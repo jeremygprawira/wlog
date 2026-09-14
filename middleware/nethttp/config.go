@@ -14,6 +14,7 @@ type config struct {
 	maxBodyCapture   int
 	bodyContentTypes []string
 	skipPaths        map[string]bool
+	userFunc         func(*http.Request) string
 }
 
 func newConfig(opts []Option) *config {
@@ -96,4 +97,10 @@ func defaultRoute(r *http.Request) string {
 //	})
 func WithRouteFunc(fn func(*http.Request) string) Option {
 	return func(c *config) { c.routeFunc = fn }
+}
+
+// WithUserFunc extracts the authenticated user id from a request into user.id.
+// Unset by default (user.id is never set).
+func WithUserFunc(fn func(*http.Request) string) Option {
+	return func(c *config) { c.userFunc = fn }
 }

@@ -3,10 +3,12 @@
 // request id captured by default.
 //
 // Read top to bottom: Middleware wraps a handler; config.go holds its Options;
-// writer.go is the response-writer wrapper that observes status and byte count.
+// writer.go is the response-writer wrapper that observes status and byte count;
+// recover.go and trace.go hold the panic and W3C traceparent handling.
 package wlogstd
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -25,7 +27,12 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 
 			ctx := log.WithContext(r.Context())
 			ctx, end := wlog.Start(ctx, "http.request")
-			defer end()
+
+			for _, p := range log.Plugins() {
+				if rs, ok := p.(wlog.RequestStarter); ok {
+					ctx = rs.OnRequestStart(ctx)
+				}
+			}
 
 			requestID := r.Header.Get("X-Request-ID")
 			if requestID == "" {
@@ -33,6 +40,15 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 			}
 			w.Header().Set("X-Request-ID", requestID)
 			wlog.SetGroup(ctx, "trace", "request_id", requestID)
+			if traceID, spanID, ok := parseTraceparent(r.Header.Get("traceparent")); ok {
+				wlog.SetGroup(ctx, "trace", "trace_id", traceID, "span_id", spanID)
+			}
+
+			if cfg.userFunc != nil {
+				if uid := cfg.userFunc(r); uid != "" {
+					wlog.SetGroup(ctx, "user", "id", uid)
+				}
+			}
 
 			if cfg.captureHeaders {
 				wlog.SetGroup(ctx, "http", "request_headers", captureHeaders(r.Header))
@@ -58,19 +74,38 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 			// dispatches to, which WithContext made a shallow copy of — reading
 			// route/path off the original r would always see the zero value.
 			req := r.WithContext(ctx)
-			next.ServeHTTP(sw, req)
 
-			wlog.SetGroup(ctx, "http",
-				"method", r.Method,
-				"route", cfg.route(req),
-				"path", req.URL.Path,
-				"status", sw.status,
-				"duration_ms", time.Since(start).Milliseconds(),
-				"bytes_out", sw.bytes,
-			)
-			if body := sw.body(); body != nil {
-				wlog.SetGroup(ctx, "http", "response_body", body)
-			}
+			// Registered in this order so they unwind in the opposite one:
+			// recoverPanic runs first (turns a panic into a 500 + logged error, so
+			// sw.status/route/etc below are still correct for a panicking request),
+			// then the http.* fields, then the RequestFinisher plugins, then end()
+			// emits the event last.
+			defer end()
+			defer runRequestFinishers(ctx, log)
+			defer func() {
+				wlog.SetGroup(ctx, "http",
+					"method", r.Method,
+					"route", cfg.route(req),
+					"path", req.URL.Path,
+					"status", sw.status,
+					"duration_ms", time.Since(start).Milliseconds(),
+					"bytes_out", sw.bytes,
+				)
+				if body := sw.body(); body != nil {
+					wlog.SetGroup(ctx, "http", "response_body", body)
+				}
+			}()
+			defer recoverPanic(ctx, sw)
+
+			next.ServeHTTP(sw, req)
 		})
+	}
+}
+
+func runRequestFinishers(ctx context.Context, log *wlog.Logger) {
+	for _, p := range log.Plugins() {
+		if rf, ok := p.(wlog.RequestFinisher); ok {
+			rf.OnRequestFinish(ctx)
+		}
 	}
 }

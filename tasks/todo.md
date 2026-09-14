@@ -45,7 +45,7 @@
 - [x] H1 net/http middleware, thin slice
 - [x] H2 Header, query, cookie capture + skip rules (path params: none yet, ServeMux's r.PathValue is available to handlers directly)
 - [x] H3 Body capture
-- [ ] H4 Panics, traceparent, user id, plugin request hooks
+- [x] H4 Panics, traceparent, user id, plugin request hooks
 - [ ] H5 Conformance suite + gorilla/mux proof
 - [ ] **Checkpoint 2A** — end-to-end request, 50µs budget measured
 - [ ] P1 Batching + flush
