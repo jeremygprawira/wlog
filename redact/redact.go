@@ -1,50 +1,54 @@
 package redact
 
-import "strings"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // Redactor masks sensitive keys and values in an event. It is immutable after New
-// returns; to change what it masks, build a new one (see With, added in a later task).
+// returns; to change what it masks, derive a new one with With.
 type Redactor struct {
+	raw        []string        // the effective raw key entries, post add/remove
 	leafTokens map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
 	leafGlobs  []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
 	paths      [][]segMatcher  // dotted entries, one segMatcher per "." segment
 }
 
-// Option configures a Redactor built by New.
+// Option configures a Redactor built by New or With.
 type Option func(*config)
 
 type config struct {
-	keys []string
+	keys    []string
+	removed []string
 }
 
-// ReplaceKeys starts the key denylist from exactly this list, with no defaults.
+// AddKeys extends the key denylist. See match.go for how an entry matches: no dot and
+// no star matches a whole word at any depth, a star globs within one segment, a dot
+// anchors the entry to that exact path from the event root.
+func AddKeys(keys ...string) Option {
+	return func(c *config) { c.keys = append(c.keys, keys...) }
+}
+
+// RemoveKeys removes entries from the current denylist (the defaults, or whatever an
+// earlier AddKeys/ReplaceKeys built). New/With return an error if an entry is not
+// present, so a typo in RemoveKeys never silently keeps a key masked.
+func RemoveKeys(keys ...string) Option {
+	return func(c *config) { c.removed = append(c.removed, keys...) }
+}
+
+// ReplaceKeys starts the key denylist from exactly this list, with no defaults and no
+// earlier AddKeys/RemoveKeys in this Option chain.
 func ReplaceKeys(keys ...string) Option {
-	return func(c *config) { c.keys = append([]string(nil), keys...) }
+	return func(c *config) { c.keys, c.removed = append([]string(nil), keys...), nil }
 }
 
 // New compiles opts into an immutable *Redactor. With no options, it uses defaultKeys.
 func New(opts ...Option) (*Redactor, error) {
 	c := &config{keys: append([]string(nil), defaultKeys...)}
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	r := &Redactor{leafTokens: map[string]bool{}}
-	for _, k := range c.keys {
-		switch {
-		case strings.Contains(k, "."):
-			var segs []segMatcher
-			for _, seg := range strings.Split(k, ".") {
-				segs = append(segs, newSegMatcher(seg))
-			}
-			r.paths = append(r.paths, segs)
-		case strings.Contains(k, "*"):
-			r.leafGlobs = append(r.leafGlobs, strings.ToLower(k))
-		default:
-			r.leafTokens[joinTokens(tokenize(k))] = true
-		}
-	}
-	return r, nil
+	return build(c, opts)
 }
 
 // MustNew is New, panicking on error. Use it in package-level vars and tests.
@@ -54,6 +58,62 @@ func MustNew(opts ...Option) *Redactor {
 		panic(err)
 	}
 	return r
+}
+
+// With derives a new Redactor from r's effective key list plus opts. r is unchanged.
+func (r *Redactor) With(opts ...Option) (*Redactor, error) {
+	c := &config{keys: append([]string(nil), r.raw...)}
+	return build(c, opts)
+}
+
+// build applies opts to c, resolves removals, validates every glob, and compiles the
+// result. It never panics: every failure is returned as an error.
+func build(c *config, opts []Option) (*Redactor, error) {
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	final := c.keys
+	for _, rem := range c.removed {
+		idx := indexFold(final, rem)
+		if idx < 0 {
+			return nil, fmt.Errorf("redact: RemoveKeys: %q is not in the current denylist", rem)
+		}
+		final = append(final[:idx], final[idx+1:]...)
+	}
+
+	r := &Redactor{raw: append([]string(nil), final...), leafTokens: map[string]bool{}}
+	for _, k := range r.raw {
+		switch {
+		case strings.Contains(k, "."):
+			var segs []segMatcher
+			for _, seg := range strings.Split(k, ".") {
+				sm, err := newSegMatcher(seg)
+				if err != nil {
+					return nil, fmt.Errorf("redact: invalid path entry %q: %w", k, err)
+				}
+				segs = append(segs, sm)
+			}
+			r.paths = append(r.paths, segs)
+		case strings.Contains(k, "*"):
+			if err := validateGlob(k); err != nil {
+				return nil, fmt.Errorf("redact: invalid glob entry %q: %w", k, err)
+			}
+			r.leafGlobs = append(r.leafGlobs, strings.ToLower(k))
+		default:
+			r.leafTokens[joinTokens(tokenize(k))] = true
+		}
+	}
+	return r, nil
+}
+
+func indexFold(list []string, want string) int {
+	for i, s := range list {
+		if strings.EqualFold(s, want) {
+			return i
+		}
+	}
+	return -1
 }
 
 // Apply walks event and replaces the value of any key matching the denylist with
@@ -96,7 +156,7 @@ func (r *Redactor) applyValue(v any, path []string) any {
 // Unanchored: matches at any depth.
 func (r *Redactor) matchesKey(key string) bool {
 	tokens := tokenize(key)
-	for i := 0; i < len(tokens); i++ {
+	for i := range tokens {
 		for j := i + 1; j <= len(tokens); j++ {
 			if r.leafTokens[joinTokens(tokens[i:j])] {
 				return true
@@ -110,7 +170,7 @@ func (r *Redactor) matchesKey(key string) bool {
 func (r *Redactor) matchesLeafGlob(key string) bool {
 	lower := strings.ToLower(key)
 	for _, g := range r.leafGlobs {
-		if ok := globMatch(g, lower); ok {
+		if globMatch(g, lower) {
 			return true
 		}
 	}
@@ -136,4 +196,19 @@ func (r *Redactor) matchesPath(fullPath []string) bool {
 		}
 	}
 	return false
+}
+
+// Keys returns the effective key denylist, sorted.
+func (r *Redactor) Keys() []string {
+	out := append([]string(nil), r.raw...)
+	sort.Strings(out)
+	return out
+}
+
+// Fingerprint is a short, stable hash of the effective config: the same set of keys
+// hashes the same regardless of the order options were given, and changes after any
+// add or remove.
+func (r *Redactor) Fingerprint() string {
+	sum := sha256.Sum256([]byte(strings.Join(r.Keys(), "\n")))
+	return hex.EncodeToString(sum[:8])
 }

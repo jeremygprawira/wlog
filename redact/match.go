@@ -13,11 +13,22 @@ type segMatcher struct {
 	tokens []string // used when !isGlob: must appear contiguously in the segment's tokens
 }
 
-func newSegMatcher(seg string) segMatcher {
+func newSegMatcher(seg string) (segMatcher, error) {
 	if strings.Contains(seg, "*") {
-		return segMatcher{isGlob: true, glob: strings.ToLower(seg)}
+		if err := validateGlob(seg); err != nil {
+			return segMatcher{}, err
+		}
+		return segMatcher{isGlob: true, glob: strings.ToLower(seg)}, nil
 	}
-	return segMatcher{tokens: tokenize(seg)}
+	return segMatcher{tokens: tokenize(seg)}, nil
+}
+
+// validateGlob reports an error if pattern is not a valid "*"-only glob, e.g. an
+// unterminated "[" bracket class. New/With surface this instead of panicking or
+// silently treating the entry as never-matching.
+func validateGlob(pattern string) error {
+	_, err := path.Match(strings.ToLower(pattern), "")
+	return err
 }
 
 func (m segMatcher) match(actualSeg string) bool {
