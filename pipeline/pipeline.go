@@ -9,6 +9,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
@@ -117,17 +118,39 @@ func (w *wrapped) takeBatchIfReady() []map[string]any {
 	return batch
 }
 
+// RetryError lets a Sender's error say more than "failed": whether it is even worth
+// retrying, and how long to wait if the server said so (e.g. a 429's Retry-After).
+// internal/httpdrain's *StatusError implements this; a plain error just gets the
+// normal backoff for every attempt.
+type RetryError interface {
+	error
+	Retryable() bool
+	RetryAfter() time.Duration
+}
+
 // sendBatch tries next.SendBatch up to MaxAttempts times, waiting between tries per
-// the configured backoff curve. If every attempt fails, the batch is dropped and
-// OnDropped(batch, lastErr) is called.
+// the configured backoff curve (or a RetryError's own RetryAfter, if it gives one).
+// A RetryError that reports Retryable() == false stops immediately, since retrying it
+// verbatim would just fail the same way. If every attempt fails, the batch is dropped
+// and OnDropped(batch, lastErr) is called.
 func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 	var err error
 	for attempt := 1; attempt <= w.cfg.maxAttempts; attempt++ {
 		if err = w.next.SendBatch(ctx, batch); err == nil {
 			return
 		}
+		var re RetryError
+		if errors.As(err, &re) && !re.Retryable() {
+			break
+		}
 		if attempt < w.cfg.maxAttempts {
-			time.Sleep(w.retryDelay(attempt))
+			delay := w.retryDelay(attempt)
+			if errors.As(err, &re) {
+				if ra := re.RetryAfter(); ra > 0 {
+					delay = ra
+				}
+			}
+			time.Sleep(delay)
 		}
 	}
 	if w.cfg.onDropped != nil {

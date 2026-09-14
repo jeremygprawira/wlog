@@ -51,7 +51,7 @@
 - [x] P1 Batching + flush
 - [x] P2 Retry + backoff
 - [x] P3 Bounded buffer, drop-oldest, fan-out isolation
-- [ ] P4 Shared HTTP drain helper + identity headers
+- [x] P4 Shared HTTP drain helper + identity headers
 - [ ] SA1 Head + tail sampling rules
 - [ ] SA2 Presets + defaults
 - [ ] M1 Memory drain: ring buffer + subscribe
