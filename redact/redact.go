@@ -11,19 +11,35 @@ import (
 // Redactor masks sensitive keys and values in an event. It is immutable after New
 // returns; to change what it masks, derive a new one with With.
 type Redactor struct {
-	raw        []string        // the effective raw key entries, post add/remove
-	leafTokens map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
-	leafGlobs  []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
-	paths      [][]segMatcher  // dotted entries, one segMatcher per "." segment
-	patterns   []builtinPattern
+	raw          []string        // the effective raw key entries, post add/remove
+	leafTokens   map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
+	leafGlobs    []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
+	paths        [][]segMatcher  // dotted entries, one segMatcher per "." segment
+	patterns     []builtinPattern
+	maskClientIP bool
 }
 
 // Option configures a Redactor built by New or With.
 type Option func(*config)
 
 type config struct {
-	keys    []string
-	removed []string
+	keys            []string
+	removed         []string
+	enabledPatterns []string
+	maskClientIP    bool
+}
+
+// EnablePatterns turns on a built-in pattern that is off by default (currently only
+// "nik", which has a higher false-positive rate than the others).
+func EnablePatterns(names ...string) Option {
+	return func(c *config) { c.enabledPatterns = append(c.enabledPatterns, names...) }
+}
+
+// MaskClientIP also masks the reserved http.client_ip field with the ipv4 pattern. By
+// default that field is exempt, since it is IP metadata core adds on purpose, not a
+// value that happened to contain an address.
+func MaskClientIP() Option {
+	return func(c *config) { c.maskClientIP = true }
 }
 
 // AddKeys extends the key denylist. See match.go for how an entry matches: no dot and
@@ -84,9 +100,14 @@ func build(c *config, opts []Option) (*Redactor, error) {
 	}
 
 	r := &Redactor{
-		raw:        append([]string(nil), final...),
-		leafTokens: map[string]bool{},
-		patterns:   defaultPatterns,
+		raw:          append([]string(nil), final...),
+		leafTokens:   map[string]bool{},
+		maskClientIP: c.maskClientIP,
+	}
+	for _, p := range allBuiltinPatterns {
+		if p.enabledByDefault || indexFold(c.enabledPatterns, p.name) >= 0 {
+			r.patterns = append(r.patterns, p)
+		}
 	}
 	for _, k := range r.raw {
 		switch {
@@ -152,7 +173,7 @@ func (r *Redactor) applyValue(v any, path []string) any {
 		}
 		return x
 	case string:
-		return r.applyPatterns(x)
+		return r.applyPatterns(x, path)
 	default:
 		return v
 	}

@@ -15,7 +15,7 @@
 - [x] R2 Paths, globs, arrays
 - [x] R3 Add / remove / replace keys, With, introspection
 - [x] R4 Built-in patterns A: credit_card, email, jwt, bearer
-- [ ] R5 Built-in patterns B: ipv4, phone, iban, nik
+- [x] R5 Built-in patterns B: ipv4, phone, iban, nik
 - [ ] R6 Pattern options + custom patterns
 - [ ] R7 Transforms, limits, Default/Disabled
 - [ ] R8 Gates G1/G2, benchmark, examples

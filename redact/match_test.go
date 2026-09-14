@@ -56,9 +56,9 @@ func TestRedact_Path_Glob(t *testing.T) {
 func TestRedact_LeafGlob(t *testing.T) {
 	r := withKeys(t, "*_pin", "x-*-secret")
 	event := map[string]any{
-		"login_pin":     "1234",
-		"x-app-secret":  "shh",
-		"login_pinned":  "not-a-match",
+		"login_pin":    "1234",
+		"x-app-secret": "shh",
+		"login_pinned": "not-a-match",
 	}
 	r.Apply(event)
 	if event["login_pin"] != "[REDACTED]" {
