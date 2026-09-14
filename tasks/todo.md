@@ -56,7 +56,7 @@
 - [x] SA2 Presets + defaults
 - [x] M1 Memory drain: ring buffer + subscribe
 - [x] M2 SSE handler
-- [ ] W1 wlogtest recorder
+- [x] W1 wlogtest recorder
 - [ ] E1 Host + deployment enrichers
 - [ ] E2 User agent enricher
 - [ ] E3 Geo + user-id enrichers
