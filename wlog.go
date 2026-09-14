@@ -30,6 +30,7 @@ type Logger struct {
 	fieldNames        FieldNames
 	plugins           []Plugin
 	strictKeys        map[string]bool
+	format            Format
 }
 
 type serviceInfo struct {

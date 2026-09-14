@@ -297,6 +297,10 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	out = applyFieldNames(out, l.fieldNames)
 	l.sendToDrains(ctx, out)
 
+	if l.resolvedFormat() == FormatPretty {
+		writePretty(os.Stdout, out, colorEnabled())
+		return
+	}
 	b, err := json.Marshal(out)
 	if err != nil {
 		l.reportError(err, "stdout")

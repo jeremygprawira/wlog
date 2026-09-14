@@ -30,6 +30,7 @@ func TestCore_StrictKeys_FlagsUnregisteredKey_InDev(t *testing.T) {
 	log := wlog.New(
 		wlog.WithService("svc", "1.0.0", "dev"),
 		wlog.StrictKeys(orderID),
+		wlog.WithFormat(wlog.FormatJSON),
 	)
 
 	out := captureStdout(t, func() {
@@ -70,7 +71,7 @@ func TestCore_StrictKeys_NoOp_OutsideLocalDev(t *testing.T) {
 }
 
 func TestCore_NoStrictKeys_NeverFlags(t *testing.T) {
-	log := wlog.New(wlog.WithService("svc", "1.0.0", "dev"))
+	log := wlog.New(wlog.WithService("svc", "1.0.0", "dev"), wlog.WithFormat(wlog.FormatJSON))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
 		ctx, end := wlog.Start(ctx, "op")

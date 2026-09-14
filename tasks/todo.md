@@ -34,7 +34,7 @@
 - [x] C10 Plugins
 - [x] C11 Typed keys + StrictKeys
 - [x] C12 Plain one-off log lines
-- [ ] C13 Pretty console sink
+- [x] C13 Pretty console sink
 - [ ] C14 Env configuration
 - [ ] C15 Core gates, benchmark, examples
 - [ ] **Checkpoint 1B** — event shape reviewed (last cheap change)
