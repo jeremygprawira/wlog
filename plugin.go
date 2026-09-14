@@ -26,10 +26,14 @@ type RequestStarter interface {
 	OnRequestStart(ctx context.Context) context.Context
 }
 
-// RequestFinisher runs at the end of an HTTP request, after the response is written.
-// Like RequestStarter, http-std calls this — core only defines and exposes it.
+// RequestFinisher runs at the end of an HTTP request, right before its event is
+// emitted. Like RequestStarter, http-std calls this — core only defines and exposes
+// it. It takes only ctx (not the final event map): the map is core-internal at the
+// point http-std's handler wrapper returns, so a finisher observes side effects via
+// ctx or its own state (e.g. a metrics counter), not the rendered event. Use an
+// Enricher instead to add or read fields on the event itself.
 type RequestFinisher interface {
-	OnRequestFinish(ctx context.Context, event map[string]any)
+	OnRequestFinish(ctx context.Context)
 }
 
 // WithPlugins registers plugins. Each is wired into every hook it implements

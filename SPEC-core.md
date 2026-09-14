@@ -89,7 +89,7 @@ func NewKey[T any](name string) Key[T]
 func (k Key[T]) Set(ctx context.Context, v T)
 func (k Key[T]) Name() string
 
-func StrictKeys(keys ...Key[any]) Option
+func StrictKeys(keys ...interface{ Name() string }) Option // any Key[T] satisfies this
 ```
 
 `Key[T].Set` compiles only for the declared `T`; it calls the same `Set` under the hood.
@@ -115,7 +115,9 @@ type ErrorExtractor interface {
 ```
 
 Default extractor (used when `WithErrorExtractor` is not set): `Code = "INTERNAL"`,
-`Message = err.Error()`, walks `errors.Unwrap` for `Cause`, no stack. `wlog.Error` appends the
+`Message = err.Error()`, walks `errors.Unwrap` for `Cause`. `Stack` is populated when `err`
+implements `interface{ Stack() string }` (http-std's recovered panics do this), else left empty.
+`wlog.Error` appends the
 previous `error` value (if any) to `errors[]` (cap 10, overflow counted in
 `wlog.dropped_fields`) before replacing it.
 
@@ -133,7 +135,7 @@ type Keeper interface{ Keep(ctx context.Context, event map[string]any) bool }  /
 type Plugin interface{ Name() string }
 // optional, detected by type assertion:
 type RequestStarter interface{ OnRequestStart(ctx context.Context) context.Context }
-type RequestFinisher interface{ OnRequestFinish(ctx context.Context, event map[string]any) }
+type RequestFinisher interface{ OnRequestFinish(ctx context.Context) }
 type Setup interface{ Setup(l *Logger) error }
 ```
 

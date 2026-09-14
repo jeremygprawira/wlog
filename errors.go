@@ -40,6 +40,11 @@ func (defaultExtractor) Extract(err error) ErrorInfo {
 	if cause := stderrors.Unwrap(err); cause != nil {
 		info.Cause = cause.Error()
 	}
+	// Any error can opt into carrying its own stack this way — http-std's recovered
+	// panics do — without core needing to know about panics specifically.
+	if s, ok := err.(interface{ Stack() string }); ok {
+		info.Stack = s.Stack()
+	}
 	return info
 }
 

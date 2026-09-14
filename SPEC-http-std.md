@@ -64,10 +64,10 @@ The process keeps serving.
 
 Every plugin from `log.Plugins()` implementing `wlog.RequestStarter` runs (in registration
 order) right after `wlog.Start`, before the handler; every one implementing
-`wlog.RequestFinisher` runs right before `end()`, given the final event map for inspection only
-(mutating it here still works, since redact/enrich/sinks happen inside `end()`, but a
-`RequestFinisher` is meant for side effects like metrics, not mutation — `Enricher` is the
-mutation hook).
+`wlog.RequestFinisher` runs right before `end()`, given `ctx` only — the final event map is
+core-internal at this point, so a finisher observes side effects via `ctx` or its own state
+(e.g. a metrics counter), not the rendered event. Use an `Enricher` to add or read fields on
+the event itself.
 
 ## Success Criteria (also the conformance suite's contract)
 
