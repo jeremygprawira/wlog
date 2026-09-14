@@ -17,7 +17,7 @@
 - [x] R4 Built-in patterns A: credit_card, email, jwt, bearer
 - [x] R5 Built-in patterns B: ipv4, phone, iban, nik
 - [x] R6 Pattern options + custom patterns
-- [ ] R7 Transforms, limits, Default/Disabled
+- [x] R7 Transforms, limits, Default/Disabled
 - [ ] R8 Gates G1/G2, benchmark, examples
 - [ ] **Checkpoint 1A** — SPEC-redact criteria met, stdlib-only, human review
 

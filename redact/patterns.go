@@ -45,14 +45,14 @@ func (r *Redactor) applyPatterns(s string, path []string) string {
 		if p.name == "ipv4" && isClientIP && !r.maskClientIP {
 			continue
 		}
-		s = applyRegex(s, p.re, path, p.masker)
+		s = applyRegex(s, p.re, path, p.masker, r.replacement)
 	}
 	return s
 }
 
 // applyRegex replaces every match of re in s with maskSafe(masker, match), building the
-// Match{Path, Key, Value, Groups} each masker sees.
-func applyRegex(s string, re *regexp.Regexp, path []string, masker func(Match) string) string {
+// Match{Path, Key, Value, Groups} each masker sees. fallback is used if masker panics.
+func applyRegex(s string, re *regexp.Regexp, path []string, masker func(Match) string, fallback string) string {
 	idxs := re.FindAllStringSubmatchIndex(s, -1)
 	if idxs == nil {
 		return s
@@ -76,19 +76,19 @@ func applyRegex(s string, re *regexp.Regexp, path []string, masker func(Match) s
 			groups = append(groups, s[m[g]:m[g+1]])
 		}
 		match := Match{Path: pathStr, Key: key, Value: s[m[0]:m[1]], Groups: groups}
-		b.WriteString(maskSafe(masker, match))
+		b.WriteString(maskSafe(masker, match, fallback))
 		last = m[1]
 	}
 	b.WriteString(s[last:])
 	return b.String()
 }
 
-// maskSafe calls masker and recovers a panic as "[REDACTED]", so one bad custom
-// pattern can never crash the request that logged through it.
-func maskSafe(masker func(Match) string, m Match) (out string) {
+// maskSafe calls masker and recovers a panic as fallback, so one bad custom pattern can
+// never crash the request that logged through it.
+func maskSafe(masker func(Match) string, m Match, fallback string) (out string) {
 	defer func() {
 		if recover() != nil {
-			out = "[REDACTED]"
+			out = fallback
 		}
 	}()
 	return masker(m)

@@ -11,13 +11,23 @@ import (
 // Redactor masks sensitive keys and values in an event. It is immutable after New
 // returns; to change what it masks, derive a new one with With.
 type Redactor struct {
-	raw          []string        // the effective raw key entries, post add/remove
-	leafTokens   map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
-	leafGlobs    []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
-	paths        [][]segMatcher  // dotted entries, one segMatcher per "." segment
-	patterns     []builtinPattern
-	maskClientIP bool
+	disabled      bool            // Disabled(): Apply is a no-op, nothing else below is set
+	raw           []string        // the effective raw key entries, post add/remove
+	leafTokens    map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
+	leafGlobs     []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
+	paths         [][]segMatcher  // dotted entries, one segMatcher per "." segment
+	patterns      []builtinPattern
+	maskClientIP  bool
+	transforms    []func(map[string]any)
+	replacement   string
+	maxDepth      int
+	maxStringScan int
 }
+
+const (
+	defaultMaxDepth      = 16
+	defaultMaxStringScan = 64 * 1024
+)
 
 // Option configures a Redactor built by New or With.
 type Option func(*config)
@@ -30,6 +40,38 @@ type config struct {
 	customPatterns    []Pattern
 	removedPatterns   []string
 	noBuiltinPatterns bool
+	transforms        []func(map[string]any)
+	replacement       string
+	maxDepth          int
+	maxStringScan     int
+}
+
+// Transform registers a function that runs on the whole event before the key, glob,
+// path, and pattern rules do. Use it for logic those rules can't express, e.g.
+// dropping a field only for one tenant. A panic in fn is recovered: that transform is
+// skipped and the rest of Apply still runs.
+func Transform(fn func(map[string]any)) Option {
+	return func(c *config) { c.transforms = append(c.transforms, fn) }
+}
+
+// Replacement sets the text a matched key, path, or glob is replaced with. Default
+// "[REDACTED]".
+func Replacement(s string) Option {
+	return func(c *config) { c.replacement = s }
+}
+
+// MaxDepth caps how many levels of nested maps/arrays Apply walks into. A subtree
+// deeper than this is replaced with "[REDACTED:DEPTH]" instead of being masked
+// field-by-field. Default 16.
+func MaxDepth(n int) Option {
+	return func(c *config) { c.maxDepth = n }
+}
+
+// MaxStringScan caps how many bytes of one string value the built-in and custom value
+// patterns scan. A longer string is replaced with "[REDACTED:TOO_LARGE]" instead
+// (its key may still mask it first, same as any other field). Default 64KB.
+func MaxStringScan(n int) Option {
+	return func(c *config) { c.maxStringScan = n }
 }
 
 // EnablePatterns turns on a built-in pattern that is off by default (currently only
@@ -67,7 +109,8 @@ func ReplaceKeys(keys ...string) Option {
 
 // New compiles opts into an immutable *Redactor. With no options, it uses defaultKeys.
 func New(opts ...Option) (*Redactor, error) {
-	c := &config{keys: append([]string(nil), defaultKeys...)}
+	c := newConfig()
+	c.keys = append([]string(nil), defaultKeys...)
 	return build(c, opts)
 }
 
@@ -80,10 +123,28 @@ func MustNew(opts ...Option) *Redactor {
 	return r
 }
 
-// With derives a new Redactor from r's effective key list plus opts. r is unchanged.
+// Default is the Redactor New() with no options builds: every default on. Use it as an
+// explicit "no custom redactor configured" fallback.
+func Default() *Redactor {
+	return MustNew()
+}
+
+// Disabled turns redaction off entirely: Apply becomes a no-op. Prefer this over
+// omitting a redactor, so "no redaction" is a deliberate, greppable choice.
+func Disabled() *Redactor {
+	return &Redactor{disabled: true}
+}
+
+// With derives a new Redactor from r's effective config plus opts. r is unchanged.
 func (r *Redactor) With(opts ...Option) (*Redactor, error) {
-	c := &config{keys: append([]string(nil), r.raw...)}
+	c := newConfig()
+	c.keys = append([]string(nil), r.raw...)
+	c.maskClientIP, c.replacement, c.maxDepth, c.maxStringScan = r.maskClientIP, r.replacement, r.maxDepth, r.maxStringScan
 	return build(c, opts)
+}
+
+func newConfig() *config {
+	return &config{replacement: "[REDACTED]", maxDepth: defaultMaxDepth, maxStringScan: defaultMaxStringScan}
 }
 
 // build applies opts to c, resolves removals, validates every glob, and compiles the
@@ -107,10 +168,14 @@ func build(c *config, opts []Option) (*Redactor, error) {
 		return nil, err
 	}
 	r := &Redactor{
-		raw:          append([]string(nil), final...),
-		leafTokens:   map[string]bool{},
-		maskClientIP: c.maskClientIP,
-		patterns:     patterns,
+		raw:           append([]string(nil), final...),
+		leafTokens:    map[string]bool{},
+		maskClientIP:  c.maskClientIP,
+		patterns:      patterns,
+		transforms:    c.transforms,
+		replacement:   c.replacement,
+		maxDepth:      c.maxDepth,
+		maxStringScan: c.maxStringScan,
 	}
 	for _, k := range r.raw {
 		switch {
@@ -145,37 +210,63 @@ func indexFold(list []string, want string) int {
 	return -1
 }
 
-// Apply walks event and replaces the value of any key matching the denylist with
-// "[REDACTED]". It mutates event in place: core hands Apply a private snapshot that
-// nothing else holds a reference to.
+// Apply walks event and replaces the value of any key matching the denylist with the
+// configured Replacement. It mutates event in place: core hands Apply a private
+// snapshot that nothing else holds a reference to.
 func (r *Redactor) Apply(event map[string]any) {
-	r.applyMap(event, nil)
+	if r.disabled {
+		return
+	}
+	r.runTransforms(event)
+	r.applyMap(event, nil, 0)
 }
 
-func (r *Redactor) applyMap(m map[string]any, path []string) {
-	for k, v := range m {
-		fullPath := append(append([]string(nil), path...), k)
-		if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(fullPath) {
-			m[k] = "[REDACTED]"
-			continue
-		}
-		m[k] = r.applyValue(v, fullPath)
+// runTransforms runs every registered Transform. A panic in one is recovered and that
+// transform is skipped; the rest still run, and redaction still proceeds afterward.
+func (r *Redactor) runTransforms(event map[string]any) {
+	for _, t := range r.transforms {
+		runTransformSafe(t, event)
 	}
 }
 
-func (r *Redactor) applyValue(v any, path []string) any {
+func runTransformSafe(t func(map[string]any), event map[string]any) {
+	defer func() { recover() }()
+	t(event)
+}
+
+func (r *Redactor) applyMap(m map[string]any, path []string, depth int) {
+	for k, v := range m {
+		fullPath := append(append([]string(nil), path...), k)
+		if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(fullPath) {
+			m[k] = r.replacement
+			continue
+		}
+		m[k] = r.applyValue(v, fullPath, depth)
+	}
+}
+
+func (r *Redactor) applyValue(v any, path []string, depth int) any {
 	switch x := v.(type) {
 	case map[string]any:
-		r.applyMap(x, path)
+		if depth+1 > r.maxDepth {
+			return "[REDACTED:DEPTH]"
+		}
+		r.applyMap(x, path, depth+1)
 		return x
 	case []any:
+		if depth+1 > r.maxDepth {
+			return "[REDACTED:DEPTH]"
+		}
 		for i, item := range x {
 			// Array elements inherit the parent field's path (no index segment),
 			// so "items.card_number" matches every element's card_number.
-			x[i] = r.applyValue(item, path)
+			x[i] = r.applyValue(item, path, depth+1)
 		}
 		return x
 	case string:
+		if len(x) > r.maxStringScan {
+			return "[REDACTED:TOO_LARGE]"
+		}
 		return r.applyPatterns(x, path)
 	default:
 		return v
