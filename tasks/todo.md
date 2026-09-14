@@ -32,7 +32,7 @@
 - [x] C8 Atomic redactor swap
 - [x] C9 Field-name presets + renaming
 - [x] C10 Plugins
-- [ ] C11 Typed keys + StrictKeys
+- [x] C11 Typed keys + StrictKeys
 - [ ] C12 Plain one-off log lines
 - [ ] C13 Pretty console sink
 - [ ] C14 Env configuration

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"sync"
 	"time"
 )
@@ -13,19 +14,21 @@ import (
 // event holds one unit of work's fields between Start and its end func running. It is
 // safe for concurrent Set calls: everything below mu is only ever touched with mu held.
 type event struct {
-	mu         sync.Mutex
-	fields     map[string]any
-	operation  string
-	start      time.Time
-	sealed     bool
-	dropped    int // count of Set/SetGroup/Append calls rejected by a cap (G4)
-	level      Level
-	levelSet   bool // true once SetLevel has been called; wins over the default
-	extractor  ErrorExtractor
-	errInfo    *ErrorInfo  // the error that currently decides the outcome
-	errList    []ErrorInfo // earlier errors, oldest first, capped at maxErrorList
-	parent     *event      // set by Detach; nil for a top-level Start event
-	lateWrites int         // writes received after this event sealed (G3, G4)
+	mu          sync.Mutex
+	fields      map[string]any
+	operation   string
+	start       time.Time
+	sealed      bool
+	dropped     int // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	level       Level
+	levelSet    bool // true once SetLevel has been called; wins over the default
+	extractor   ErrorExtractor
+	errInfo     *ErrorInfo      // the error that currently decides the outcome
+	errList     []ErrorInfo     // earlier errors, oldest first, capped at maxErrorList
+	parent      *event          // set by Detach; nil for a top-level Start event
+	lateWrites  int             // writes received after this event sealed (G3, G4)
+	strictKeys  map[string]bool // nil unless StrictKeys is active for this event's env
+	unknownKeys []string
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -61,6 +64,7 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo,
+		strictKeys: l.strictKeysForEvent(),
 	}
 	return withEvent(ctx, e), func() { l.emit(e) }
 }
@@ -84,6 +88,19 @@ func Set(ctx context.Context, key string, value any) {
 		return
 	}
 	e.fields[key] = normalize(value)
+	e.trackUnknownKey(key)
+}
+
+// trackUnknownKey records key in unknownKeys (once) if StrictKeys is active for this
+// event and key was never registered. Callers must hold e.mu.
+func (e *event) trackUnknownKey(key string) {
+	if e.strictKeys == nil || e.strictKeys[key] {
+		return
+	}
+	if slices.Contains(e.unknownKeys, key) {
+		return
+	}
+	e.unknownKeys = append(e.unknownKeys, key)
 }
 
 // SetGroup merges fields into a named group within the event, creating it on first
@@ -212,6 +229,7 @@ func (l *Logger) emit(e *event) {
 	maps.Copy(fields, e.fields)
 	dropped := e.dropped
 	lateWrites := e.lateWrites
+	unknownKeys := e.unknownKeys
 	errInfo := e.errInfo
 	errList := e.errList
 	level := e.level
@@ -244,6 +262,9 @@ func (l *Logger) emit(e *event) {
 	}
 	if lateWrites > 0 {
 		out["wlog.late_writes"] = lateWrites
+	}
+	if len(unknownKeys) > 0 {
+		out["wlog.unknown_keys"] = unknownKeys
 	}
 	// Normalized through normalize() (not assigned directly) so redaction, which only
 	// walks map[string]any/[]any/string, sees inside error detail too.

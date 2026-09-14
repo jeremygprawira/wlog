@@ -29,6 +29,7 @@ type Logger struct {
 	enrichers         []Enricher
 	fieldNames        FieldNames
 	plugins           []Plugin
+	strictKeys        map[string]bool
 }
 
 type serviceInfo struct {
