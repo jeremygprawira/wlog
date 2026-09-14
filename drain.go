@@ -48,7 +48,7 @@ func (l *Logger) sendToDrains(ctx context.Context, event map[string]any) {
 func (l *Logger) safeSend(ctx context.Context, d Drain, event map[string]any) {
 	defer func() {
 		if r := recover(); r != nil {
-			l.reportError(fmt.Errorf("panic: %v", r), fmt.Sprintf("%T", d))
+			l.reportError(fmt.Errorf("panic: %v", r), sourceName(d))
 		}
 	}()
 	d.Send(ctx, event)
@@ -81,7 +81,7 @@ func (l *Logger) safeClose(ctx context.Context, c drainCloser) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
-			l.reportError(err, fmt.Sprintf("%T", c))
+			l.reportError(err, sourceName(c))
 		}
 	}()
 	return c.Close(ctx)

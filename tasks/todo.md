@@ -31,7 +31,7 @@
 - [x] C7 Stage order
 - [x] C8 Atomic redactor swap
 - [x] C9 Field-name presets + renaming
-- [ ] C10 Plugins
+- [x] C10 Plugins
 - [ ] C11 Typed keys + StrictKeys
 - [ ] C12 Plain one-off log lines
 - [ ] C13 Pretty console sink

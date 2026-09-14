@@ -28,6 +28,7 @@ type Logger struct {
 	sampler           Keeper
 	enrichers         []Enricher
 	fieldNames        FieldNames
+	plugins           []Plugin
 }
 
 type serviceInfo struct {
@@ -45,6 +46,7 @@ func New(opts ...Option) *Logger {
 	for _, opt := range opts {
 		opt(l)
 	}
+	l.wirePlugins()
 	return l
 }
 
