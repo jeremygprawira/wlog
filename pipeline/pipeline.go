@@ -9,6 +9,7 @@ package pipeline
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -116,10 +117,43 @@ func (w *wrapped) takeBatchIfReady() []map[string]any {
 	return batch
 }
 
+// sendBatch tries next.SendBatch up to MaxAttempts times, waiting between tries per
+// the configured backoff curve. If every attempt fails, the batch is dropped and
+// OnDropped(batch, lastErr) is called.
 func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
-	if err := w.next.SendBatch(ctx, batch); err != nil && w.cfg.onDropped != nil {
+	var err error
+	for attempt := 1; attempt <= w.cfg.maxAttempts; attempt++ {
+		if err = w.next.SendBatch(ctx, batch); err == nil {
+			return
+		}
+		if attempt < w.cfg.maxAttempts {
+			time.Sleep(w.retryDelay(attempt))
+		}
+	}
+	if w.cfg.onDropped != nil {
 		w.cfg.onDropped(batch, err)
 	}
+}
+
+// retryDelay is the wait before the (attempt+1)th try, per Backoff, capped at
+// MaxDelay, plus up to 20% jitter to avoid a thundering herd across many drains.
+func (w *wrapped) retryDelay(attempt int) time.Duration {
+	var d time.Duration
+	switch w.cfg.backoff {
+	case Linear:
+		d = w.cfg.initialDelay * time.Duration(attempt)
+	case Fixed:
+		d = w.cfg.initialDelay
+	default: // Exponential
+		d = w.cfg.initialDelay * time.Duration(1<<uint(attempt-1))
+	}
+	if d > w.cfg.maxDelay {
+		d = w.cfg.maxDelay
+	}
+	if d <= 0 {
+		return 0
+	}
+	return d + time.Duration(rand.Int63n(int64(d)/5+1))
 }
 
 // flushAll drains and sends everything left in the buffer, for Close.

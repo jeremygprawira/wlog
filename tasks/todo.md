@@ -49,7 +49,7 @@
 - [x] H5 Conformance suite passing for wlogstd and for gorilla/mux (examples/mux, go get approved)
 - [x] **Checkpoint 2A** — end-to-end request works (24.8us/op, under the 50us budget)
 - [x] P1 Batching + flush
-- [ ] P2 Retry + backoff
+- [x] P2 Retry + backoff
 - [ ] P3 Bounded buffer, drop-oldest, fan-out isolation
 - [ ] P4 Shared HTTP drain helper + identity headers
 - [ ] SA1 Head + tail sampling rules

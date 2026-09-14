@@ -41,6 +41,12 @@ func (f *fakeSender) SendBatch(ctx context.Context, events []map[string]any) err
 	return nil
 }
 
+func (f *fakeSender) callsMade() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
 func (f *fakeSender) allEvents() []map[string]any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
