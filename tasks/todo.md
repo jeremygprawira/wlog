@@ -23,7 +23,7 @@
 
 ## Phase 1B — core
 - [x] C1 Thin wide event: Start → Set → emit JSON
-- [ ] C2 SetGroup, Append, normalization, caps
+- [x] C2 SetGroup, Append, normalization, caps
 - [ ] C3 Levels, SetLevel, outcome
 - [ ] C4 Errors: extractor, error + errors[]
 - [ ] C5 Detach + sealed events
