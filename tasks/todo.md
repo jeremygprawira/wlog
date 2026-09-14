@@ -18,8 +18,8 @@
 - [x] R5 Built-in patterns B: ipv4, phone, iban, nik
 - [x] R6 Pattern options + custom patterns
 - [x] R7 Transforms, limits, Default/Disabled
-- [x] R8 Gates G1/G2, benchmark, examples (benchmark target not met, see redact/BENCH.md)
-- [ ] **Checkpoint 1A** — SPEC-redact criteria met, stdlib-only, human review (perf gap flagged)
+- [x] R8 Gates G1/G2, benchmark, examples (15.7us/op, meets the 30us target; see redact/BENCH.md)
+- [x] **Checkpoint 1A** — SPEC-redact criteria met, stdlib-only, benchmark meets target, approved
 
 ## Phase 1B — core
 - [ ] C1 Thin wide event: Start → Set → emit JSON

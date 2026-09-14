@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Redactor masks sensitive keys and values in an event. It is immutable after New
@@ -22,6 +23,20 @@ type Redactor struct {
 	replacement   string
 	maxDepth      int
 	maxStringScan int
+	tokenCache    sync.Map // key string -> []string; a real event reuses the same field
+	// names on every call, so tokenizing them fresh each time is pure waste.
+}
+
+// cachedTokenize is tokenize(key), memoized per Redactor. Safe for concurrent use
+// (sync.Map): tokenize is a pure function, so a duplicate compute on a cache race
+// just replaces the entry with an equal value.
+func (r *Redactor) cachedTokenize(key string) []string {
+	if v, ok := r.tokenCache.Load(key); ok {
+		return v.([]string)
+	}
+	tokens := tokenize(key)
+	r.tokenCache.Store(key, tokens)
+	return tokens
 }
 
 const (
@@ -234,14 +249,18 @@ func runTransformSafe(t func(map[string]any), event map[string]any) {
 	t(event)
 }
 
+// applyMap walks m, mutating path in place (push the key, recurse, pop) rather than
+// copying it per field. Safe because path never escapes this call tree: nothing keeps
+// a reference to it past the synchronous matchesPath/applyValue calls below.
 func (r *Redactor) applyMap(m map[string]any, path []string, depth int) {
 	for k, v := range m {
-		fullPath := append(append([]string(nil), path...), k)
-		if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(fullPath) {
+		path = append(path, k)
+		if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(path) {
 			m[k] = r.replacement
-			continue
+		} else {
+			m[k] = r.applyValue(v, path, depth)
 		}
-		m[k] = r.applyValue(v, fullPath, depth)
+		path = path[:len(path)-1]
 	}
 }
 
@@ -277,7 +296,7 @@ func (r *Redactor) applyValue(v any, path []string, depth int) any {
 // entry, e.g. "stripe_api_key" contains the run ["api","key"] and matches "api_key".
 // Unanchored: matches at any depth.
 func (r *Redactor) matchesKey(key string) bool {
-	tokens := tokenize(key)
+	tokens := r.cachedTokenize(key)
 	for i := range tokens {
 		for j := i + 1; j <= len(tokens); j++ {
 			if r.leafTokens[joinTokens(tokens[i:j])] {

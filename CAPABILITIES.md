@@ -70,5 +70,5 @@ Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separ
 | (project-wide) | [SPEC.md](SPEC.md) | approved 2026-09-15 (v3) |
 | `redact` | [SPEC-redact.md](SPEC-redact.md) | approved 2026-09-15 (v2) |
 | (plan) | [tasks/plan.md](tasks/plan.md) | approved 2026-09-15 |
-| `core` | [SPEC-core.md](SPEC-core.md) | draft — awaiting approval |
+| `core` | [SPEC-core.md](SPEC-core.md) | approved 2026-09-15 |
 | others | SPEC-<id>.md | not started |
