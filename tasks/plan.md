@@ -1,6 +1,6 @@
 # Implementation Plan: wlog v1 + v1.1
 
-> Source of truth: [SPEC.md](../SPEC.md), [CAPABILITIES.md](../CAPABILITIES.md), [SPEC-redact.md](../SPEC-redact.md).
+> Source of truth: [SPEC.md](../docs/SPEC.md), [CAPABILITIES.md](../docs/CAPABILITIES.md), [SPEC-redact.md](../docs/SPEC-redact.md).
 > Checklist index: [todo.md](todo.md). Task ids are stable; `/build` refers to them.
 > Every task also clears the project-wide Definition of Done: tests pass under `-race`, no
 > regressions, behavior verified, docs/spec updated.

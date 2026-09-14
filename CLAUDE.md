@@ -1,7 +1,7 @@
 # CLAUDE.md — wlog
 
-Read order: [CAPABILITIES.md](CAPABILITIES.md), then [SPEC.md](SPEC.md), then the module spec
-(`SPEC-<id>.md`) for the task at hand, then [tasks/plan.md](tasks/plan.md).
+Read order: [CAPABILITIES.md](docs/CAPABILITIES.md), then [SPEC.md](docs/SPEC.md), then the
+module spec (`docs/SPEC-<id>.md`) for the task at hand, then [tasks/plan.md](tasks/plan.md).
 
 ## Golden rules
 
