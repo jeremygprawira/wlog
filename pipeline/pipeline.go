@@ -1,0 +1,146 @@
+// Package pipeline wraps a batch-sending backend with batching, retry, and a bounded
+// buffer, so a real drain (Axiom, Loki, a file) never slows down or blocks the request
+// that logged through it, and never grows memory without bound.
+//
+// Read top to bottom: Sender is what a real backend implements; Wrap turns one into a
+// wlog.Drain whose Send never blocks — it appends to an internal buffer that a
+// background goroutine (started by Wrap, stopped by Close) drains into batches.
+package pipeline
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/jeremygprawira/wlog"
+)
+
+// Sender is what pipeline.Wrap needs from a real backend: send a batch, report
+// failure. A phase-4 drain (Axiom, Loki, ...) implements this, not wlog.Drain
+// directly — Wrap is what turns a Sender into a wlog.Drain.
+type Sender interface {
+	SendBatch(ctx context.Context, events []map[string]any) error
+}
+
+// pollInterval is how often the background goroutine checks whether the current
+// buffer is ready to flush. Small relative to any realistic BatchInterval, so it adds
+// negligible latency without polling wastefully.
+const pollInterval = 5 * time.Millisecond
+
+type wrapped struct {
+	next Sender
+	cfg  config
+
+	mu         sync.Mutex
+	buf        []map[string]any
+	oldestTime time.Time
+
+	closeOnce sync.Once
+	closeSig  chan struct{}
+	done      chan struct{}
+}
+
+// Wrap returns a wlog.Drain backed by next, batching and buffering per opts. The
+// returned Drain also implements Close(ctx context.Context) error, picked up by
+// wlog.Logger.Close.
+func Wrap(next Sender, opts ...Option) wlog.Drain {
+	c := defaultConfig()
+	for _, o := range opts {
+		o(&c)
+	}
+	w := &wrapped{
+		next:     next,
+		cfg:      c,
+		closeSig: make(chan struct{}),
+		done:     make(chan struct{}),
+	}
+	go w.run()
+	return w
+}
+
+// Send buffers event and returns immediately; it never calls next itself and never
+// blocks (gate G3). A full buffer drops the oldest queued event.
+func (w *wrapped) Send(ctx context.Context, event map[string]any) {
+	w.mu.Lock()
+	if len(w.buf) == 0 {
+		w.oldestTime = time.Now()
+	}
+	if len(w.buf) >= w.cfg.maxBuffer {
+		dropped := w.buf[0]
+		w.buf = w.buf[1:]
+		if w.cfg.onDropped != nil {
+			w.cfg.onDropped([]map[string]any{dropped}, nil)
+		}
+	}
+	w.buf = append(w.buf, event)
+	w.mu.Unlock()
+}
+
+func (w *wrapped) run() {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			w.flushIfReady()
+		case <-w.closeSig:
+			w.flushAll(context.Background())
+			close(w.done)
+			return
+		}
+	}
+}
+
+// flushIfReady sends the current buffer as one batch once it has reached BatchSize or
+// BatchInterval has passed since its oldest event, whichever comes first.
+func (w *wrapped) flushIfReady() {
+	batch := w.takeBatchIfReady()
+	if batch == nil {
+		return
+	}
+	w.sendBatch(context.Background(), batch)
+}
+
+func (w *wrapped) takeBatchIfReady() []map[string]any {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.buf) == 0 {
+		return nil
+	}
+	ready := len(w.buf) >= w.cfg.batchSize || time.Since(w.oldestTime) >= w.cfg.batchInterval
+	if !ready {
+		return nil
+	}
+	batch := w.buf
+	w.buf = nil
+	return batch
+}
+
+func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
+	if err := w.next.SendBatch(ctx, batch); err != nil && w.cfg.onDropped != nil {
+		w.cfg.onDropped(batch, err)
+	}
+}
+
+// flushAll drains and sends everything left in the buffer, for Close.
+func (w *wrapped) flushAll(ctx context.Context) {
+	w.mu.Lock()
+	batch := w.buf
+	w.buf = nil
+	w.mu.Unlock()
+	if len(batch) > 0 {
+		w.sendBatch(ctx, batch)
+	}
+}
+
+// Close stops the background goroutine after flushing every buffered event, or
+// returns ctx's error if its deadline passes first.
+func (w *wrapped) Close(ctx context.Context) error {
+	w.closeOnce.Do(func() { close(w.closeSig) })
+	select {
+	case <-w.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}

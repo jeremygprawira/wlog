@@ -48,7 +48,7 @@
 - [x] H4 Panics, traceparent, user id, plugin request hooks
 - [x] H5 Conformance suite passing for wlogstd and for gorilla/mux (examples/mux, go get approved)
 - [x] **Checkpoint 2A** — end-to-end request works (24.8us/op, under the 50us budget)
-- [ ] P1 Batching + flush
+- [x] P1 Batching + flush
 - [ ] P2 Retry + backoff
 - [ ] P3 Bounded buffer, drop-oldest, fan-out isolation
 - [ ] P4 Shared HTTP drain helper + identity headers
