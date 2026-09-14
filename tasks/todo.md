@@ -37,7 +37,7 @@
 - [x] C13 Pretty console sink
 - [x] C14 Env configuration
 - [x] C15 Core gates, benchmark, examples (10.25us/op, coverage 89.7%, examples for the main entry points — not literally every exported symbol, see commit)
-- [ ] **Checkpoint 1B** — event shape reviewed (last cheap change)
+- [x] **Checkpoint 1B** — event shape reviewed and approved
 
 ## Phase 2 — pipeline, HTTP, herr, test tooling, audit
 - [ ] S2.1 Specs: pipeline, sample, drain-memory, wlogtest
