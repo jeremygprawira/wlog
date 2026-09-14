@@ -76,10 +76,12 @@ background goroutine.
 
 ### FanOut
 
-`FanOut(drains...)` returns a `Drain` whose `Send` calls every drain concurrently and waits for
-all to return. Each drain is already panic-isolated by `wlog.Logger`'s own dispatch —
-`FanOut` adds no isolation of its own. One slow drain delays `Send`'s return only up to that
-drain's own time; it does not block delivery to the others.
+`FanOut(drains...)` returns a `Drain` whose `Send` dispatches to every drain concurrently
+(one goroutine per drain) and returns immediately, without waiting for any of them — matching
+gate G3, since `FanOut` is itself just a `wlog.Drain` and core calls `Send` synchronously from
+the event pipeline. Each drain is already panic-isolated by `wlog.Logger`'s own dispatch;
+`FanOut` adds no isolation of its own. A hanging or slow drain never delays delivery to, or
+blocks, the others, or the caller.
 
 ## Success Criteria
 

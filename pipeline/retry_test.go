@@ -24,23 +24,45 @@ func TestPipeline_Retry_SucceedsAfterFailures(t *testing.T) {
 	waitFor(t, time.Second, func() bool { return len(sender.allEvents()) == 3 })
 }
 
+// dropCapture accumulates every OnDropped call (there can be more than one — a
+// hanging Sender under overflow drops one event per call, for instance).
 type dropCapture struct {
-	mu     sync.Mutex
-	events []map[string]any
-	err    error
+	mu    sync.Mutex
+	calls [][]map[string]any
+	errs  []error
 }
 
 func (d *dropCapture) record(events []map[string]any, err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.events = events
-	d.err = err
+	d.calls = append(d.calls, events)
+	d.errs = append(d.errs, err)
 }
 
+// get returns the most recent call.
 func (d *dropCapture) get() ([]map[string]any, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.events, d.err
+	if len(d.calls) == 0 {
+		return nil, nil
+	}
+	return d.calls[len(d.calls)-1], d.errs[len(d.errs)-1]
+}
+
+// first returns the first call ever recorded.
+func (d *dropCapture) first() ([]map[string]any, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(d.calls) == 0 {
+		return nil, nil
+	}
+	return d.calls[0], d.errs[0]
+}
+
+func (d *dropCapture) count() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.calls)
 }
 
 func TestPipeline_Retry_ExhaustedCallsOnDropped(t *testing.T) {
