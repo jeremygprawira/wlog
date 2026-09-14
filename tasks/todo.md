@@ -7,7 +7,7 @@
 - [x] T0.1 Repository scaffold
 - [x] T0.2 Agent guidance + README stub
 - [x] T0.3 CI workflow
-- [ ] T0.4 Write SPEC-core.md
+- [x] T0.4 Write SPEC-core.md (drafted, awaiting approval)
 - [ ] **Checkpoint 0** — scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
 
 ## Phase 1A — redact
