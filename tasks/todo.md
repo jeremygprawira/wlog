@@ -40,8 +40,8 @@
 - [x] **Checkpoint 1B** — event shape reviewed and approved
 
 ## Phase 2 — pipeline, HTTP, herr, test tooling, audit
-- [ ] S2.1 Specs: pipeline, sample, drain-memory, wlogtest
-- [ ] S2.2 Specs: http-std, enrich, errors-herr, audit
+- [x] S2.1 Specs: pipeline, sample, drain-memory, wlogtest
+- [x] S2.2 Specs: http-std, enrich, errors-herr, audit
 - [ ] H1 net/http middleware, thin slice
 - [ ] H2 Header, query, param, cookie capture + skip rules
 - [ ] H3 Body capture

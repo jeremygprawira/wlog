@@ -71,4 +71,12 @@ Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separ
 | `redact` | [SPEC-redact.md](SPEC-redact.md) | approved 2026-09-15 (v2) |
 | (plan) | [tasks/plan.md](tasks/plan.md) | approved 2026-09-15 |
 | `core` | [SPEC-core.md](SPEC-core.md) | approved 2026-09-15 |
+| `pipeline` | [SPEC-pipeline.md](SPEC-pipeline.md) | approved 2026-09-15 |
+| `sample` | [SPEC-sample.md](SPEC-sample.md) | approved 2026-09-15 |
+| `drain-memory` | [SPEC-drain-memory.md](SPEC-drain-memory.md) | approved 2026-09-15 |
+| `wlogtest` | [SPEC-wlogtest.md](SPEC-wlogtest.md) | approved 2026-09-15 |
+| `http-std` | [SPEC-http-std.md](SPEC-http-std.md) | approved 2026-09-15 |
+| `enrich` | [SPEC-enrich.md](SPEC-enrich.md) | approved 2026-09-15 |
+| `errors-herr` | [SPEC-errors-herr.md](SPEC-errors-herr.md) | approved 2026-09-15 |
+| `audit` | [SPEC-audit.md](SPEC-audit.md) | approved 2026-09-15 |
 | others | SPEC-<id>.md | not started |
