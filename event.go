@@ -21,6 +21,8 @@ type event struct {
 	start     time.Time
 	sealed    bool
 	dropped   int // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	level     Level
+	levelSet  bool // true once SetLevel has been called; wins over the default
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -200,15 +202,27 @@ func (l *Logger) emit(e *event) {
 	fields := make(map[string]any, len(e.fields))
 	maps.Copy(fields, e.fields)
 	dropped := e.dropped
+	level := LevelInfo
+	if e.levelSet {
+		level = e.level
+	}
 	e.sealed = true
 	e.mu.Unlock()
 
+	if levelRank[level] < levelRank[l.minLevel] {
+		return
+	}
+
+	outcome := "success"
+	if level == LevelError {
+		outcome = "error"
+	}
 	out := map[string]any{
 		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
-		"level":       "info",
+		"level":       string(level),
 		"operation":   e.operation,
 		"duration_ms": time.Since(e.start).Milliseconds(),
-		"outcome":     "success",
+		"outcome":     outcome,
 	}
 	if l.service != (serviceInfo{}) {
 		out["service"] = map[string]any{

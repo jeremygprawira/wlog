@@ -19,6 +19,7 @@ import (
 type Logger struct {
 	redactor *redact.Redactor
 	service  serviceInfo
+	minLevel Level
 }
 
 type serviceInfo struct {
@@ -31,7 +32,7 @@ type Option func(*Logger)
 // New builds a Logger from opts. With no options, it uses redact.Default() and no
 // service metadata.
 func New(opts ...Option) *Logger {
-	l := &Logger{redactor: redact.Default()}
+	l := &Logger{redactor: redact.Default(), minLevel: LevelDebug}
 	for _, opt := range opts {
 		opt(l)
 	}
