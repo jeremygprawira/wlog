@@ -10,6 +10,7 @@ package wlog
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/jeremygprawira/wlog/redact"
 )
@@ -17,14 +18,15 @@ import (
 // Logger holds the configuration every event is built and emitted with. Build one with
 // New at startup; attach it to request/job contexts with WithContext.
 type Logger struct {
-	redactor       *redact.Redactor
-	service        serviceInfo
-	minLevel       Level
-	errorExtractor ErrorExtractor
-	drains         []Drain
-	onError        func(err error, source string)
-	sampler        Keeper
-	enrichers      []Enricher
+	redactor          atomic.Pointer[redact.Redactor] // swapped at runtime via SetRedactor
+	redactFingerprint bool
+	service           serviceInfo
+	minLevel          Level
+	errorExtractor    ErrorExtractor
+	drains            []Drain
+	onError           func(err error, source string)
+	sampler           Keeper
+	enrichers         []Enricher
 }
 
 type serviceInfo struct {
@@ -37,7 +39,8 @@ type Option func(*Logger)
 // New builds a Logger from opts. With no options, it uses redact.Default() and no
 // service metadata.
 func New(opts ...Option) *Logger {
-	l := &Logger{redactor: redact.Default(), minLevel: LevelDebug, errorExtractor: defaultExtractor{}}
+	l := &Logger{minLevel: LevelDebug, errorExtractor: defaultExtractor{}, redactFingerprint: true}
+	l.redactor.Store(redact.Default())
 	for _, opt := range opts {
 		opt(l)
 	}
@@ -52,7 +55,7 @@ func WithService(name, version, env string) Option {
 // WithRedactor sets the *redact.Redactor used to mask every event before it is
 // written. Unset, New uses redact.Default().
 func WithRedactor(r *redact.Redactor) Option {
-	return func(l *Logger) { l.redactor = r }
+	return func(l *Logger) { l.redactor.Store(r) }
 }
 
 type loggerCtxKey struct{}

@@ -8,8 +8,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"github.com/jeremygprawira/wlog/redact"
 )
 
 // event holds one unit of work's fields between Start and its end func running. It is
@@ -265,11 +263,11 @@ func (l *Logger) emit(e *event) {
 	}
 	l.runEnrichers(ctx, out)
 
-	redactor := l.redactor
-	if redactor == nil {
-		redactor = redact.Default()
-	}
+	redactor := l.currentRedactor()
 	redactor.Apply(out)
+	if l.redactFingerprint {
+		out["redact.fingerprint"] = redactor.Fingerprint()
+	}
 	l.sendToDrains(ctx, out)
 
 	b, err := json.Marshal(out)

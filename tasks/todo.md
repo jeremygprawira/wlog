@@ -29,7 +29,7 @@
 - [x] C5 Detach + sealed events
 - [x] C6 Drains, OnError, Close
 - [x] C7 Stage order
-- [ ] C8 Atomic redactor swap
+- [x] C8 Atomic redactor swap
 - [ ] C9 Field-name presets + renaming
 - [ ] C10 Plugins
 - [ ] C11 Typed keys + StrictKeys
