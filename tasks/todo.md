@@ -14,7 +14,7 @@
 - [x] R1 Key-token matching, end to end
 - [x] R2 Paths, globs, arrays
 - [x] R3 Add / remove / replace keys, With, introspection
-- [ ] R4 Built-in patterns A: credit_card, email, jwt, bearer
+- [x] R4 Built-in patterns A: credit_card, email, jwt, bearer
 - [ ] R5 Built-in patterns B: ipv4, phone, iban, nik
 - [ ] R6 Pattern options + custom patterns
 - [ ] R7 Transforms, limits, Default/Disabled

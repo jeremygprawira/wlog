@@ -15,6 +15,7 @@ type Redactor struct {
 	leafTokens map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
 	leafGlobs  []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
 	paths      [][]segMatcher  // dotted entries, one segMatcher per "." segment
+	patterns   []builtinPattern
 }
 
 // Option configures a Redactor built by New or With.
@@ -82,7 +83,11 @@ func build(c *config, opts []Option) (*Redactor, error) {
 		final = append(final[:idx], final[idx+1:]...)
 	}
 
-	r := &Redactor{raw: append([]string(nil), final...), leafTokens: map[string]bool{}}
+	r := &Redactor{
+		raw:        append([]string(nil), final...),
+		leafTokens: map[string]bool{},
+		patterns:   defaultPatterns,
+	}
 	for _, k := range r.raw {
 		switch {
 		case strings.Contains(k, "."):
@@ -146,6 +151,8 @@ func (r *Redactor) applyValue(v any, path []string) any {
 			x[i] = r.applyValue(item, path)
 		}
 		return x
+	case string:
+		return r.applyPatterns(x)
 	default:
 		return v
 	}
