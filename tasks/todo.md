@@ -54,7 +54,7 @@
 - [x] P4 Shared HTTP drain helper + identity headers
 - [x] SA1 Head + tail sampling rules
 - [x] SA2 Presets + defaults
-- [ ] M1 Memory drain: ring buffer + subscribe
+- [x] M1 Memory drain: ring buffer + subscribe
 - [ ] M2 SSE handler
 - [ ] W1 wlogtest recorder
 - [ ] E1 Host + deployment enrichers
