@@ -6,15 +6,46 @@ import "net/http"
 type Option func(*config)
 
 type config struct {
-	routeFunc func(*http.Request) string
+	routeFunc      func(*http.Request) string
+	captureHeaders bool
+	captureQuery   bool
+	captureCookies bool
+	skipPaths      map[string]bool
 }
 
 func newConfig(opts []Option) *config {
-	c := &config{routeFunc: defaultRoute}
+	c := &config{
+		routeFunc:      defaultRoute,
+		captureHeaders: true,
+		captureQuery:   true,
+		captureCookies: true,
+		skipPaths:      map[string]bool{},
+	}
 	for _, opt := range opts {
 		opt(c)
 	}
 	return c
+}
+
+// CaptureHeaders toggles capturing request headers under http.request_headers.
+// Default true.
+func CaptureHeaders(on bool) Option { return func(c *config) { c.captureHeaders = on } }
+
+// CaptureQuery toggles capturing the query string under http.request_query.
+// Default true.
+func CaptureQuery(on bool) Option { return func(c *config) { c.captureQuery = on } }
+
+// CaptureCookies toggles capturing cookies under http.request_cookies. Default true.
+func CaptureCookies(on bool) Option { return func(c *config) { c.captureCookies = on } }
+
+// SkipPaths excludes exact paths from logging entirely — no event is emitted at all
+// (the handler still runs). Typical use: health checks.
+func SkipPaths(paths ...string) Option {
+	return func(c *config) {
+		for _, p := range paths {
+			c.skipPaths[p] = true
+		}
+	}
 }
 
 func (c *config) route(r *http.Request) string {

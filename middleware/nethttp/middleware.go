@@ -18,6 +18,11 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 	cfg := newConfig(opts)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if cfg.skipPaths[r.URL.Path] {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			ctx := log.WithContext(r.Context())
 			ctx, end := wlog.Start(ctx, "http.request")
 			defer end()
@@ -28,6 +33,16 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 			}
 			w.Header().Set("X-Request-ID", requestID)
 			wlog.SetGroup(ctx, "trace", "request_id", requestID)
+
+			if cfg.captureHeaders {
+				wlog.SetGroup(ctx, "http", "request_headers", captureHeaders(r.Header))
+			}
+			if cfg.captureQuery {
+				wlog.SetGroup(ctx, "http", "request_query", captureQuery(r))
+			}
+			if cfg.captureCookies {
+				wlog.SetGroup(ctx, "http", "request_cookies", captureCookies(r))
+			}
 
 			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 			start := time.Now()
