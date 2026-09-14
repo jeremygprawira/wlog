@@ -11,7 +11,7 @@
 - [ ] **Checkpoint 0** — scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
 
 ## Phase 1A — redact
-- [ ] R1 Key-token matching, end to end
+- [x] R1 Key-token matching, end to end
 - [ ] R2 Paths, globs, arrays
 - [ ] R3 Add / remove / replace keys, With, introspection
 - [ ] R4 Built-in patterns A: credit_card, email, jwt, bearer
