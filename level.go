@@ -38,6 +38,7 @@ func SetLevel(ctx context.Context, level Level) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
+		e.recordLateWrite()
 		return
 	}
 	e.levelSet = true

@@ -65,6 +65,7 @@ func Error(ctx context.Context, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
+		e.recordLateWrite()
 		return
 	}
 

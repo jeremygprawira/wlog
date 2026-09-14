@@ -15,17 +15,19 @@ import (
 // event holds one unit of work's fields between Start and its end func running. It is
 // safe for concurrent Set calls: everything below mu is only ever touched with mu held.
 type event struct {
-	mu        sync.Mutex
-	fields    map[string]any
-	operation string
-	start     time.Time
-	sealed    bool
-	dropped   int // count of Set/SetGroup/Append calls rejected by a cap (G4)
-	level     Level
-	levelSet  bool // true once SetLevel has been called; wins over the default
-	extractor ErrorExtractor
-	errInfo   *ErrorInfo  // the error that currently decides the outcome
-	errList   []ErrorInfo // earlier errors, oldest first, capped at maxErrorList
+	mu         sync.Mutex
+	fields     map[string]any
+	operation  string
+	start      time.Time
+	sealed     bool
+	dropped    int // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	level      Level
+	levelSet   bool // true once SetLevel has been called; wins over the default
+	extractor  ErrorExtractor
+	errInfo    *ErrorInfo  // the error that currently decides the outcome
+	errList    []ErrorInfo // earlier errors, oldest first, capped at maxErrorList
+	parent     *event      // set by Detach; nil for a top-level Start event
+	lateWrites int         // writes received after this event sealed (G3, G4)
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -77,6 +79,7 @@ func Set(ctx context.Context, key string, value any) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
+		e.recordLateWrite()
 		return
 	}
 	if !e.reserveTopLevelSlot(key) {
@@ -102,6 +105,7 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
+		e.recordLateWrite()
 		return
 	}
 
@@ -132,6 +136,7 @@ func Append(ctx context.Context, key string, value any) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
+		e.recordLateWrite()
 		return
 	}
 
@@ -208,6 +213,7 @@ func (l *Logger) emit(e *event) {
 	fields := make(map[string]any, len(e.fields))
 	maps.Copy(fields, e.fields)
 	dropped := e.dropped
+	lateWrites := e.lateWrites
 	errInfo := e.errInfo
 	errList := e.errList
 	level := e.level
@@ -237,6 +243,9 @@ func (l *Logger) emit(e *event) {
 	maps.Copy(out, fields)
 	if dropped > 0 {
 		out["wlog.dropped_fields"] = dropped
+	}
+	if lateWrites > 0 {
+		out["wlog.late_writes"] = lateWrites
 	}
 	// Normalized through normalize() (not assigned directly) so redaction, which only
 	// walks map[string]any/[]any/string, sees inside error detail too.

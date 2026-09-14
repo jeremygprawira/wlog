@@ -26,7 +26,7 @@
 - [x] C2 SetGroup, Append, normalization, caps
 - [x] C3 Levels, SetLevel, outcome
 - [x] C4 Errors: extractor, error + errors[]
-- [ ] C5 Detach + sealed events
+- [x] C5 Detach + sealed events
 - [ ] C6 Drains, OnError, Close
 - [ ] C7 Stage order
 - [ ] C8 Atomic redactor swap
