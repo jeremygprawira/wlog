@@ -8,7 +8,8 @@ package enrich
 type Option func(*config)
 
 type config struct {
-	overwrite bool
+	overwrite  bool
+	geoHeaders map[string]string
 }
 
 func newConfig(opts []Option) config {
