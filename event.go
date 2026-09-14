@@ -256,12 +256,21 @@ func (l *Logger) emit(e *event) {
 		out["errors"] = normalize(errList)
 	}
 
+	// Fixed per-event pipeline (SPEC.md): keep/sample, then enrich, then redact, then
+	// sinks. A dropped event skips enrich and redact entirely; anything an enricher
+	// adds still passes through redact, same as any other field.
+	ctx := context.Background()
+	if !l.shouldKeep(ctx, out) {
+		return
+	}
+	l.runEnrichers(ctx, out)
+
 	redactor := l.redactor
 	if redactor == nil {
 		redactor = redact.Default()
 	}
 	redactor.Apply(out)
-	l.sendToDrains(context.Background(), out)
+	l.sendToDrains(ctx, out)
 
 	b, err := json.Marshal(out)
 	if err != nil {

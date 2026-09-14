@@ -23,6 +23,8 @@ type Logger struct {
 	errorExtractor ErrorExtractor
 	drains         []Drain
 	onError        func(err error, source string)
+	sampler        Keeper
+	enrichers      []Enricher
 }
 
 type serviceInfo struct {

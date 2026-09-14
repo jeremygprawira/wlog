@@ -28,7 +28,7 @@
 - [x] C4 Errors: extractor, error + errors[]
 - [x] C5 Detach + sealed events
 - [x] C6 Drains, OnError, Close
-- [ ] C7 Stage order
+- [x] C7 Stage order
 - [ ] C8 Atomic redactor swap
 - [ ] C9 Field-name presets + renaming
 - [ ] C10 Plugins
