@@ -7,40 +7,91 @@ import (
 
 // builtinPattern is one built-in value pattern: a regex that finds candidate matches in
 // a string value, and a masker that produces the replacement for one match (or returns
-// the match unchanged when it turns out not to be a real hit, e.g. a non-Luhn number).
-// enabledByDefault false means the pattern only runs when named in EnablePatterns.
+// the original value unchanged when it turns out not to be a real hit, e.g. a non-Luhn
+// number). enabledByDefault false means the pattern only runs when named in
+// EnablePatterns. A masker that panics is treated as "[REDACTED]" (see applyPatterns).
 type builtinPattern struct {
 	name             string
 	re               *regexp.Regexp
-	masker           func(match string) string
+	masker           func(Match) string
 	enabledByDefault bool
+}
+
+// valueMasker adapts a simple func(matchedText string) string into the func(Match)
+// string shape every pattern uses, for the built-ins that only look at the match text.
+func valueMasker(f func(string) string) func(Match) string {
+	return func(m Match) string { return f(m.Value) }
 }
 
 // allBuiltinPatterns is every built-in value pattern (SPEC-redact.md's pattern table).
 // Patterns run in this order over one string, each seeing the previous one's output.
 var allBuiltinPatterns = []builtinPattern{
-	{"credit_card", regexp.MustCompile(`\b\d(?:[ -]?\d){12,18}\b`), maskCreditCard, true},
-	{"email", regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`), maskEmail, true},
-	{"jwt", regexp.MustCompile(`\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`), maskJWT, true},
-	{"bearer", regexp.MustCompile(`(?i)\bBearer\s+\S+`), maskBearer, true},
-	{"ipv4", reIPv4, maskIPv4, true},
-	{"phone", rePhone, maskPhone, true},
-	{"iban", reIBAN, maskIBAN, true},
-	{"nik", reNIK, maskNIK, false},
+	{"credit_card", regexp.MustCompile(`\b\d(?:[ -]?\d){12,18}\b`), valueMasker(maskCreditCard), true},
+	{"email", regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`), valueMasker(maskEmail), true},
+	{"jwt", regexp.MustCompile(`\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`), valueMasker(maskJWT), true},
+	{"bearer", regexp.MustCompile(`(?i)\bBearer\s+\S+`), valueMasker(maskBearer), true},
+	{"ipv4", reIPv4, valueMasker(maskIPv4), true},
+	{"phone", rePhone, valueMasker(maskPhone), true},
+	{"iban", reIBAN, valueMasker(maskIBAN), true},
+	{"nik", reNIK, valueMasker(maskNIK), false},
 }
 
-// applyPatterns runs every active built-in pattern over s and returns the result. path is
-// the field's full path from the event root, used only to exempt http.client_ip from the
-// ipv4 pattern unless MaskClientIP was set.
+// applyPatterns runs every active pattern over s and returns the result. path is the
+// field's full path from the event root: it becomes Match.Path/Key, and it is used to
+// exempt http.client_ip from the ipv4 pattern unless MaskClientIP was set.
 func (r *Redactor) applyPatterns(s string, path []string) string {
 	isClientIP := len(path) == 2 && path[0] == "http" && path[1] == "client_ip"
 	for _, p := range r.patterns {
 		if p.name == "ipv4" && isClientIP && !r.maskClientIP {
 			continue
 		}
-		s = p.re.ReplaceAllStringFunc(s, p.masker)
+		s = applyRegex(s, p.re, path, p.masker)
 	}
 	return s
+}
+
+// applyRegex replaces every match of re in s with maskSafe(masker, match), building the
+// Match{Path, Key, Value, Groups} each masker sees.
+func applyRegex(s string, re *regexp.Regexp, path []string, masker func(Match) string) string {
+	idxs := re.FindAllStringSubmatchIndex(s, -1)
+	if idxs == nil {
+		return s
+	}
+	pathStr := strings.Join(path, ".")
+	key := ""
+	if len(path) > 0 {
+		key = path[len(path)-1]
+	}
+
+	var b strings.Builder
+	last := 0
+	for _, m := range idxs {
+		b.WriteString(s[last:m[0]])
+		var groups []string
+		for g := 2; g < len(m); g += 2 {
+			if m[g] < 0 {
+				groups = append(groups, "")
+				continue
+			}
+			groups = append(groups, s[m[g]:m[g+1]])
+		}
+		match := Match{Path: pathStr, Key: key, Value: s[m[0]:m[1]], Groups: groups}
+		b.WriteString(maskSafe(masker, match))
+		last = m[1]
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// maskSafe calls masker and recovers a panic as "[REDACTED]", so one bad custom
+// pattern can never crash the request that logged through it.
+func maskSafe(masker func(Match) string, m Match) (out string) {
+	defer func() {
+		if recover() != nil {
+			out = "[REDACTED]"
+		}
+	}()
+	return masker(m)
 }
 
 func maskCreditCard(match string) string {

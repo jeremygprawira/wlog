@@ -23,10 +23,13 @@ type Redactor struct {
 type Option func(*config)
 
 type config struct {
-	keys            []string
-	removed         []string
-	enabledPatterns []string
-	maskClientIP    bool
+	keys              []string
+	removed           []string
+	enabledPatterns   []string
+	maskClientIP      bool
+	customPatterns    []Pattern
+	removedPatterns   []string
+	noBuiltinPatterns bool
 }
 
 // EnablePatterns turns on a built-in pattern that is off by default (currently only
@@ -99,15 +102,15 @@ func build(c *config, opts []Option) (*Redactor, error) {
 		final = append(final[:idx], final[idx+1:]...)
 	}
 
+	patterns, err := buildPatterns(c)
+	if err != nil {
+		return nil, err
+	}
 	r := &Redactor{
 		raw:          append([]string(nil), final...),
 		leafTokens:   map[string]bool{},
 		maskClientIP: c.maskClientIP,
-	}
-	for _, p := range allBuiltinPatterns {
-		if p.enabledByDefault || indexFold(c.enabledPatterns, p.name) >= 0 {
-			r.patterns = append(r.patterns, p)
-		}
+		patterns:     patterns,
 	}
 	for _, k := range r.raw {
 		switch {
