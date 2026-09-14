@@ -5,7 +5,7 @@
 
 ## Phase 0 — Foundation
 - [x] T0.1 Repository scaffold
-- [ ] T0.2 Agent guidance + README stub
+- [x] T0.2 Agent guidance + README stub
 - [ ] T0.3 CI workflow
 - [ ] T0.4 Write SPEC-core.md
 - [ ] **Checkpoint 0** — scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
