@@ -83,14 +83,20 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 			defer end()
 			defer runRequestFinishers(ctx, log)
 			defer func() {
-				wlog.SetGroup(ctx, "http",
+				fields := []any{
 					"method", r.Method,
 					"route", cfg.route(req),
 					"path", req.URL.Path,
 					"status", sw.status,
 					"duration_ms", time.Since(start).Milliseconds(),
 					"bytes_out", sw.bytes,
-				)
+					"client_ip", clientIP(r),
+					"user_agent", r.UserAgent(),
+				}
+				if r.ContentLength >= 0 {
+					fields = append(fields, "bytes_in", r.ContentLength)
+				}
+				wlog.SetGroup(ctx, "http", fields...)
 				if body := sw.body(); body != nil {
 					wlog.SetGroup(ctx, "http", "response_body", body)
 				}

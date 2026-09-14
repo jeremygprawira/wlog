@@ -1,6 +1,26 @@
 package wlogstd
 
-import "net/http"
+import (
+	"net"
+	"net/http"
+	"strings"
+)
+
+// clientIP prefers the first X-Forwarded-For entry (the original client, per the
+// header's de-facto convention), falling back to RemoteAddr with its port stripped.
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		first := strings.TrimSpace(strings.Split(fwd, ",")[0])
+		if first != "" {
+			return first
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
 
 // captureHeaders converts http.Header to a flat map[string]any (first value per key),
 // the shape wlog's redactor walks.
