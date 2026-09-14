@@ -70,9 +70,13 @@ func TestCore_LateWrite_CountedOnOpenParent(t *testing.T) {
 
 func TestCore_LateWrite_NoOpenAncestor_IsSilentNoop(t *testing.T) {
 	log := wlog.New()
-	ctx := log.WithContext(context.Background())
-	ctx, end := wlog.Start(ctx, "solo.op")
-	end() // seals; no parent exists at all
+	var ctx context.Context
+	var end func()
+	captureStdout(t, func() {
+		ctx = log.WithContext(context.Background())
+		ctx, end = wlog.Start(ctx, "solo.op")
+		end() // seals; no parent exists at all
+	})
 
 	// Must not panic.
 	wlog.Set(ctx, "late", "value")

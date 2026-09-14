@@ -30,7 +30,7 @@
 - [x] C6 Drains, OnError, Close
 - [x] C7 Stage order
 - [x] C8 Atomic redactor swap
-- [ ] C9 Field-name presets + renaming
+- [x] C9 Field-name presets + renaming
 - [ ] C10 Plugins
 - [ ] C11 Typed keys + StrictKeys
 - [ ] C12 Plain one-off log lines

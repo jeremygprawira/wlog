@@ -27,6 +27,7 @@ type Logger struct {
 	onError           func(err error, source string)
 	sampler           Keeper
 	enrichers         []Enricher
+	fieldNames        FieldNames
 }
 
 type serviceInfo struct {

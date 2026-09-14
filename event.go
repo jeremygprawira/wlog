@@ -268,6 +268,7 @@ func (l *Logger) emit(e *event) {
 	if l.redactFingerprint {
 		out["redact.fingerprint"] = redactor.Fingerprint()
 	}
+	out = applyFieldNames(out, l.fieldNames)
 	l.sendToDrains(ctx, out)
 
 	b, err := json.Marshal(out)
