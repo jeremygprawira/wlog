@@ -4,7 +4,7 @@
 > Rule: no implementation task starts before its module spec is approved.
 
 ## Phase 0 — Foundation
-- [ ] T0.1 Repository scaffold
+- [x] T0.1 Repository scaffold
 - [ ] T0.2 Agent guidance + README stub
 - [ ] T0.3 CI workflow
 - [ ] T0.4 Write SPEC-core.md
