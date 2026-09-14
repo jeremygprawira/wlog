@@ -52,8 +52,8 @@
 - [x] P2 Retry + backoff
 - [x] P3 Bounded buffer, drop-oldest, fan-out isolation
 - [x] P4 Shared HTTP drain helper + identity headers
-- [ ] SA1 Head + tail sampling rules
-- [ ] SA2 Presets + defaults
+- [x] SA1 Head + tail sampling rules
+- [x] SA2 Presets + defaults
 - [ ] M1 Memory drain: ring buffer + subscribe
 - [ ] M2 SSE handler
 - [ ] W1 wlogtest recorder
