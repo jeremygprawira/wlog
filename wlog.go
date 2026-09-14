@@ -45,10 +45,14 @@ type Option func(*Logger)
 func New(opts ...Option) *Logger {
 	l := &Logger{minLevel: LevelDebug, errorExtractor: defaultExtractor{}, redactFingerprint: true}
 	l.redactor.Store(redact.Default())
+	warnings := l.applyEnvDefaults()
 	for _, opt := range opts {
 		opt(l)
 	}
 	l.wirePlugins()
+	for _, w := range warnings {
+		l.reportError(w.err, w.source)
+	}
 	return l
 }
 
