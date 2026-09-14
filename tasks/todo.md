@@ -25,7 +25,7 @@
 - [x] C1 Thin wide event: Start → Set → emit JSON
 - [x] C2 SetGroup, Append, normalization, caps
 - [x] C3 Levels, SetLevel, outcome
-- [ ] C4 Errors: extractor, error + errors[]
+- [x] C4 Errors: extractor, error + errors[]
 - [ ] C5 Detach + sealed events
 - [ ] C6 Drains, OnError, Close
 - [ ] C7 Stage order

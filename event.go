@@ -23,6 +23,9 @@ type event struct {
 	dropped   int // count of Set/SetGroup/Append calls rejected by a cap (G4)
 	level     Level
 	levelSet  bool // true once SetLevel has been called; wins over the default
+	extractor ErrorExtractor
+	errInfo   *ErrorInfo  // the error that currently decides the outcome
+	errList   []ErrorInfo // earlier errors, oldest first, capped at maxErrorList
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -55,7 +58,10 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 	if l == nil {
 		return ctx, func() {}
 	}
-	e := &event{fields: map[string]any{}, operation: operation, start: time.Now()}
+	e := &event{
+		fields: map[string]any{}, operation: operation, start: time.Now(),
+		extractor: l.errorExtractor, level: LevelInfo,
+	}
 	return withEvent(ctx, e), func() { l.emit(e) }
 }
 
@@ -202,10 +208,9 @@ func (l *Logger) emit(e *event) {
 	fields := make(map[string]any, len(e.fields))
 	maps.Copy(fields, e.fields)
 	dropped := e.dropped
-	level := LevelInfo
-	if e.levelSet {
-		level = e.level
-	}
+	errInfo := e.errInfo
+	errList := e.errList
+	level := e.level
 	e.sealed = true
 	e.mu.Unlock()
 
@@ -232,6 +237,14 @@ func (l *Logger) emit(e *event) {
 	maps.Copy(out, fields)
 	if dropped > 0 {
 		out["wlog.dropped_fields"] = dropped
+	}
+	// Normalized through normalize() (not assigned directly) so redaction, which only
+	// walks map[string]any/[]any/string, sees inside error detail too.
+	if errInfo != nil {
+		out["error"] = normalize(*errInfo)
+	}
+	if len(errList) > 0 {
+		out["errors"] = normalize(errList)
 	}
 
 	redactor := l.redactor

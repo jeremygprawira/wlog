@@ -17,9 +17,10 @@ import (
 // Logger holds the configuration every event is built and emitted with. Build one with
 // New at startup; attach it to request/job contexts with WithContext.
 type Logger struct {
-	redactor *redact.Redactor
-	service  serviceInfo
-	minLevel Level
+	redactor       *redact.Redactor
+	service        serviceInfo
+	minLevel       Level
+	errorExtractor ErrorExtractor
 }
 
 type serviceInfo struct {
@@ -32,7 +33,7 @@ type Option func(*Logger)
 // New builds a Logger from opts. With no options, it uses redact.Default() and no
 // service metadata.
 func New(opts ...Option) *Logger {
-	l := &Logger{redactor: redact.Default(), minLevel: LevelDebug}
+	l := &Logger{redactor: redact.Default(), minLevel: LevelDebug, errorExtractor: defaultExtractor{}}
 	for _, opt := range opts {
 		opt(l)
 	}
