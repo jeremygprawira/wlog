@@ -58,7 +58,7 @@
 - [x] M2 SSE handler
 - [x] W1 wlogtest recorder
 - [x] E1 Host + deployment enrichers
-- [ ] E2 User agent enricher
+- [x] E2 User agent enricher
 - [ ] E3 Geo + user-id enrichers
 - [ ] EH1 herr error extractor
 - [ ] A1 Audit records
