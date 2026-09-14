@@ -275,10 +275,15 @@ func (l *Logger) emit(e *event) {
 		out["errors"] = normalize(errList)
 	}
 
-	// Fixed per-event pipeline (SPEC.md): keep/sample, then enrich, then redact, then
-	// sinks. A dropped event skips enrich and redact entirely; anything an enricher
-	// adds still passes through redact, same as any other field.
-	ctx := context.Background()
+	l.pipeline(context.Background(), out)
+}
+
+// pipeline runs the fixed per-event stages (SPEC.md): keep/sample, then enrich, then
+// redact, then rename, then sinks/drains. A dropped event skips enrich and redact
+// entirely; anything an enricher adds still passes through redact, same as any other
+// field. Shared by emit (a wide event) and plainLog (a one-off line), so both go
+// through exactly the same pipeline.
+func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	if !l.shouldKeep(ctx, out) {
 		return
 	}

@@ -33,7 +33,7 @@
 - [x] C9 Field-name presets + renaming
 - [x] C10 Plugins
 - [x] C11 Typed keys + StrictKeys
-- [ ] C12 Plain one-off log lines
+- [x] C12 Plain one-off log lines
 - [ ] C13 Pretty console sink
 - [ ] C14 Env configuration
 - [ ] C15 Core gates, benchmark, examples
