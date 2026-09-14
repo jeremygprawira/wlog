@@ -46,7 +46,7 @@
 - [x] H2 Header, query, cookie capture + skip rules (path params: none yet, ServeMux's r.PathValue is available to handlers directly)
 - [x] H3 Body capture
 - [x] H4 Panics, traceparent, user id, plugin request hooks
-- [x] H5 Conformance suite built and passing for wlogstd (gorilla/mux proof deferred — needs a new dependency, asked below)
+- [x] H5 Conformance suite passing for wlogstd and for gorilla/mux (examples/mux, go get approved)
 - [x] **Checkpoint 2A** — end-to-end request works (24.8us/op, under the 50us budget)
 - [ ] P1 Batching + flush
 - [ ] P2 Retry + backoff
