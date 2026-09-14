@@ -22,7 +22,7 @@
 - [x] **Checkpoint 1A** — SPEC-redact criteria met, stdlib-only, benchmark meets target, approved
 
 ## Phase 1B — core
-- [ ] C1 Thin wide event: Start → Set → emit JSON
+- [x] C1 Thin wide event: Start → Set → emit JSON
 - [ ] C2 SetGroup, Append, normalization, caps
 - [ ] C3 Levels, SetLevel, outcome
 - [ ] C4 Errors: extractor, error + errors[]
