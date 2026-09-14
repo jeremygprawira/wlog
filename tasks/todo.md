@@ -36,7 +36,7 @@
 - [x] C12 Plain one-off log lines
 - [x] C13 Pretty console sink
 - [x] C14 Env configuration
-- [ ] C15 Core gates, benchmark, examples
+- [x] C15 Core gates, benchmark, examples (10.25us/op, coverage 89.7%, examples for the main entry points — not literally every exported symbol, see commit)
 - [ ] **Checkpoint 1B** — event shape reviewed (last cheap change)
 
 ## Phase 2 — pipeline, HTTP, herr, test tooling, audit
