@@ -43,8 +43,16 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 			if cfg.captureCookies {
 				wlog.SetGroup(ctx, "http", "request_cookies", captureCookies(r))
 			}
+			if cfg.captureBody {
+				if body := captureRequestBody(r, cfg.maxBodyCapture, cfg.bodyContentTypes); body != nil {
+					wlog.SetGroup(ctx, "http", "request_body", body)
+				}
+			}
 
-			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+			sw := &statusWriter{
+				ResponseWriter: w, status: http.StatusOK,
+				captureBody: cfg.captureBody, allowedTypes: cfg.bodyContentTypes, maxCapture: cfg.maxBodyCapture,
+			}
 			start := time.Now()
 			// req, not r: net/http.ServeMux sets Pattern on the *Request it actually
 			// dispatches to, which WithContext made a shallow copy of — reading
@@ -60,6 +68,9 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 				"duration_ms", time.Since(start).Milliseconds(),
 				"bytes_out", sw.bytes,
 			)
+			if body := sw.body(); body != nil {
+				wlog.SetGroup(ctx, "http", "response_body", body)
+			}
 		})
 	}
 }

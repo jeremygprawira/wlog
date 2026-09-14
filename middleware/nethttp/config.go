@@ -6,25 +6,47 @@ import "net/http"
 type Option func(*config)
 
 type config struct {
-	routeFunc      func(*http.Request) string
-	captureHeaders bool
-	captureQuery   bool
-	captureCookies bool
-	skipPaths      map[string]bool
+	routeFunc        func(*http.Request) string
+	captureHeaders   bool
+	captureQuery     bool
+	captureCookies   bool
+	captureBody      bool
+	maxBodyCapture   int
+	bodyContentTypes []string
+	skipPaths        map[string]bool
 }
 
 func newConfig(opts []Option) *config {
 	c := &config{
-		routeFunc:      defaultRoute,
-		captureHeaders: true,
-		captureQuery:   true,
-		captureCookies: true,
-		skipPaths:      map[string]bool{},
+		routeFunc:        defaultRoute,
+		captureHeaders:   true,
+		captureQuery:     true,
+		captureCookies:   true,
+		captureBody:      true,
+		maxBodyCapture:   defaultMaxBodyCapture,
+		bodyContentTypes: defaultBodyContentTypes,
+		skipPaths:        map[string]bool{},
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
 	return c
+}
+
+// CaptureBody toggles capturing both the request and response body. Default true.
+func CaptureBody(on bool) Option { return func(c *config) { c.captureBody = on } }
+
+// MaxBodyCapture caps how many bytes of each body direction are logged. The handler
+// still receives the complete, untruncated request body regardless of this cap.
+// Default 10KB.
+func MaxBodyCapture(n int) Option { return func(c *config) { c.maxBodyCapture = n } }
+
+// BodyContentTypes sets which Content-Types are captured; anything else is skipped
+// entirely (never read or buffered), so a binary upload/download is never corrupted
+// or needlessly held in memory. An entry ending in "/" matches a whole top-level type
+// (e.g. "text/"). Default: "application/json", "text/".
+func BodyContentTypes(types ...string) Option {
+	return func(c *config) { c.bodyContentTypes = types }
 }
 
 // CaptureHeaders toggles capturing request headers under http.request_headers.
