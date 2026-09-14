@@ -21,6 +21,8 @@ type Logger struct {
 	service        serviceInfo
 	minLevel       Level
 	errorExtractor ErrorExtractor
+	drains         []Drain
+	onError        func(err error, source string)
 }
 
 type serviceInfo struct {

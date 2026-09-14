@@ -261,10 +261,12 @@ func (l *Logger) emit(e *event) {
 		redactor = redact.Default()
 	}
 	redactor.Apply(out)
+	l.sendToDrains(context.Background(), out)
 
 	b, err := json.Marshal(out)
 	if err != nil {
-		return // never panics; a later task adds an OnError hook for this
+		l.reportError(err, "stdout")
+		return
 	}
 	fmt.Fprintln(os.Stdout, string(b))
 }
