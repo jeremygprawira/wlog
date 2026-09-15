@@ -67,7 +67,7 @@
 - [x] **Checkpoint 2B**: G1 through G5 green, refund scenario passes as an integration test, human review complete
 
 ## Phase 3 — adapters, trace, examples
-- [ ] S3 Specs: HTTP adapters, logger adapters, trace-otel
+- [x] S3 Specs: HTTP adapters, logger adapters, trace-otel
 - [ ] HE4 Echo v4 adapter
 - [ ] HE5 Echo v5 adapter
 - [ ] HG Gin adapter

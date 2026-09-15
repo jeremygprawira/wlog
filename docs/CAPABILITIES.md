@@ -79,7 +79,7 @@ Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separ
 | `enrich` | [SPEC-enrich.md](SPEC-enrich.md) | approved 2026-09-15 |
 | `errors-herr` | [SPEC-errors-herr.md](SPEC-errors-herr.md) | approved 2026-09-15 |
 | `audit` | [SPEC-audit.md](SPEC-audit.md) | approved 2026-09-15 |
-| `http-echo`, `http-echo5`, `http-gin` | [SPEC-http-adapters.md](SPEC-http-adapters.md) | drafted, awaiting approval |
-| `log-slog`, `log-zap`, `log-zerolog`, `log-logrus` | [SPEC-log-adapters.md](SPEC-log-adapters.md) | drafted, awaiting approval |
-| `trace-otel` | [SPEC-trace-otel.md](SPEC-trace-otel.md) | drafted, awaiting approval |
+| `http-echo`, `http-echo5`, `http-gin` | [SPEC-http-adapters.md](SPEC-http-adapters.md) | approved 2026-09-16 |
+| `log-slog`, `log-zap`, `log-zerolog`, `log-logrus` | [SPEC-log-adapters.md](SPEC-log-adapters.md) | approved 2026-09-16 |
+| `trace-otel` | [SPEC-trace-otel.md](SPEC-trace-otel.md) | approved 2026-09-16 |
 | others | SPEC-<id>.md | not started |
