@@ -15,4 +15,5 @@ use (
 	./log/zap
 	./log/zerolog
 	./middleware/gin
+	./trace/otel
 )
