@@ -20,6 +20,7 @@ type event struct {
 	start       time.Time
 	sealed      bool
 	dropped     int // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	droppedLogs int // count of AppendLog lines rejected by maxLogLines (G4)
 	level       Level
 	levelSet    bool // true once SetLevel has been called; wins over the default
 	extractor   ErrorExtractor
@@ -235,6 +236,7 @@ func (l *Logger) emit(e *event) {
 	fields := make(map[string]any, len(e.fields))
 	maps.Copy(fields, e.fields)
 	dropped := e.dropped
+	droppedLogs := e.droppedLogs
 	lateWrites := e.lateWrites
 	unknownKeys := e.unknownKeys
 	errInfo := e.errInfo
@@ -266,6 +268,9 @@ func (l *Logger) emit(e *event) {
 	maps.Copy(out, fields)
 	if dropped > 0 {
 		out["wlog.dropped_fields"] = dropped
+	}
+	if droppedLogs > 0 {
+		out["wlog.dropped_logs"] = droppedLogs
 	}
 	if lateWrites > 0 {
 		out["wlog.late_writes"] = lateWrites

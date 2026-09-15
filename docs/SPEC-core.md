@@ -74,11 +74,28 @@ func SetLevel(ctx context.Context, level Level)                // overrides infe
 func Error(ctx context.Context, err error)                     // uses the active ErrorExtractor
 func Info(ctx context.Context, msg string, kv ...any)          // plain one-off line (C12)
 func Warn(ctx context.Context, msg string, kv ...any)
+func AppendLog(ctx context.Context, line LogLine)     // folds one log record into logs[]
 ```
 
 All are no-ops on a `ctx` with no event (never panics). `Set`/`SetGroup`/`Append` respect the
 caps from SPEC.md G4: `MaxKeys` (default 200), `MaxGroupFields` (default 50), `MaxArrayLen`
 (default 200). An entry beyond a cap is dropped and counted in `wlog.dropped_fields`.
+
+### Folded log lines
+
+```go
+type LogLine struct {
+    Level string         `json:"level"`
+    Msg   string         `json:"msg"`
+    Attrs map[string]any `json:"attrs,omitempty"`
+}
+```
+
+A log-*-in adapter (`log-slog`'s `Handler`) calls `AppendLog` to fold one record made inside an
+event into that event's `logs[]`. The array is capped at 50 lines. A line beyond the cap is
+dropped and counted in `wlog.dropped_logs`, the same way `wlog.dropped_fields` counts other
+overflow. `AppendLog` is a no-op on a sealed event or a `ctx` with no event, and increments
+`wlog.late_writes` on a sealed one, like every other write.
 
 ### Typed keys (C11)
 
