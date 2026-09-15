@@ -82,4 +82,5 @@ Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separ
 | `http-echo`, `http-echo5`, `http-gin` | [SPEC-http-adapters.md](SPEC-http-adapters.md) | approved 2026-09-16 |
 | `log-slog`, `log-zap`, `log-zerolog`, `log-logrus` | [SPEC-log-adapters.md](SPEC-log-adapters.md) | approved 2026-09-16 |
 | `trace-otel` | [SPEC-trace-otel.md](SPEC-trace-otel.md) | approved 2026-09-16 |
+| `drain-axiom` · `drain-loki` · `drain-file` · `drain-webhook` · `drain-otlp` | [SPEC-drains-v1.md](SPEC-drains-v1.md) | approved 2026-09-16 |
 | others | SPEC-<id>.md | not started |
