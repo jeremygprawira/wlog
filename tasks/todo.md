@@ -68,7 +68,7 @@
 
 ## Phase 3 — adapters, trace, examples
 - [x] S3 Specs: HTTP adapters, logger adapters, trace-otel
-- [ ] HE4 Echo v4 adapter
+- [x] HE4 Echo v4 adapter
 - [ ] HE5 Echo v5 adapter
 - [ ] HG Gin adapter
 - [ ] LS1 slog output
