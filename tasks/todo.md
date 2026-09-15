@@ -63,7 +63,7 @@
 - [x] EH1 herr error extractor
 - [x] A1 Audit records
 - [x] A2 Hash chain
-- [ ] A3 Journal drain + Verify
+- [x] A3 Journal drain + Verify
 - [ ] **Checkpoint 2B** — G1–G5 green, refund scenario passes
 
 ## Phase 3 — adapters, trace, examples
