@@ -60,7 +60,7 @@
 - [x] E1 Host + deployment enrichers
 - [x] E2 User agent enricher
 - [x] E3 Geo + user-id enrichers
-- [ ] EH1 herr error extractor
+- [x] EH1 herr error extractor
 - [ ] A1 Audit records
 - [ ] A2 Hash chain
 - [ ] A3 Journal drain + Verify
