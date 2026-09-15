@@ -55,6 +55,23 @@ func TestSlogOutput_OneRecordWithNestedGroup(t *testing.T) {
 	}
 }
 
+// TestSlogOutput_PlainLineUsesMessage proves a plain one-off line (no operation) keeps
+// its text as the record message rather than being emitted with an empty message.
+func TestSlogOutput_PlainLineUsesMessage(t *testing.T) {
+	var buf bytes.Buffer
+	log, _ := wlogtest.New(t, wlog.WithDrains(wlogslog.Drain(slog.NewJSONHandler(&buf, nil))))
+
+	wlog.Info(log.WithContext(context.Background()), "started", "port", 8080)
+
+	var rec map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &rec); err != nil {
+		t.Fatalf("slog output is not one JSON record: %v\n%q", err, buf.String())
+	}
+	if rec["msg"] != "started" {
+		t.Errorf("msg = %v, want started", rec["msg"])
+	}
+}
+
 // TestSlogOutput_LevelMapping proves each wlog level maps to the matching slog level.
 func TestSlogOutput_LevelMapping(t *testing.T) {
 	cases := map[wlog.Level]string{

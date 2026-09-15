@@ -20,7 +20,7 @@ import (
 // rather than a flattened key.
 func Drain(handler slog.Handler) wlog.Drain {
 	return wlog.DrainFunc(func(ctx context.Context, event map[string]any) {
-		rec := slog.NewRecord(recordTime(event), slogLevel(event["level"]), stringValue(event["operation"]), 0)
+		rec := slog.NewRecord(recordTime(event), slogLevel(event["level"]), eventMessage(event), 0)
 		rec.AddAttrs(eventAttrs(event)...)
 		_ = handler.Handle(ctx, rec)
 	})
@@ -57,13 +57,22 @@ func stringValue(v any) string {
 	return s
 }
 
-// eventAttrs turns every field except the three already carried by the record
-// (timestamp, level, operation) into an slog attribute.
+// eventMessage picks the record message: a wide event's operation, or a plain log
+// line's message when there is no operation.
+func eventMessage(event map[string]any) string {
+	if op := stringValue(event["operation"]); op != "" {
+		return op
+	}
+	return stringValue(event["message"])
+}
+
+// eventAttrs turns every field except the ones already carried by the record
+// (timestamp, level, operation, message) into an slog attribute.
 func eventAttrs(event map[string]any) []slog.Attr {
 	attrs := make([]slog.Attr, 0, len(event))
 	for k, v := range event {
 		switch k {
-		case "timestamp", "level", "operation":
+		case "timestamp", "level", "operation", "message":
 			continue
 		}
 		attrs = append(attrs, attrFor(k, v))
