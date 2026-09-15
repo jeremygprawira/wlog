@@ -62,7 +62,7 @@
 - [x] E3 Geo + user-id enrichers
 - [x] EH1 herr error extractor
 - [x] A1 Audit records
-- [ ] A2 Hash chain
+- [x] A2 Hash chain
 - [ ] A3 Journal drain + Verify
 - [ ] **Checkpoint 2B** — G1–G5 green, refund scenario passes
 
