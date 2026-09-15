@@ -157,3 +157,22 @@ func TestCore_ConcurrentWriters(t *testing.T) {
 		t.Errorf("list has %d elements, want 32", len(list))
 	}
 }
+
+func TestCore_HasEvent(t *testing.T) {
+	log := wlog.New()
+	ctx := log.WithContext(context.Background())
+
+	if wlog.HasEvent(ctx) {
+		t.Error("HasEvent = true before Start, want false")
+	}
+
+	ctx, end := wlog.Start(ctx, "test.op")
+	if !wlog.HasEvent(ctx) {
+		t.Error("HasEvent = false inside a started event, want true")
+	}
+	captureStdout(t, end)
+
+	if wlog.HasEvent(context.Background()) {
+		t.Error("HasEvent = true on a bare context, want false")
+	}
+}

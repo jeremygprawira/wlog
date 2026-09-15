@@ -50,6 +50,13 @@ func eventFrom(ctx context.Context) *event {
 	return e
 }
 
+// HasEvent reports whether ctx carries a wide event from an active Start. Callers that
+// build on top of Start/Set (like package audit) use it to tell "inside a request" from
+// "standalone", since Set alone cannot: it silently no-ops either way.
+func HasEvent(ctx context.Context) bool {
+	return eventFrom(ctx) != nil
+}
+
 // Start begins one wide event. It reads the *Logger attached to ctx (see
 // Logger.WithContext); if there is none, Start returns ctx unchanged and a no-op end
 // func, so calling it is always safe even before a logger is configured.
