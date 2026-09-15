@@ -1,6 +1,6 @@
 MODULES := $(shell go work edit -json | grep '"DiskPath"' | sed -E 's/.*"DiskPath": "(.*)"/\1/')
 
-.PHONY: test race fuzz bench lint tidy cover compat map
+.PHONY: test race fuzz bench lint tidy cover compat map integration
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
@@ -31,3 +31,10 @@ compat:
 
 map:
 	go run ./cmd/wlog map --min-score 80 ./examples/...
+
+# Optional: needs a running docker daemon. Not part of make test or make race.
+integration:
+	@mkdir -p .integration-out
+	docker compose -f docker-compose.integration.yml up -d
+	@go test -tags=integration -timeout 180s ./drain/loki ./drain/otlp; status=$$?; \
+		docker compose -f docker-compose.integration.yml down; exit $$status

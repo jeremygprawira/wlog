@@ -2,4 +2,5 @@ coverage/
 bin/
 *.test
 testdata/fuzz/
+.integration-out/
 .DS_Store

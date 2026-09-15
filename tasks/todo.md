@@ -88,7 +88,7 @@
 - [x] DF File drain
 - [x] DW Webhook drain
 - [x] DO OTLP drain
-- [ ] DI Optional docker integration tests
+- [x] DI Optional docker integration tests
 - [ ] **Checkpoint 4**: drains work from env alone
 
 ## Phase 5 — cli-map + v1

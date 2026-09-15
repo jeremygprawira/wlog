@@ -1,0 +1,31 @@
+# Integration stack for the optional drain tests (make integration).
+# Not used by make test or make race.
+services:
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.0
+    command: ["--config=env:OTEL_CONFIG"]
+    environment:
+      # The collector reads its config from this env var, so the stack stays in one file.
+      OTEL_CONFIG: |
+        receivers:
+          otlp:
+            protocols:
+              http:
+        exporters:
+          file:
+            path: /out/logs.json
+        service:
+          pipelines:
+            logs:
+              receivers: [otlp]
+              exporters: [file]
+    ports:
+      - "4318:4318"
+    volumes:
+      - ./.integration-out:/out
