@@ -12,5 +12,6 @@ use ./middleware/echo5
 
 use (
 	./log/zap
+	./log/zerolog
 	./middleware/gin
 )
