@@ -70,16 +70,16 @@
 - [x] S3 Specs: HTTP adapters, logger adapters, trace-otel
 - [x] HE4 Echo v4 adapter
 - [x] HE5 Echo v5 adapter
-- [ ] HG Gin adapter
-- [ ] LS1 slog output
-- [ ] LS2 slog input
-- [ ] LZ zap output
-- [ ] LZR zerolog output
-- [ ] LL logrus output
-- [ ] TO OpenTelemetry span link
-- [ ] EX1 Example apps (HTTP)
-- [ ] EX2 Example apps (extension points)
-- [ ] **Checkpoint 3**: 5 HTTP stacks identical, logger swap = one option
+- [x] HG Gin adapter
+- [x] LS1 slog output
+- [x] LS2 slog input
+- [x] LZ zap output
+- [x] LZR zerolog output
+- [x] LL logrus output
+- [x] TO OpenTelemetry span link
+- [x] EX1 Example apps (HTTP)
+- [x] EX2 Example apps (extension points)
+- [x] **Checkpoint 3**: 5 HTTP stacks identical, logger swap = one option
 
 ## Phase 4 — v1 drains
 - [ ] S4 Specs: axiom, loki, file, webhook, otlp
