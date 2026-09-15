@@ -89,7 +89,7 @@
 - [x] DW Webhook drain
 - [x] DO OTLP drain
 - [x] DI Optional docker integration tests
-- [ ] **Checkpoint 4**: drains work from env alone
+- [x] **Checkpoint 4**: drains work from env alone, G1 covered per drain
 
 ## Phase 5 — cli-map + v1
 - [ ] S5 Spec: cli-map
