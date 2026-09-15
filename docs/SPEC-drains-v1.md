@@ -116,7 +116,8 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
   - a slice to `arrayValue` with each element mapped the same way
   - a nested map to dotted keys, for example `http.status`
   - `timestamp` and `level` are not attributes, because the record already carries them
-- `traceId` and `spanId` are set from `trace.trace_id` and `trace.span_id` when present.
+- `traceId` and `spanId` are set from `trace.trace_id` and `trace.span_id` when present. Those
+  two keys are not attributes, since the record already carries them.
 - `timeUnixNano` and `observedTimeUnixNano` are the event's `timestamp` in Unix nanoseconds.
 - One `SendBatch` sends one request with one `scopeLogs` and one `logRecords` entry per event.
 - `drain/otlp/testdata/export.golden.json` pins the exact JSON for one fixed event.
