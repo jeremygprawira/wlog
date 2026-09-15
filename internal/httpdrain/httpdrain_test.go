@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
+	"strconv"
 	"testing"
 	"time"
 
@@ -49,6 +50,21 @@ func TestHTTPDrain_CustomHeaders(t *testing.T) {
 
 	if srv.Last().Headers.Get("Authorization") != "Bearer tok" {
 		t.Errorf("Authorization header missing/wrong: %v", srv.Last().Headers)
+	}
+}
+
+func TestHTTPDrain_HeaderFunc(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+
+	c := httpdrain.New(srv.URL, httpdrain.WithHeaderFunc(func(body []byte) map[string]string {
+		return map[string]string{"X-Body-Length": strconv.Itoa(len(body))}
+	}))
+	if err := c.Post(context.Background(), []byte("hello"), "text/plain"); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if got := srv.Last().Headers.Get("X-Body-Length"); got != "5" {
+		t.Errorf("X-Body-Length = %q, want 5", got)
 	}
 }
 

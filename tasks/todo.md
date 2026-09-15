@@ -86,7 +86,7 @@
 - [x] DA Axiom drain
 - [x] DL Loki drain
 - [x] DF File drain
-- [ ] DW Webhook drain
+- [x] DW Webhook drain
 - [ ] DO OTLP drain
 - [ ] DI Optional docker integration tests
 - [ ] **Checkpoint 4**: drains work from env alone

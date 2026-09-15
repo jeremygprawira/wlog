@@ -21,6 +21,7 @@ type Client struct {
 	url        string
 	httpClient *http.Client
 	headers    map[string]string
+	headerFunc func(body []byte) map[string]string
 	gzip       bool
 	source     string
 	userAgent  string
@@ -52,6 +53,14 @@ func WithTimeout(d time.Duration) Option {
 // WithHeader sets one extra header on every request (e.g. an API key).
 func WithHeader(key, value string) Option {
 	return func(c *Client) { c.headers[key] = value }
+}
+
+// WithHeaderFunc sets a function that computes extra headers from the request body,
+// for a header that depends on the body, such as an HMAC signature. The body is the
+// uncompressed bytes, so a signature stays valid when gzip is also on. A computed
+// header overwrites a fixed one with the same name.
+func WithHeaderFunc(fn func(body []byte) map[string]string) Option {
+	return func(c *Client) { c.headerFunc = fn }
 }
 
 // WithGzip compresses the body and sets Content-Encoding: gzip when on.
@@ -100,6 +109,11 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 	}
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+	if c.headerFunc != nil {
+		for k, v := range c.headerFunc(body) {
+			req.Header.Set(k, v)
+		}
 	}
 
 	resp, err := c.httpClient.Do(req)
