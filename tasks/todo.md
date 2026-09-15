@@ -84,7 +84,7 @@
 ## Phase 4 — v1 drains
 - [x] S4 Specs: axiom, loki, file, webhook, otlp
 - [x] DA Axiom drain
-- [ ] DL Loki drain
+- [x] DL Loki drain
 - [ ] DF File drain
 - [ ] DW Webhook drain
 - [ ] DO OTLP drain
