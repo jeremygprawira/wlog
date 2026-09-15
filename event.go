@@ -30,6 +30,7 @@ type event struct {
 	lateWrites  int             // writes received after this event sealed (G3, G4)
 	strictKeys  map[string]bool // nil unless StrictKeys is active for this event's env
 	unknownKeys []string
+	ctx         context.Context // the context Start/Detach was given, for the enrich stage
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -74,7 +75,9 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 		extractor: l.errorExtractor, level: LevelInfo,
 		strictKeys: l.strictKeysForEvent(),
 	}
-	return withEvent(ctx, e), func() { l.emit(e) }
+	ctx = withEvent(ctx, e)
+	e.ctx = ctx
+	return ctx, func() { l.emit(e) }
 }
 
 // Set adds one field to the current event. It is a no-op, never a panic, when ctx
@@ -242,6 +245,7 @@ func (l *Logger) emit(e *event) {
 	errInfo := e.errInfo
 	errList := e.errList
 	level := e.level
+	ctx := e.ctx
 	e.sealed = true
 	e.mu.Unlock()
 
@@ -287,7 +291,7 @@ func (l *Logger) emit(e *event) {
 		out["errors"] = normalize(errList)
 	}
 
-	l.pipeline(context.Background(), out)
+	l.pipeline(ctx, out)
 }
 
 // pipeline runs the fixed per-event stages (SPEC.md): keep/sample, then enrich, then
@@ -307,7 +311,10 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 		out["redact.fingerprint"] = redactor.Fingerprint()
 	}
 	out = applyFieldNames(out, l.fieldNames)
-	l.sendToDrains(ctx, out)
+	// A drain makes network calls, so it must not inherit the request's cancellation:
+	// WithoutCancel keeps the context's values (a span, a tenant) while ignoring a
+	// canceled request. Enrichers above keep the live context so they see its values.
+	l.sendToDrains(context.WithoutCancel(ctx), out)
 
 	if l.resolvedFormat() == FormatPretty {
 		writePretty(os.Stdout, out, colorEnabled())

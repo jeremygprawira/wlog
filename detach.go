@@ -34,7 +34,9 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 		e.fields["trace"] = trace
 	}
 
-	return withEvent(ctx, e), func() { l.emit(e) }
+	ctx = withEvent(ctx, e)
+	e.ctx = ctx
+	return ctx, func() { l.emit(e) }
 }
 
 // recordLateWrite is called (with e.mu already held by the caller) when a write lands

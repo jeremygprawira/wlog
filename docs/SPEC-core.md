@@ -161,6 +161,11 @@ A panic in any `Enricher`, `Keeper`, `Drain`, or plugin hook is recovered, repor
 drains/plugins (G3). `WithDrains` fans out the same redacted snapshot to every drain
 concurrently; `WithPlugins` and `WithEnrichers` run in the order given.
 
+Enrichers and Keepers run with the context the event was started from, so they can read
+request-scoped values (an active trace span, a tenant id). Drains receive that same context
+with cancellation removed (`context.WithoutCancel`), so a canceled request never aborts a
+drain's network call.
+
 ### Stage order (C7, locking SPEC.md's decision)
 
 ```
