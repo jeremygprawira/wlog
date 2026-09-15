@@ -5,3 +5,4 @@ use ./examples/mux
 use ./errors/herr
 use ./middleware/echo
 use ./middleware/echo5
+use ./middleware/gin
