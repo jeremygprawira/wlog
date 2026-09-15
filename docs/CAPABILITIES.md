@@ -3,22 +3,22 @@
 Approved 2026-09-14 (rev 3: evlog parity additions: audit, plugins, stream, geo, identity headers, typed fields, `wlog map`).
 Module ids are stable: specs, plans and tasks refer to them by id.
 
-**Packaging rule:** a package lives in the root module (`github.com/jeremygprawira/wlog`) only if
-it imports nothing outside the standard library. Anything with a third-party import gets its own
-`go.mod`, joined through `go.work`.
+Packaging rule: when a package imports nothing outside the standard library, it lives in the
+root module (`github.com/jeremygprawira/wlog`). A package with a third-party import gets its own
+`go.mod` instead, joined through `go.work`.
 
 ## v1 modules
 
 | Module id | Responsibility | Depends on | Go module | Phase |
 |---|---|---|---|---|
-| `redact` | Denylist masking: keys/paths + value patterns; add/remove; immutable values | — | root | 1 |
-| `core` | Wide event + ctx API, `Start`/`Detach`, `SetLevel`, errors (`error` + `errors[]`), typed keys (`Key[T]`), plugins (optional-interface hooks), field-name presets, plain log lines, `Drain`/`ErrorExtractor`/`Enricher`/`Keeper` interfaces, JSON + pretty console sinks, env config, atomic redactor swap, fixed pipeline order | redact | root | 1 |
+| `redact` | Denylist masking: keys, paths, and value patterns. Keys can be added or removed. Values stay immutable | none | root | 1 |
+| `core` | Wide event and ctx API. `Start`/`Detach`, `SetLevel`, errors (`error` and `errors[]`), typed keys (`Key[T]`), plugins, field-name presets, plain log lines. `Drain`/`ErrorExtractor`/`Enricher`/`Keeper` interfaces, JSON and pretty console sinks, env config, atomic redactor swap, fixed pipeline order | redact | root | 1 |
 | `pipeline` | Async batching, retry/backoff, fan-out, bounded buffer (drop oldest + `OnDropped`), flush on `Close`, shared HTTP drain helper with identity headers | core | root | 2 |
-| `sample` | Head (rate per level) + tail (status/duration/path/predicate) sampling; default keep 100% + presets | core | root | 2 |
+| `sample` | Head (rate per level) and tail (status, duration, path, predicate) sampling. Default keeps 100%, plus presets | core | root | 2 |
 | `enrich` | Built-in enrichers: host/pod/region, deploy version, user agent, **geo** (CDN headers), user-id lookup | core | root | 2 |
 | `drain-memory` | Ring buffer, snapshot, live subscriptions (`Subscribe`), optional SSE `http.Handler` | core | root | 2 |
 | `wlogtest` | In-memory recorder + assertion helpers for users' tests (built on `drain-memory`) | drain-memory | root | 2 |
-| `audit` | `wlog.Audit(ctx, …)` actor/action/target/outcome/reason; never sampled; hash chain; append-only journal drain; `Verify` | core, pipeline | root | 2 |
+| `audit` | `wlog.Audit(ctx, …)` for actor, action, target, outcome, and reason. Never sampled. Hash chain, append-only journal drain, `Verify` | core, pipeline | root | 2 |
 | `errors-herr` | `ErrorExtractor` for herr | core | own (`errors/herr`) | 2 |
 | `http-std` | net/http + gorilla/mux middleware: capture (default everything), request id, W3C traceparent, panic recovery, plugin request hooks, emit | core | root | 2 |
 | `http-echo` | Echo v4 adapter over `http-std` | http-std | own (`middleware/echo`) | 3 |
@@ -28,7 +28,7 @@ it imports nothing outside the standard library. Anything with a third-party imp
 | `log-zap` · `log-zerolog` · `log-logrus` | Output adapters | core | own (`log/*`) | 3 |
 | `trace-otel` | Trace/span id from an active OpenTelemetry span | core | own (`trace/otel`) | 3 |
 | `drain-axiom` · `drain-loki` · `drain-file` · `drain-webhook` · `drain-otlp` | Backend drains | pipeline | root | 4 |
-| `cli-map` | `wlog map`: static analysis (`go/analysis`) of handlers → deterministic 0–100 observability score, `wlog.map.json`, `--min-score`, `--baseline`; also exposed as an analyzer usable from `go vet`/golangci-lint | core, http-*, audit (rules know their APIs) | own (`cmd/wlog`) | 5 |
+| `cli-map` | `wlog map`: static analysis (`go/analysis`) of handlers. Gives a deterministic 0-100 observability score, `wlog.map.json`, `--min-score`, `--baseline`. Also works as an analyzer from `go vet` or golangci-lint | core, http-*, audit (rules know their APIs) | own (`cmd/wlog`) | 5 |
 | `drain-sentry` · `drain-clickhouse` · `drain-datadog` | Backend drains | pipeline | root | 6 |
 
 ## Build order
@@ -42,12 +42,12 @@ Phase 5  cli-map                                                         → v1 
 Phase 6  drain-sentry, drain-clickhouse, drain-datadog                   → v1.1
 ```
 
-`cli-map` comes last in v1 because its rules detect the public APIs of core, the HTTP adapters and
-audit; building it earlier means rewriting rules every time those APIs move.
+`cli-map` comes last in v1 because its rules detect the public APIs of core, the HTTP adapters,
+and audit. Building it earlier means rewriting rules every time those APIs move.
 
 ## Designed for, not built in v1
 
-`core` must support these without API changes; each becomes its own module later.
+`core` must support these without API changes. Each becomes its own module later.
 
 | Future module id | Responsibility |
 |---|---|
@@ -79,4 +79,7 @@ Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separ
 | `enrich` | [SPEC-enrich.md](SPEC-enrich.md) | approved 2026-09-15 |
 | `errors-herr` | [SPEC-errors-herr.md](SPEC-errors-herr.md) | approved 2026-09-15 |
 | `audit` | [SPEC-audit.md](SPEC-audit.md) | approved 2026-09-15 |
+| `http-echo`, `http-echo5`, `http-gin` | [SPEC-http-adapters.md](SPEC-http-adapters.md) | drafted, awaiting approval |
+| `log-slog`, `log-zap`, `log-zerolog`, `log-logrus` | [SPEC-log-adapters.md](SPEC-log-adapters.md) | drafted, awaiting approval |
+| `trace-otel` | [SPEC-trace-otel.md](SPEC-trace-otel.md) | drafted, awaiting approval |
 | others | SPEC-<id>.md | not started |
