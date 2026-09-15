@@ -8,7 +8,7 @@
 - [x] T0.2 Agent guidance + README stub
 - [x] T0.3 CI workflow
 - [x] T0.4 Write SPEC-core.md (drafted, awaiting approval)
-- [ ] **Checkpoint 0** — scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
+- [ ] **Checkpoint 0**: scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
 
 ## Phase 1A — redact
 - [x] R1 Key-token matching, end to end
@@ -18,8 +18,8 @@
 - [x] R5 Built-in patterns B: ipv4, phone, iban, nik
 - [x] R6 Pattern options + custom patterns
 - [x] R7 Transforms, limits, Default/Disabled
-- [x] R8 Gates G1/G2, benchmark, examples (15.7us/op, meets the 30us target; see redact/BENCH.md)
-- [x] **Checkpoint 1A** — SPEC-redact criteria met, stdlib-only, benchmark meets target, approved
+- [x] R8 Gates G1/G2, benchmark, examples (15.7us/op, meets the 30us target, see redact/BENCH.md)
+- [x] **Checkpoint 1A**: SPEC-redact criteria met, stdlib-only, benchmark meets target, approved
 
 ## Phase 1B — core
 - [x] C1 Thin wide event: Start → Set → emit JSON
@@ -36,8 +36,8 @@
 - [x] C12 Plain one-off log lines
 - [x] C13 Pretty console sink
 - [x] C14 Env configuration
-- [x] C15 Core gates, benchmark, examples (10.25us/op, coverage 89.7%, examples for the main entry points — not literally every exported symbol, see commit)
-- [x] **Checkpoint 1B** — event shape reviewed and approved
+- [x] C15 Core gates, benchmark, examples (10.25us/op, coverage 89.7%, examples cover the main entry points, not every exported symbol, see commit)
+- [x] **Checkpoint 1B**: event shape reviewed and approved
 
 ## Phase 2 — pipeline, HTTP, herr, test tooling, audit
 - [x] S2.1 Specs: pipeline, sample, drain-memory, wlogtest
@@ -47,7 +47,7 @@
 - [x] H3 Body capture
 - [x] H4 Panics, traceparent, user id, plugin request hooks
 - [x] H5 Conformance suite passing for wlogstd and for gorilla/mux (examples/mux, go get approved)
-- [x] **Checkpoint 2A** — end-to-end request works (24.8us/op, under the 50us budget)
+- [x] **Checkpoint 2A**: end-to-end request works (24.8us/op, under the 50us budget)
 - [x] P1 Batching + flush
 - [x] P2 Retry + backoff
 - [x] P3 Bounded buffer, drop-oldest, fan-out isolation
@@ -63,8 +63,8 @@
 - [x] EH1 herr error extractor
 - [x] A1 Audit records
 - [x] A2 Hash chain
-- [x] A3 Journal drain + Verify
-- [ ] **Checkpoint 2B** — G1–G5 green, refund scenario passes
+- [x] A3 Journal drain + `audit.Verify`
+- [x] **Checkpoint 2B**: G1 through G5 green, refund scenario passes as an integration test, human review complete
 
 ## Phase 3 — adapters, trace, examples
 - [ ] S3 Specs: HTTP adapters, logger adapters, trace-otel
@@ -79,7 +79,7 @@
 - [ ] TO OpenTelemetry span link
 - [ ] EX1 Example apps (HTTP)
 - [ ] EX2 Example apps (extension points)
-- [ ] **Checkpoint 3** — 5 HTTP stacks identical, logger swap = one option
+- [ ] **Checkpoint 3**: 5 HTTP stacks identical, logger swap = one option
 
 ## Phase 4 — v1 drains
 - [ ] S4 Specs: axiom, loki, file, webhook, otlp
@@ -89,7 +89,7 @@
 - [ ] DW Webhook drain
 - [ ] DO OTLP drain
 - [ ] DI Optional docker integration tests
-- [ ] **Checkpoint 4** — drains work from env alone
+- [ ] **Checkpoint 4**: drains work from env alone
 
 ## Phase 5 — cli-map + v1
 - [ ] S5 Spec: cli-map
@@ -100,11 +100,11 @@
 - [ ] MP5 Score, report, CI gates
 - [ ] MP6 go vet analyzer + dogfooding
 - [ ] REL1 v1 documentation + parity audit
-- [ ] **Checkpoint 5** — v1 release gate (ask first: remote, push, tag v0.1.0)
+- [ ] **Checkpoint 5**: v1 release gate (ask first: remote, push, tag v0.1.0)
 
 ## Phase 6 — v1.1 drains
 - [ ] S6 Specs: sentry, clickhouse, datadog
 - [ ] DS Sentry drain
 - [ ] DC ClickHouse drain
 - [ ] DD Datadog drain
-- [ ] **Checkpoint 6** — v1.1 (ask first: tag v0.2.0)
+- [ ] **Checkpoint 6**: v1.1 (ask first: tag v0.2.0)
