@@ -82,8 +82,8 @@
 - [x] **Checkpoint 3**: 5 HTTP stacks identical, logger swap = one option
 
 ## Phase 4 — v1 drains
-- [ ] S4 Specs: axiom, loki, file, webhook, otlp
-- [ ] DA Axiom drain
+- [x] S4 Specs: axiom, loki, file, webhook, otlp
+- [x] DA Axiom drain
 - [ ] DL Loki drain
 - [ ] DF File drain
 - [ ] DW Webhook drain
