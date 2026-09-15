@@ -1,8 +1,16 @@
 go 1.26.1
 
 use .
+
 use ./examples/mux
+
 use ./errors/herr
+
 use ./middleware/echo
+
 use ./middleware/echo5
-use ./middleware/gin
+
+use (
+	./log/zap
+	./middleware/gin
+)
