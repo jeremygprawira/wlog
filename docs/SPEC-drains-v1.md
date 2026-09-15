@@ -71,8 +71,9 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
   `WithMaxBackups`.
 - Defaults: `maxSize` 100 MiB, `maxAge` 24h, `maxBackups` 3.
 - Mode: every file is created with mode 0600.
-- Rotation by size: before a write, if the current size plus the new blob would pass
-  `maxSize`, rotate first.
+- Rotation by size: before a write, if the file has content and its size plus the new
+  blob would pass `maxSize`, rotate first. An empty file never rotates for size, so a
+  first blob larger than `maxSize` still lands in the main file.
 - Rotation by age: before a write, if the file's modification time is older than `maxAge`,
   rotate first.
 - One rotation: close the current file, shift `path.N` to `path.N+1` for N from

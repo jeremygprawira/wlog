@@ -85,7 +85,7 @@
 - [x] S4 Specs: axiom, loki, file, webhook, otlp
 - [x] DA Axiom drain
 - [x] DL Loki drain
-- [ ] DF File drain
+- [x] DF File drain
 - [ ] DW Webhook drain
 - [ ] DO OTLP drain
 - [ ] DI Optional docker integration tests
