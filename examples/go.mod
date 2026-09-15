@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/labstack/echo/v5 v5.3.1
+	go.uber.org/zap v1.28.0
 )
 
 require (
@@ -43,4 +44,3 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
-
