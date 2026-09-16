@@ -19,6 +19,7 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo, rawValues: l.rawValues,
+		strictKeys: l.strictKeysForEvent(),
 	}
 
 	if parent := eventFrom(ctx); parent != nil {
@@ -34,7 +35,11 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 		e.fields["trace"] = trace
 	}
 
-	ctx = withEvent(ctx, e)
+	// The work outlives the request, so the child context must not die with the
+	// parent. WithoutCancel keeps every value of the parent, including the
+	// logger, and drops only the cancellation.
+	bg := context.WithoutCancel(ctx)
+	ctx = withEvent(bg, e)
 	e.ctx = ctx
 	return ctx, func() { l.emit(e) }
 }

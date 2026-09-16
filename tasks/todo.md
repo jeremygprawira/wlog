@@ -17,7 +17,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CORE-2 Event-shape fuzz test
 - [x] 10-CORE-3 Plain lines, enricher values, drain contract
 - [x] 10-CORE-4 Hook isolation
-- [ ] 10-CORE-5 Audit level bypass, Detach context
+- [x] 10-CORE-5 Audit level bypass, Detach context
 - [ ] 10-CORE-6 Option validation and keepers
 - [ ] 10-CORE-7 Flush and Close
 - [ ] 10-CORE-8 Default extractor

@@ -276,11 +276,15 @@ func (l *Logger) emit(e *event) {
 	errInfo := e.errInfo
 	errList := e.errList
 	level := e.level
+	audit := e.fields["audit"] != nil
 	ctx := e.ctx
 	e.sealed = true
 	e.mu.Unlock()
 
-	if levelRank[level] < levelRank[l.minLevel] {
+	// An audit fact is never filtered away: a policy that asks for error-level
+	// logs still wants the record of who did what, and a dropped audit line is a
+	// hole in a chain that a reader must be able to verify.
+	if !audit && levelRank[level] < levelRank[l.minLevel] {
 		return
 	}
 
