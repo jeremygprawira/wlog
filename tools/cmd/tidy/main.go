@@ -61,10 +61,14 @@ func runTidyDiff(dir string) ([]byte, error) {
 }
 
 // runTidy runs `go mod tidy` with extra args and GOWORK=off in one module dir.
+//
+// GOTOOLCHAIN stays auto, so a module whose floor is older than one of its
+// resolved dependencies still tidies. That is the honest outcome: the diff then
+// shows the floor that the module actually needs.
 func runTidy(dir string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(context.Background(), "go", append([]string{"mod", "tidy"}, args...)...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=auto")
 	return cmd.CombinedOutput()
 }
 

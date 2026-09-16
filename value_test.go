@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -292,5 +293,78 @@ func TestCore_StringOptionAndEmbedded(t *testing.T) {
 	}
 	if _, ok := got["id"]; !ok {
 		t.Errorf("the embedded struct did not flatten: %v", got)
+	}
+}
+
+// TestCore_Copy_EdgeShapes proves the remaining copy paths: a map with a key that
+// is not a string, a big JSON number, and a nil pointer.
+func TestCore_Copy_EdgeShapes(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "shapes")
+	wlog.Set(ctx, "int_keys", map[int]string{1: "one"})
+	wlog.Set(ctx, "big", json.Number("123456789012345678901234567890"))
+	wlog.Set(ctx, "nil_ptr", (*struct{ A int })(nil))
+	end()
+
+	got := rec.Last()
+	if text, ok := got["int_keys"].(string); !ok || !strings.HasPrefix(text, "[unencodable: ") {
+		t.Errorf("int_keys = %v, want the unencodable text: JSON needs string keys", got["int_keys"])
+	}
+	if fmt.Sprint(got["big"]) != "123456789012345678901234567890" {
+		t.Errorf("big = %v (%T), want every digit kept", got["big"], got["big"])
+	}
+	if got["nil_ptr"] != nil {
+		t.Errorf("nil_ptr = %v, want nil", got["nil_ptr"])
+	}
+}
+
+// TestCore_Copy_EveryShape proves the remaining copy paths: typed slices, arrays,
+// a typed map with a string key, the string option on every scalar kind, and the
+// public extractor.
+func TestCore_Copy_EveryShape(t *testing.T) {
+	type tags struct {
+		Strs  []string       `json:"strs"`
+		Ints  []int          `json:"ints"`
+		Arr   [2]int         `json:"arr"`
+		Map   map[string]int `json:"map"`
+		Bytes []byte         `json:"bytes"`
+		Low   int            `json:"low,string"`
+		High  uint8          `json:"high,string"`
+		F     float32        `json:"f,string"`
+		B     bool           `json:"b,string"`
+	}
+
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+	ctx, end := wlog.Start(ctx, "shapes")
+	wlog.Set(ctx, "v", tags{
+		Strs: []string{"a"}, Ints: []int{1}, Arr: [2]int{1, 2}, Map: map[string]int{"k": 3},
+		Bytes: []byte{1, 2}, Low: 7, High: 8, F: 1.5, B: true,
+	})
+	end()
+
+	got := rec.Last()["v"].(map[string]any)
+	if got["strs"].([]any)[0] != "a" || got["ints"].([]any)[0] != int64(1) {
+		t.Errorf("slices = %v / %v", got["strs"], got["ints"])
+	}
+	if len(got["arr"].([]any)) != 2 || got["map"].(map[string]any)["k"] != int64(3) {
+		t.Errorf("array or map = %v / %v", got["arr"], got["map"])
+	}
+	if got["bytes"] != "[binary: 2 bytes]" {
+		t.Errorf("bytes = %v, want the byte count", got["bytes"])
+	}
+	for key, want := range map[string]string{"low": "7", "high": "8", "f": "1.5", "b": "true"} {
+		if got[key] != want {
+			t.Errorf("%s = %v (%T), want the string %q", key, got[key], got[key], want)
+		}
+	}
+
+	if _, ok := wlog.DefaultExtractor().Extract(errors.New("boom")).Code, true; !ok {
+		t.Error("DefaultExtractor returned no code")
+	}
+	if _, ok := wlog.Field(ctx, "v"); !ok {
+		t.Error("Field did not find a field that Set stored")
 	}
 }

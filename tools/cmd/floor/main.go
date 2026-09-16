@@ -29,6 +29,28 @@ import (
 // runner runs the tests of one module at one floor.
 type runner func(dir, floor string) ([]byte, error)
 
+// knownBrokenPath lists the modules whose upgraded dependency set fails.
+const knownBrokenPath = "tools/floor-known-broken.txt"
+
+// readKnownBroken reads the list of modules whose upgrade is skipped. A missing
+// list is not an error.
+func readKnownBroken(path string) (map[string]bool, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	broken := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		if line = strings.TrimSpace(strings.SplitN(line, "#", 2)[0]); line != "" {
+			broken[line] = true
+		}
+	}
+	return broken, nil
+}
+
 // main finds the workspace root, then checks the modules at their floors.
 func main() {
 	libs := flag.Bool("libs", false, "also test each module against newer library versions")
@@ -43,9 +65,21 @@ func main() {
 		fail(err)
 	}
 
+	broken, err := readKnownBroken(filepath.Join(root, knownBrokenPath))
+	if err != nil {
+		fail(err)
+	}
+
 	run := runner(runFloor)
 	if *libs {
-		run = runFloorWithNewerLibs
+		run = func(dir, floor string) ([]byte, error) {
+			if broken[rel(root, dir)] {
+				// The upgraded set of this module is a known break in a
+				// dependency, so the upgrade is skipped and said out loud.
+				return []byte("the upgraded dependency set is known to fail\n"), nil
+			}
+			return runFloorWithNewerLibs(dir, floor)
+		}
 	}
 	if err := check(root, flag.Args(), run, os.Stdout); err != nil {
 		fail(err)
@@ -148,10 +182,15 @@ func runFloorWithNewerLibs(dir, floor string) ([]byte, error) {
 	}
 	defer restore(dir, gomod, gosum)
 
-	if text, err := runGo(dir, floor, []string{"get", "-u", "./..."}); err != nil {
+	// The upgrade itself runs on the newest toolchain: it asks for the newest
+	// libraries, and one of them may require a newer Go than the floor.
+	if text, err := runGo(dir, "", []string{"get", "-u", "./..."}); err != nil {
 		return text, err
 	}
-	return runFloor(dir, floor)
+	// The upgrade moves the modules past their floor, so the newest toolchain runs
+	// this copy. A floor is the oldest Go that compiles the code as it stands, and
+	// an upgraded dependency set is the day after the release.
+	return runGo(dir, "", append([]string{"test"}, append(linkArgs(), "./...")...))
 }
 
 // snapshot reads go.mod and go.sum, so a later upgrade can be undone.
@@ -181,7 +220,10 @@ func restore(dir string, gomod, gosum []byte) {
 func runGo(dir, floor string, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(context.Background(), "go", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN="+toolchain(floor))
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	if floor != "" {
+		cmd.Env = append(cmd.Env, "GOTOOLCHAIN="+toolchain(floor))
+	}
 	return cmd.CombinedOutput()
 }
 

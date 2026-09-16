@@ -338,8 +338,12 @@ func numericValue(n json.Number) any {
 	if u, err := strconv.ParseUint(n.String(), 10, 64); err == nil {
 		return u
 	}
-	if f, err := n.Float64(); err == nil {
-		return finiteNumber(f)
+	// An integer keeps every digit even when it fits neither int64 nor uint64, so
+	// the text stays. A float turns 123456789012345678901234567890 into 1.23e+29.
+	if strings.IndexFunc(n.String(), func(r rune) bool { return r != '-' && (r < '0' || r > '9') }) >= 0 {
+		if f, err := n.Float64(); err == nil {
+			return finiteNumber(f)
+		}
 	}
 	return n
 }

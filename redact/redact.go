@@ -3,6 +3,7 @@ package redact
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -445,6 +446,8 @@ func (r *Redactor) applyValue(v any, path []string, depth int) any {
 		return r.applyInteger(strconv.FormatInt(int64(x), 10), int64(x))
 	case uint32:
 		return r.applyInteger(strconv.FormatUint(uint64(x), 10), int64(x))
+	case json.Number:
+		return r.applyInteger(x.String(), x)
 	case nil, bool, float64, float32:
 		return v
 	default:
