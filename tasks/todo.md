@@ -107,4 +107,4 @@
 - [x] DS Sentry drain
 - [x] DC ClickHouse drain
 - [x] DD Datadog drain
-- [ ] **Checkpoint 6**: v1.1 (ask first: tag v0.2.0)
+- [x] **Checkpoint 6**: v1.1 (tag v0.2.0 still needs approval)
