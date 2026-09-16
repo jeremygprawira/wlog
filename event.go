@@ -19,8 +19,9 @@ type event struct {
 	operation   string
 	start       time.Time
 	sealed      bool
-	dropped     int // count of Set/SetGroup/Append calls rejected by a cap (G4)
-	droppedLogs int // count of AppendLog lines rejected by maxLogLines (G4)
+	rawValues   bool // skip normalize for a value already in tree form
+	dropped     int  // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	droppedLogs int  // count of AppendLog lines rejected by maxLogLines (G4)
 	level       Level
 	levelSet    bool // true once SetLevel has been called; wins over the default
 	extractor   ErrorExtractor
@@ -67,13 +68,13 @@ func HasEvent(ctx context.Context) bool {
 // event.
 func Start(ctx context.Context, operation string) (context.Context, func()) {
 	l := loggerFrom(ctx)
-	if l == nil {
+	if l == nil || !Enabled() {
 		return ctx, func() {}
 	}
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo,
-		strictKeys: l.strictKeysForEvent(),
+		strictKeys: l.strictKeysForEvent(), rawValues: l.rawValues,
 	}
 	ctx = withEvent(ctx, e)
 	e.ctx = ctx
@@ -98,7 +99,7 @@ func Set(ctx context.Context, key string, value any) {
 	if !e.reserveTopLevelSlot(key) {
 		return
 	}
-	e.fields[key] = normalize(value)
+	e.fields[key] = e.normalizeValue(value)
 	e.trackUnknownKey(key)
 }
 
@@ -148,7 +149,7 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 			e.dropped++
 			continue
 		}
-		g[k] = normalize(v)
+		g[k] = e.normalizeValue(v)
 	}
 }
 
@@ -176,7 +177,7 @@ func Append(ctx context.Context, key string, value any) {
 		e.dropped++
 		return
 	}
-	e.fields[key] = append(arr, normalize(value))
+	e.fields[key] = append(arr, e.normalizeValue(value))
 }
 
 // reserveTopLevelSlot reports whether key may occupy a top-level field slot: true if
@@ -212,6 +213,27 @@ func kvToMap(kv []any) map[string]any {
 		}
 	}
 	return m
+}
+
+// normalizeValue stores a value the way the active mode wants it. RawValues mode
+// skips normalize for a value that is already a JSON tree root, because that call is
+// only a type check. Every other value still goes through normalize, so redaction can
+// always walk the stored shape. Callers must hold e.mu.
+func (e *event) normalizeValue(v any) any {
+	if e.rawValues && isTreeValue(v) {
+		return v
+	}
+	return normalize(v)
+}
+
+// isTreeValue reports whether v already is a shape normalize would return unchanged.
+func isTreeValue(v any) bool {
+	switch v.(type) {
+	case nil, string, bool, int, int64, float64, map[string]any, []any:
+		return true
+	default:
+		return false
+	}
 }
 
 // normalize passes JSON-tree values through unchanged and round-trips everything else
@@ -315,6 +337,10 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	// WithoutCancel keeps the context's values (a span, a tenant) while ignoring a
 	// canceled request. Enrichers above keep the live context so they see its values.
 	l.sendToDrains(context.WithoutCancel(ctx), out)
+
+	if l.silent {
+		return
+	}
 
 	if l.resolvedFormat() == FormatPretty {
 		writePretty(os.Stdout, out, colorEnabled())

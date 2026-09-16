@@ -13,12 +13,12 @@ import (
 // or get merged into, the parent.
 func Detach(ctx context.Context, operation string) (context.Context, func()) {
 	l := loggerFrom(ctx)
-	if l == nil {
+	if l == nil || !Enabled() {
 		return ctx, func() {}
 	}
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
-		extractor: l.errorExtractor, level: LevelInfo,
+		extractor: l.errorExtractor, level: LevelInfo, rawValues: l.rawValues,
 	}
 
 	if parent := eventFrom(ctx); parent != nil {

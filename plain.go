@@ -20,7 +20,7 @@ func Debug(ctx context.Context, msg string, kv ...any) { plainLog(ctx, LevelDebu
 
 func plainLog(ctx context.Context, level Level, msg string, kv []any) {
 	l := loggerFrom(ctx)
-	if l == nil {
+	if l == nil || !Enabled() {
 		return
 	}
 	if levelRank[level] < levelRank[l.minLevel] {

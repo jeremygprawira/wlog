@@ -15,6 +15,19 @@ import (
 	"github.com/jeremygprawira/wlog/redact"
 )
 
+// disabled is the process-wide off switch behind SetEnabled. It is stored inverted,
+// so the zero value means logging is on. This is the one piece of package-level state
+// SPEC.md allows: it stays read-only on the hot path and holds no per-event data.
+var disabled atomic.Bool
+
+// SetEnabled turns logging on or off for the whole process. With logging off, Start
+// and Detach return a no-op end func, and a plain line writes nothing. The default is
+// on.
+func SetEnabled(on bool) { disabled.Store(!on) }
+
+// Enabled reports whether logging is on.
+func Enabled() bool { return !disabled.Load() }
+
 // Logger holds the configuration every event is built and emitted with. Build one with
 // New at startup; attach it to request/job contexts with WithContext.
 type Logger struct {
@@ -31,6 +44,8 @@ type Logger struct {
 	plugins           []Plugin
 	strictKeys        map[string]bool
 	format            Format
+	silent            bool
+	rawValues         bool
 }
 
 type serviceInfo struct {
@@ -55,6 +70,15 @@ func New(opts ...Option) *Logger {
 	}
 	return l
 }
+
+// WithSilent drops the stdout write while keeping every stage and every drain. A
+// service that ships events to a backend alone wants no duplicate console output.
+func WithSilent() Option { return func(l *Logger) { l.silent = true } }
+
+// WithRawValues stores a value that already is a JSON tree root as given, instead of
+// passing it through normalize. A struct or any other non-tree value is still
+// normalized, so redaction can walk it.
+func WithRawValues() Option { return func(l *Logger) { l.rawValues = true } }
 
 // WithService sets the service.name/version/env fields every event carries.
 func WithService(name, version, env string) Option {
