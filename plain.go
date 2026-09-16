@@ -38,7 +38,9 @@ func plainLog(ctx context.Context, level Level, msg string, kv []any) {
 			"name": l.service.name, "version": l.service.version, "env": l.service.env,
 		}
 	}
-	maps.Copy(out, kvToMap(kv))
+	// The pairs are copied into the tree wlog owns before the redactor runs, so a
+	// struct renders through its json tags and a caller's map is never stored.
+	maps.Copy(out, copyMap(kvToMap(kv), 1))
 
 	l.pipeline(ctx, out)
 }

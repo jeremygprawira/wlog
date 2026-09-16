@@ -14,8 +14,8 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CI-7 Release hygiene
 - [ ] Review point 10-CI: every required CI job is green, then human review
 - [x] 10-CORE-1 Value copy tree
-- [ ] 10-CORE-2 Event-shape fuzz test
-- [ ] 10-CORE-3 Plain lines, enricher values, drain contract
+- [x] 10-CORE-2 Event-shape fuzz test
+- [x] 10-CORE-3 Plain lines, enricher values, drain contract
 - [ ] 10-CORE-4 Hook isolation
 - [ ] 10-CORE-5 Audit level bypass, Detach context
 - [ ] 10-CORE-6 Option validation and keepers

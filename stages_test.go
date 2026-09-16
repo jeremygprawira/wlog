@@ -3,9 +3,11 @@ package wlog_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
 type spyKeeper struct{ keep bool }
@@ -92,5 +94,36 @@ func TestCore_StageOrder_KeeperPanicIsIsolated(t *testing.T) {
 	// swallows every event.
 	if out == "" {
 		t.Error("panicking Keeper caused the event to be dropped")
+	}
+}
+
+// TestCore_CORE2_EnricherStructRedacted proves that core copies the value an
+// enricher adds, so a struct is walked by its json tags and a map the caller
+// still holds never reaches a drain.
+func TestCore_CORE2_EnricherStructRedacted(t *testing.T) {
+	shared := map[string]any{"password": "hunter2"}
+
+	log, rec := wlogtest.New(t, wlog.WithEnrichers(wlog.EnricherFunc(func(_ context.Context, ev map[string]any) {
+		ev["box"] = boxed{Password: "hunter2"}
+		ev["shared"] = shared
+	})))
+	ctx := log.WithContext(context.Background())
+
+	_, end := wlog.Start(ctx, "op")
+	end()
+	shared["password"] = "changed-after-the-drain"
+
+	line, err := json.Marshal(rec.Last())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(line), "hunter2") {
+		t.Errorf("an enricher value leaked a secret: %s", line)
+	}
+	if strings.Contains(string(line), "changed-after-the-drain") {
+		t.Errorf("core stored the map the enricher kept: %s", line)
+	}
+	if got := rec.Last()["shared"].(map[string]any)["password"]; got == nil {
+		t.Errorf("the enricher value vanished: %v", rec.Last()["shared"])
 	}
 }

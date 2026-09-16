@@ -22,6 +22,9 @@ func AppendLog(ctx context.Context, line LogLine) {
 	if e == nil {
 		return
 	}
+	// Like Set, the copy runs before the lock, so a MarshalJSON on the line
+	// cannot deadlock the event.
+	copied := copyValue(line)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
@@ -39,5 +42,5 @@ func AppendLog(ctx context.Context, line LogLine) {
 		e.droppedLogs++
 		return
 	}
-	e.fields["logs"] = append(arr, normalize(line))
+	e.fields["logs"] = append(arr, copied)
 }

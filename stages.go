@@ -3,6 +3,7 @@ package wlog
 import (
 	"context"
 	"fmt"
+	"reflect"
 )
 
 // Keeper decides whether to keep an event that would otherwise be sampled away. It is
@@ -71,9 +72,33 @@ func (l *Logger) safeKeep(ctx context.Context, event map[string]any) (keep bool)
 // panic-isolated so one bad enricher never drops the fields the others added or the
 // event itself.
 func (l *Logger) runEnrichers(ctx context.Context, event map[string]any) {
+	before := make(map[string]any, len(event))
+	for key, value := range event {
+		before[key] = value
+	}
 	for _, en := range l.enrichers {
 		l.safeEnrich(ctx, en, event)
 	}
+	// An enricher writes into the canonical map, which core handed to it. Copy
+	// what it added or changed before the redactor and the drains run, so core
+	// owns what it emits and an enricher that keeps a reference can never change
+	// the event after this point. The fields core itself wrote stay as they are,
+	// so a reserved field keeps its own type.
+	for key, value := range event {
+		if enriched(before[key], value) {
+			event[key] = copyValue(value)
+		}
+	}
+}
+
+// enriched reports whether an enricher added or changed a value.
+//
+// The comparison looks inside a map or a slice, because an enricher may write
+// through the reference core gave it rather than replace the field. A field that
+// core itself wrote, such as the list of unknown keys, compares equal and keeps
+// its own type.
+func enriched(before, after any) bool {
+	return !reflect.DeepEqual(before, after)
 }
 
 func (l *Logger) safeEnrich(ctx context.Context, en Enricher, event map[string]any) {

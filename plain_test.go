@@ -3,9 +3,11 @@ package wlog_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
 func TestCore_PlainLog_Info(t *testing.T) {
@@ -79,5 +81,42 @@ func TestCore_PlainLog_StandaloneInsideRequest(t *testing.T) {
 
 	if len(outputs) != 1 || outputs[0] != "inside a request" {
 		t.Errorf("plain log inside a request was not emitted standalone: %v", outputs)
+	}
+}
+
+// boxed is a caller type whose secret is named only by a json tag, so a plain
+// line has to copy it before the redactor can mask it.
+type boxed struct {
+	Password string `json:"password"`
+}
+
+// TestCore_CORE1_PlainLineStructRedacted proves that Info, Warn, and Debug copy
+// their key-value pairs the same way Set does, so a struct is walked by its json
+// tags and a caller's map is never stored.
+func TestCore_CORE1_PlainLineStructRedacted(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	meta := map[string]any{"password": "hunter2"}
+	wlog.Info(ctx, "started", "box", boxed{Password: "hunter2"}, "meta", meta)
+	wlog.Warn(ctx, "slow", "box", boxed{Password: "hunter2"})
+	wlog.Debug(ctx, "detail", "box", boxed{Password: "hunter2"})
+
+	meta["password"] = "changed-after-the-write"
+
+	for _, ev := range rec.Events() {
+		line, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(line), "hunter2") {
+			t.Errorf("a plain line leaked a secret: %s", line)
+		}
+		if strings.Contains(string(line), "changed-after-the-write") {
+			t.Errorf("a plain line stored a caller's map: %s", line)
+		}
+	}
+	if len(rec.Events()) != 3 {
+		t.Fatalf("recorded %d plain lines, want 3", len(rec.Events()))
 	}
 }

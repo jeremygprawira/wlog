@@ -5,9 +5,14 @@ import (
 	"fmt"
 )
 
-// Drain receives a copy of every emitted event, already redacted, alongside the
-// built-in stdout sink. This is the one interface every backend (a file, Axiom, Loki,
-// a test recorder, ...) implements to plug into wlog.
+// Drain receives every emitted event, already redacted, alongside the built-in
+// stdout sink. This is the one interface every backend (a file, Axiom, Loki, a
+// test recorder, ...) implements to plug into wlog.
+//
+// The map belongs to core, and it is final: a drain must not change it, and it
+// must not keep a reference and change it later. Two drains receive the same
+// event, so a write from one of them would be a change the other never saw. Copy
+// what you need to keep.
 type Drain interface {
 	Send(ctx context.Context, event map[string]any)
 }
