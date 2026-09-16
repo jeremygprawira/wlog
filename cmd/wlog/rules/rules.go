@@ -68,9 +68,8 @@ type Check struct {
 }
 
 // Config holds the user's additions to the rules.
-type Config struct {
-	SensitivePatterns []string
-}
+//
+// (The struct lives in config.go.)
 
 // defaultSensitivePatterns mark routes that touch money, identity, or privilege.
 var defaultSensitivePatterns = []string{
@@ -100,12 +99,20 @@ func Sensitive(route string, extra []string) bool {
 }
 
 // Evaluate runs every applicable rule for one handler.
-func Evaluate(pkg *packages.Package, point entry.Point, _ Config) []Check {
-	return []Check{
+func Evaluate(pkg *packages.Package, point entry.Point, cfg Config) []Check {
+	checks := []Check{
 		coverage(pkg, point),
 		contextSet(pkg, point),
 		errorsReachWlog(pkg, point),
 	}
+	if Sensitive(point.Route, cfg.SensitivePatterns) {
+		checks = append(checks, sensitiveAudit(pkg, point))
+	}
+	checks = append(checks,
+		noPrint(pkg, point),
+		noDenylisted(pkg, point),
+	)
+	return checks
 }
 
 // pass and fail build a Check.

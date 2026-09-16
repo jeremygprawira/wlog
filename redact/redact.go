@@ -346,6 +346,14 @@ func (r *Redactor) Keys() []string {
 	return out
 }
 
+// Denies reports whether a top-level key name would be masked by the key denylist. It
+// checks the key tokens and the leaf globs, not the value patterns, because a value
+// pattern only applies after the event holds a value. A linter (cli-map) uses this to
+// flag a literal key that the redactor would already deny.
+func (r *Redactor) Denies(key string) bool {
+	return r.matchesKey(key) || r.matchesLeafGlob(key)
+}
+
 // Fingerprint is a short, stable hash of the effective config: the same set of keys
 // hashes the same regardless of the order options were given, and changes after any
 // add or remove.

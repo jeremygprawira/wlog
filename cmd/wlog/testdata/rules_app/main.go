@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/audit"
 	wlogstd "github.com/jeremygprawira/wlog/middleware/nethttp"
 )
 
@@ -35,6 +36,12 @@ func handleSensitive(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func handleSensitiveAudited(w http.ResponseWriter, r *http.Request) {
+	wlog.Set(r.Context(), "refund_id", "r1")
+	audit.Do(r.Context(), audit.Record{Action: "refund.create", Outcome: "success"})
+	w.WriteHeader(http.StatusOK)
+}
+
 func main() {
 	logger := wlog.New()
 	mux := http.NewServeMux()
@@ -43,5 +50,6 @@ func main() {
 	mux.HandleFunc("/print", handlePrint)
 	mux.HandleFunc("/keys", handleDeniedKey)
 	mux.HandleFunc("/refund/{id}", handleSensitive)
+	mux.HandleFunc("/refund/audit", handleSensitiveAudited)
 	http.ListenAndServe(":8080", wlogstd.Middleware(logger)(mux))
 }

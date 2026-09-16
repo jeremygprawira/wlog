@@ -134,7 +134,7 @@ func applyMethodChains(pkg *packages.Package, file *ast.File, byCall map[*ast.Ca
 			return true
 		}
 		if point := byCall[inner]; point != nil {
-			point.Method = stringLit(call.Args[0])
+			point.Method = StringLiteral(call.Args[0])
 		}
 		return true
 	})
@@ -244,9 +244,9 @@ func routeFor(call *ast.CallExpr, reg registration) (string, string) {
 		if len(args) < 3 {
 			return "", ""
 		}
-		return stringLit(args[0]), stringLit(args[1])
+		return StringLiteral(args[0]), StringLiteral(args[1])
 	}
-	route := stringLit(args[reg.pathArg])
+	route := StringLiteral(args[reg.pathArg])
 	if reg.method != "" {
 		return reg.method, route
 	}
@@ -264,8 +264,8 @@ func splitMethodPattern(pattern string) (string, string) {
 	return "", pattern
 }
 
-// stringLit reads a string-literal argument, or returns "" for anything else.
-func stringLit(expr ast.Expr) string {
+// StringLiteral reads a string-literal argument, or returns "" for anything else.
+func StringLiteral(expr ast.Expr) string {
 	lit, ok := expr.(*ast.BasicLit)
 	if !ok || lit.Kind != token.STRING {
 		return ""

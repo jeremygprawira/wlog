@@ -108,6 +108,7 @@ func Disabled() *Redactor                                    // explicit, greppa
 func (r *Redactor) With(opts ...Option) (*Redactor, error)   // derive; r unchanged
 func (r *Redactor) Apply(event map[string]any)
 func (r *Redactor) Keys() []string                           // effective list, sorted
+func (r *Redactor) Denies(key string) bool                   // key name alone: deny list + leaf globs
 func (r *Redactor) Patterns() []string                       // effective pattern names, sorted
 func (r *Redactor) Fingerprint() string                      // stable short hash of effective config
 
