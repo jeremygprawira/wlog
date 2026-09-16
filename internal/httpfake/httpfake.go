@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 )
 
@@ -13,6 +14,7 @@ import (
 type Request struct {
 	Method  string
 	Path    string
+	Query   url.Values
 	Headers http.Header
 	Body    []byte
 }
@@ -39,7 +41,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 
 	s.mu.Lock()
-	s.requests = append(s.requests, Request{Method: r.Method, Path: r.URL.Path, Headers: r.Header.Clone(), Body: body})
+	s.requests = append(s.requests, Request{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Headers: r.Header.Clone(), Body: body})
 	status := s.status
 	for k, vs := range s.header {
 		for _, v := range vs {
