@@ -38,7 +38,13 @@ type DrainFunc func(ctx context.Context, event map[string]any)
 // Send calls f.
 func (f DrainFunc) Send(ctx context.Context, event map[string]any) { f(ctx, event) }
 
-// WithDrains adds drains every event is sent to, alongside the default stdout sink.
+// WithDrains adds drains that every event is sent to, alongside the default stdout
+// sink.
+//
+// The drains of one event run in order, on the goroutine that ends it, so a
+// custom drain that blocks also blocks the request. The built-in network drains
+// hand their send to a background pipeline, which keeps a slow backend off that
+// path.
 func WithDrains(drains ...Drain) Option {
 	return func(l *Logger) { l.drains = append(l.drains, drains...) }
 }

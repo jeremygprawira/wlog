@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
 func startEvent(t *testing.T) (context.Context, func() map[string]any) {
@@ -174,5 +176,61 @@ func TestCore_HasEvent(t *testing.T) {
 
 	if wlog.HasEvent(context.Background()) {
 		t.Error("HasEvent = true on a bare context, want false")
+	}
+}
+
+// TestCore_CORE25_SizeCapCounts proves that the fields of one event stop at 256
+// KiB, that the dropped writes are counted, and that the event still emits.
+func TestCore_CORE25_SizeCapCounts(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	chunk := strings.Repeat("x", 32<<10)
+	ctx, end := wlog.Start(ctx, "big")
+	for i := 0; i < 16; i++ {
+		wlog.Set(ctx, fmt.Sprintf("field_%d", i), chunk)
+	}
+	end()
+
+	got := rec.Last()
+	dropped, ok := got["wlog.dropped_fields"]
+	if !ok {
+		t.Fatalf("no dropped counter: the size cap did not fire (fields: %d)", len(got))
+	}
+	if dropped == int64(0) || dropped == 0 {
+		t.Errorf("wlog.dropped_fields = %v, want a positive count", dropped)
+	}
+	kept := 0
+	for key := range got {
+		if strings.HasPrefix(key, "field_") {
+			kept++
+		}
+	}
+	if kept >= 16 {
+		t.Errorf("kept %d large fields, want the cap to drop some", kept)
+	}
+	if kept == 0 {
+		t.Error("the cap dropped every field instead of the writes past it")
+	}
+}
+
+// TestCore_CORE23_SetGroupMergesNested proves that SetGroup merges nested maps at
+// every depth rather than replacing them.
+func TestCore_CORE23_SetGroupMergesNested(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.SetGroup(ctx, "user", map[string]any{"id": "u1", "address": map[string]any{"city": "Jakarta"}})
+	wlog.SetGroup(ctx, "user", map[string]any{"country": "ID", "address": map[string]any{"zip": "10110"}})
+	end()
+
+	group, _ := rec.Last()["user"].(map[string]any)
+	if group["id"] != "u1" || group["country"] != "ID" {
+		t.Fatalf("the second call replaced the group: %v", group)
+	}
+	address, _ := group["address"].(map[string]any)
+	if address["city"] != "Jakarta" || address["zip"] != "10110" {
+		t.Errorf("address = %v, want both levels merged", address)
 	}
 }

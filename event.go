@@ -21,6 +21,7 @@ type event struct {
 	sealed      bool
 	rawValues   bool // skip normalize for a value already in tree form
 	dropped     int  // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	size        int  // approximate bytes of the stored values (CORE-25)
 	droppedLogs int  // count of AppendLog lines rejected by maxLogLines (G4)
 	level       Level
 	levelSet    bool // true once SetLevel has been called; wins over the default
@@ -37,9 +38,10 @@ type event struct {
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
 // counted in wlog.dropped_fields on the emitted event, rather than growing unbounded.
 const (
-	maxKeys        = 200 // top-level fields, including group and array field names
-	maxGroupFields = 50  // fields inside one SetGroup group
-	maxArrayLen    = 200 // elements in one Append array
+	maxKeys        = 200       // top-level fields, including group and array field names
+	maxGroupFields = 50        // fields inside one SetGroup group
+	maxArrayLen    = 200       // elements in one Append array
+	maxEventSize   = 256 << 10 // bytes of field values one event may hold (CORE-25)
 )
 
 type eventCtxKey struct{}
@@ -82,9 +84,12 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 }
 
 // Set adds one field to the current event. It is a no-op, never a panic, when ctx
-// carries no event (no Start was called) or the event has already been emitted. A
-// struct or other non-JSON-tree value is normalized via its json tags, same as if it
-// had gone through json.Marshal/Unmarshal.
+// carries no event (no Start was called) or the event has already been emitted.
+//
+// Set replaces the value of a key. SetGroup merges, and Append adds to an array,
+// so a caller always knows which of the three it called. A struct or any other
+// non-JSON-tree value is copied through its json tags, and the copy belongs to
+// the event: a later change to the caller's value never reaches a sink.
 func Set(ctx context.Context, key string, value any) {
 	e := eventFrom(ctx)
 	if e == nil {
@@ -100,6 +105,9 @@ func Set(ctx context.Context, key string, value any) {
 		return
 	}
 	if !e.reserveTopLevelSlot(key) {
+		return
+	}
+	if !e.reserveSize(copied) {
 		return
 	}
 	e.fields[key] = copied
@@ -168,6 +176,17 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 			e.dropped++
 			continue
 		}
+		if !e.reserveSize(v) {
+			continue
+		}
+		// A group merges a nested map rather than replacing it, at every depth,
+		// so a second call adds to what the first one wrote.
+		if existing, ok := g[k].(map[string]any); ok {
+			if incoming, ok := v.(map[string]any); ok {
+				mergeMap(existing, incoming)
+				continue
+			}
+		}
 		g[k] = v
 	}
 }
@@ -197,7 +216,40 @@ func Append(ctx context.Context, key string, value any) {
 		e.dropped++
 		return
 	}
+	if !e.reserveSize(copied) {
+		return
+	}
 	e.fields[key] = append(arr, copied)
+}
+
+// reserveSize reports whether the event has room for one more value, and counts a
+// write it has to drop.
+//
+// Phase 11 replaces this ceiling with the full size cap of the event shape. Until
+// then it keeps gate G4: one event cannot grow without bound because a caller
+// writes a large value in a loop. Callers must hold e.mu.
+func (e *event) reserveSize(v any) bool {
+	size := valueSize(v)
+	if e.size+size > maxEventSize {
+		e.dropped++
+		return false
+	}
+	e.size += size
+	return true
+}
+
+// mergeMap copies every field of src into dst, and it merges two maps that share a
+// key the same way, so SetGroup reaches the same result at every depth.
+func mergeMap(dst, src map[string]any) {
+	for key, value := range src {
+		if existing, ok := dst[key].(map[string]any); ok {
+			if incoming, ok := value.(map[string]any); ok {
+				mergeMap(existing, incoming)
+				continue
+			}
+		}
+		dst[key] = value
+	}
 }
 
 // reserveTopLevelSlot reports whether key may occupy a top-level field slot: true if

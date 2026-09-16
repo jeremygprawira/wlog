@@ -387,6 +387,39 @@ func decodeJSON(raw []byte, depth int) any {
 	return copyAt(v, depth+1)
 }
 
+// valueSize returns the approximate size of a tree value in bytes.
+//
+// The estimate counts the text and the numbers, and it adds a small cost for each
+// container and key. It is a bound for a memory ceiling, not a measurement of the
+// JSON that a sink writes, so it never walks a value twice.
+func valueSize(v any) int {
+	switch t := v.(type) {
+	case nil:
+		return 0
+	case string:
+		return len(t)
+	case bool:
+		return 1
+	case int64, uint64, float64:
+		return 8
+	case json.Number:
+		return len(t)
+	case map[string]any:
+		size := 0
+		for key, value := range t {
+			size += len(key) + 8 + valueSize(value)
+		}
+		return size
+	case []any:
+		size := 0
+		for _, value := range t {
+			size += 8 + valueSize(value)
+		}
+		return size
+	}
+	return 16
+}
+
 // typeName names the Go type of a value for a fallback, without a package path
 // that a reader cannot use.
 func typeName(v any) string {
