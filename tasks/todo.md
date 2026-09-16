@@ -22,7 +22,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CORE-7 Flush and Close
 - [x] 10-CORE-8 Default extractor
 - [x] 10-CORE-9 Size counting, group merge, drain docs
-- [ ] 10-RED-1 Linear key matching and a bounded cache
+- [x] 10-RED-1 Linear key matching and a bounded cache
 - [ ] 10-RED-2 `With` keeps the full configuration
 - [ ] 10-RED-3 Joined tokens and the default list
 - [ ] 10-RED-4 Pattern names and new patterns

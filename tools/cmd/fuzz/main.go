@@ -180,8 +180,10 @@ func find(root string) ([]target, error) {
 
 // runTarget runs one fuzz target for the given time.
 func runTarget(dir, pkg, name, duration string) ([]byte, error) {
+	// One worker: a target that captures process stdout (the sink tests do)
+	// would otherwise read another worker's output and report a false leak.
 	cmd := exec.CommandContext(context.Background(), "go", "test",
-		"-run=xxx", "-fuzz="+name, "-fuzztime="+duration, pkg)
+		"-run=xxx", "-fuzz="+name, "-fuzztime="+duration, "-parallel=1", pkg)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	return cmd.CombinedOutput()

@@ -3,6 +3,7 @@ package redact_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jeremygprawira/wlog/redact"
 )
@@ -78,5 +79,28 @@ func TestRedact_Disabled_IsNoop(t *testing.T) {
 	r.Apply(event)
 	if event["password"] != "secret" {
 		t.Errorf("Disabled() redactor changed the event: %v", event["password"])
+	}
+}
+
+// TestRedact_RED1_LongKeyUnderOneMs proves that a hostile key length costs the
+// same as a normal one: the key is cut before it is tokenized, so matching stays
+// linear in the length of a key that matters.
+func TestRedact_RED1_LongKeyUnderOneMs(t *testing.T) {
+	r := redact.MustNew()
+	key := strings.Repeat("a_", 2000) // 4000 bytes
+
+	start := time.Now()
+	for i := 0; i < 100; i++ {
+		event := map[string]any{key: "some-value"}
+		r.Apply(event)
+	}
+	perCall := time.Since(start) / 100
+	if perCall > time.Millisecond {
+		t.Errorf("a 4000-byte key took %v, want under 1ms", perCall)
+	}
+	event := map[string]any{key: "some-value"}
+	r.Apply(event)
+	if event[key] != "some-value" {
+		t.Errorf("a key with no denylist entry was masked: %v", event[key])
 	}
 }

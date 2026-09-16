@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Redactor masks sensitive keys and values in an event. It is immutable after New
@@ -24,25 +25,53 @@ type Redactor struct {
 	replaceFunc   func(string) string
 	maxDepth      int
 	maxStringScan int
-	tokenCache    sync.Map // key string -> []string; a real event reuses the same field
-	// names on every call, so tokenizing them fresh each time is pure waste.
+	tokenCache    sync.Map     // key string -> []string; a real event reuses the same
+	cacheEntries  atomic.Int64 // field names on every call, so a fresh tokenize is waste
+	maxLeafTokens int          // longest denylist entry in tokens, which bounds a run
 }
 
 // cachedTokenize is tokenize(key), memoized per Redactor. Safe for concurrent use
 // (sync.Map): tokenize is a pure function, so a duplicate compute on a cache race
 // just replaces the entry with an equal value.
+//
+// The cache holds at most cacheLimit keys. Past that a key is tokenized without
+// being stored, so a caller who sends a new field name on every event cannot grow
+// the redactor without bound.
 func (r *Redactor) cachedTokenize(key string) []string {
+	key = cutKey(key)
 	if v, ok := r.tokenCache.Load(key); ok {
 		return v.([]string)
 	}
 	tokens := tokenize(key)
-	r.tokenCache.Store(key, tokens)
+	if r.cacheEntries.Add(1) > cacheLimit {
+		r.cacheEntries.Add(-1)
+		return tokens
+	}
+	if _, loaded := r.tokenCache.LoadOrStore(key, tokens); loaded {
+		r.cacheEntries.Add(-1)
+	}
 	return tokens
+}
+
+// cutKey shortens a key to the length that the denylist can answer for. Every
+// entry is far shorter than the limit, so the tail of a hostile key cannot change
+// a match, and the work stays linear in the length of a key that matters.
+func cutKey(key string) string {
+	if len(key) <= maxKeyBytes {
+		return key
+	}
+	return key[:maxKeyBytes]
 }
 
 const (
 	defaultMaxDepth      = 16
 	defaultMaxStringScan = 64 * 1024
+	// maxKeyBytes is the longest field name that can match a denylist entry.
+	maxKeyBytes = 256
+	// cacheLimit bounds the token cache. The bound keeps a stream of new field
+	// names from growing the process while it still holds every name a real
+	// service uses.
+	cacheLimit = 4096
 )
 
 // Option configures a Redactor built by New or With.
@@ -221,8 +250,15 @@ func build(c *config, opts []Option) (*Redactor, error) {
 			}
 			r.leafGlobs = append(r.leafGlobs, strings.ToLower(k))
 		default:
-			r.leafTokens[joinTokens(tokenize(k))] = true
+			tokens := tokenize(cutKey(k))
+			r.leafTokens[joinTokens(tokens)] = true
+			if len(tokens) > r.maxLeafTokens {
+				r.maxLeafTokens = len(tokens)
+			}
 		}
+	}
+	if r.maxLeafTokens == 0 {
+		r.maxLeafTokens = 1
 	}
 	return r, nil
 }
@@ -332,8 +368,11 @@ func (r *Redactor) applyValue(v any, path []string, depth int) any {
 // Unanchored: matches at any depth.
 func (r *Redactor) matchesKey(key string) bool {
 	tokens := r.cachedTokenize(key)
+	// A run is never longer than the longest denylist entry, so a long key costs
+	// a bounded number of lookups rather than a quadratic scan.
 	for i := range tokens {
-		for j := i + 1; j <= len(tokens); j++ {
+		limit := min(i+r.maxLeafTokens, len(tokens))
+		for j := i + 1; j <= limit; j++ {
 			if r.leafTokens[joinTokens(tokens[i:j])] {
 				return true
 			}
