@@ -38,7 +38,8 @@ type Logger struct {
 	errorExtractor    ErrorExtractor
 	drains            []Drain
 	onError           func(err error, source string)
-	sampler           Keeper
+	pendingErrors     []report
+	samplers          []Keeper
 	enrichers         []Enricher
 	fieldNames        FieldNames
 	plugins           []Plugin
@@ -68,6 +69,8 @@ func New(opts ...Option) *Logger {
 	for _, w := range warnings {
 		l.reportError(w.err, w.source)
 	}
+	// An option that failed before the OnError option ran left its report here.
+	l.flushReports()
 	return l
 }
 
@@ -82,13 +85,35 @@ func WithRawValues() Option { return func(l *Logger) { l.rawValues = true } }
 
 // WithService sets the service.name/version/env fields every event carries.
 func WithService(name, version, env string) Option {
-	return func(l *Logger) { l.service = serviceInfo{name: name, version: version, env: env} }
+	return func(l *Logger) {
+		// An empty argument keeps whatever the environment gave, so a caller may
+		// pass only the field it knows.
+		l.service = serviceInfo{
+			name:    pick(name, l.service.name),
+			version: pick(version, l.service.version),
+			env:     pick(env, l.service.env),
+		}
+	}
+}
+
+// pick returns value when it is not empty, and fallback otherwise.
+func pick(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 // WithRedactor sets the *redact.Redactor used to mask every event before it is
 // written. Unset, New uses redact.Default().
 func WithRedactor(r *redact.Redactor) Option {
-	return func(l *Logger) { l.redactor.Store(r) }
+	return func(l *Logger) {
+		if r == nil {
+			// Resolve the default once, here, so an event never rebuilds it.
+			r = redact.Default()
+		}
+		l.redactor.Store(r)
+	}
 }
 
 type loggerCtxKey struct{}

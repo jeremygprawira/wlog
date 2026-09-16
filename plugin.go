@@ -46,7 +46,7 @@ func WithPlugins(plugins ...Plugin) Option {
 // Plugins returns every registered plugin, so an HTTP adapter (http-std and friends)
 // can find the ones implementing RequestStarter/RequestFinisher via a type assertion.
 func (l *Logger) Plugins() []Plugin {
-	return l.plugins
+	return append([]Plugin(nil), l.plugins...)
 }
 
 // wirePlugins runs each plugin's Setup (if any) and registers it as an Enricher,
@@ -58,8 +58,8 @@ func (l *Logger) wirePlugins() {
 		if en, ok := p.(Enricher); ok {
 			l.enrichers = append(l.enrichers, en)
 		}
-		if k, ok := p.(Keeper); ok && l.sampler == nil {
-			l.sampler = k
+		if k, ok := p.(Keeper); ok {
+			l.samplers = append(l.samplers, k)
 		}
 		if d, ok := p.(Drain); ok {
 			l.drains = append(l.drains, d)

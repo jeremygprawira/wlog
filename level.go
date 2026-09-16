@@ -1,6 +1,9 @@
 package wlog
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // Level is an event's severity. The zero value is not a valid Level; use LevelInfo as
 // the default.
@@ -24,7 +27,21 @@ var levelRank = map[Level]int{
 // WithLevel sets the minimum level a Logger writes; events below it are dropped
 // silently. Default LevelDebug (nothing filtered).
 func WithLevel(min Level) Option {
-	return func(l *Logger) { l.minLevel = min }
+	return func(l *Logger) {
+		if !validLevel(min) {
+			// Report and keep the current level, so a typo never silences a
+			// service or turns it into noise.
+			l.reportError(fmt.Errorf("unknown level %q", string(min)), "WithLevel")
+			return
+		}
+		l.minLevel = min
+	}
+}
+
+// validLevel reports whether a level is one of the four.
+func validLevel(level Level) bool {
+	_, ok := levelRank[level]
+	return ok
 }
 
 // SetLevel overrides the level an event would otherwise be given. Later work in a
@@ -33,6 +50,14 @@ func WithLevel(min Level) Option {
 func SetLevel(ctx context.Context, level Level) {
 	e := eventFrom(ctx)
 	if e == nil {
+		return
+	}
+	if !validLevel(level) {
+		// Report and keep the event's own level, so a typo never labels an event
+		// with a severity no filter understands.
+		if l := loggerFrom(e.ctx); l != nil {
+			l.reportError(fmt.Errorf("unknown level %q", string(level)), "SetLevel")
+		}
 		return
 	}
 	e.mu.Lock()

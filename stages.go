@@ -32,10 +32,11 @@ type EnricherFunc func(ctx context.Context, event map[string]any)
 // Enrich calls f.
 func (f EnricherFunc) Enrich(ctx context.Context, event map[string]any) { f(ctx, event) }
 
-// WithSampler sets the Keeper used to decide which events to keep. Unset, every event
-// is kept.
+// WithSampler adds a Keeper that decides which events to keep. Unset, every event
+// is kept. Several keepers, from this option and from plugins, all run, and one
+// keeper that says yes keeps the event.
 func WithSampler(k Keeper) Option {
-	return func(l *Logger) { l.sampler = k }
+	return func(l *Logger) { l.samplers = append(l.samplers, k) }
 }
 
 // WithEnrichers adds enrichers, run in order, after sampling and before redaction.
@@ -51,21 +52,33 @@ func (l *Logger) shouldKeep(ctx context.Context, event map[string]any) bool {
 	if _, isAudit := event["audit"]; isAudit {
 		return true
 	}
-	if l.sampler == nil {
+	if len(l.samplers) == 0 {
 		return true
 	}
 	return l.safeKeep(ctx, event)
 }
 
-func (l *Logger) safeKeep(ctx context.Context, event map[string]any) (keep bool) {
-	keep = true
+// safeKeep runs every Keeper and combines the answers with OR: one keeper that
+// says yes keeps the event. A keeper that panics counts as a yes, so a broken
+// sampler can never silently drop every event.
+func (l *Logger) safeKeep(ctx context.Context, event map[string]any) bool {
+	for _, k := range l.samplers {
+		if l.keepOne(ctx, k, event) {
+			return true
+		}
+	}
+	return false
+}
+
+// keepOne runs one Keeper under recover.
+func (l *Logger) keepOne(ctx context.Context, k Keeper, event map[string]any) (keep bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			l.reportError(fmt.Errorf("panic: %v", r), sourceName(l.sampler))
+			l.reportError(fmt.Errorf("panic: %v", r), sourceName(k))
 			keep = true
 		}
 	}()
-	return l.sampler.Keep(ctx, event)
+	return k.Keep(ctx, event)
 }
 
 // runEnrichers runs the enrich stage: every configured Enricher, in order, each

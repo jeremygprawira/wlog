@@ -64,12 +64,31 @@ func (l *Logger) safeSend(ctx context.Context, d Drain, event map[string]any) {
 // OnError is user code, and a panic inside it would otherwise climb out of a
 // logging call. The panic is swallowed here, because the report of a failure
 // must never become a failure of its own.
+//
+// An option can fail before the OnError option has run, because options apply in
+// order. Those reports wait in pending until New finishes.
 func (l *Logger) reportError(err error, source string) {
 	if l.onError == nil {
+		l.pendingErrors = append(l.pendingErrors, report{err: err, source: source})
 		return
 	}
 	defer func() { _ = recover() }()
 	l.onError(err, source)
+}
+
+// report is one failure that waits for OnError to arrive.
+type report struct {
+	err    error
+	source string
+}
+
+// flushReports hands the reports that arrived before OnError was set.
+func (l *Logger) flushReports() {
+	pending := l.pendingErrors
+	l.pendingErrors = nil
+	for _, r := range pending {
+		l.reportError(r.err, r.source)
+	}
 }
 
 // Close calls Close(ctx) on every drain that implements it (drainCloser), stopping at
