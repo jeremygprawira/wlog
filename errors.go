@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"reflect"
 )
 
 // maxErrorList caps how many earlier errors one event keeps in errors[] (gate G4).
@@ -76,7 +77,7 @@ func WithErrorExtractor(x ErrorExtractor) Option {
 // error becomes the new error field. Unless SetLevel already ran, the event's level
 // becomes LevelError — an explicit SetLevel, before or after, still wins.
 func Error(ctx context.Context, err error) {
-	if err == nil {
+	if isNilError(err) {
 		return
 	}
 	e := eventFrom(ctx)
@@ -91,7 +92,7 @@ func Error(ctx context.Context, err error) {
 		return
 	}
 
-	info := e.extractor.Extract(err)
+	info := e.safeExtract(err)
 	if e.errInfo != nil {
 		if len(e.errList) >= maxErrorList {
 			e.dropped++
@@ -103,6 +104,43 @@ func Error(ctx context.Context, err error) {
 	if !e.levelSet {
 		e.level = LevelError
 	}
+}
+
+// isNilError reports whether an error is absent.
+//
+// A nil error interface is the common case, and a typed nil pointer satisfies the
+// interface while it holds no value. The second one panics inside any method it
+// reaches, so it counts as absent here.
+func isNilError(err error) bool {
+	if err == nil {
+		return true
+	}
+	v := reflect.ValueOf(err)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Interface, reflect.Chan:
+		return v.IsNil()
+	}
+	return false
+}
+
+// safeExtract runs the extractor for one error and returns its result.
+//
+// An extractor is user code, and user code panics. The panic becomes the
+// INTERNAL fallback with a readable message, and OnError hears about it, so a
+// broken extractor never reaches the caller of Error and never loses the event.
+func (e *event) safeExtract(err error) (info ErrorInfo) {
+	defer func() {
+		if r := recover(); r != nil {
+			info = ErrorInfo{
+				Code:    "INTERNAL",
+				Message: fmt.Sprintf("[extractor: %T panicked]", err),
+			}
+			if l := loggerFrom(e.ctx); l != nil {
+				l.reportError(fmt.Errorf("extractor panic: %v", r), "extractor")
+			}
+		}
+	}()
+	return e.extractor.Extract(err)
 }
 
 // ErrorData returns the current event error's Data map, or nil when the current event

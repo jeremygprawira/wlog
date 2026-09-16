@@ -59,10 +59,17 @@ func (l *Logger) safeSend(ctx context.Context, d Drain, event map[string]any) {
 	d.Send(ctx, event)
 }
 
+// reportError hands one failure to OnError.
+//
+// OnError is user code, and a panic inside it would otherwise climb out of a
+// logging call. The panic is swallowed here, because the report of a failure
+// must never become a failure of its own.
 func (l *Logger) reportError(err error, source string) {
-	if l.onError != nil {
-		l.onError(err, source)
+	if l.onError == nil {
+		return
 	}
+	defer func() { _ = recover() }()
+	l.onError(err, source)
 }
 
 // Close calls Close(ctx) on every drain that implements it (drainCloser), stopping at

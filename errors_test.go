@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
 func TestCore_Error_DefaultExtractor(t *testing.T) {
@@ -166,3 +170,90 @@ func TestCore_Errorf_RecordsAndReturns(t *testing.T) {
 		t.Errorf("recorded error.message = %v, want bad field 42", errInfo["message"])
 	}
 }
+
+// panickingExtractor panics on every error, which a logging call must survive.
+type panickingExtractor struct{}
+
+// Extract panics on purpose.
+func (panickingExtractor) Extract(error) wlog.ErrorInfo { panic("extractor boom") }
+
+// nilError is an error type whose value can be nil.
+type nilError struct{ msg string }
+
+// Error returns the message, and panics when the value is nil.
+func (e *nilError) Error() string { return e.msg }
+
+// TestCore_CORE7_ExtractorPanicIsolated proves that a panicking extractor never
+// reaches the caller: the event carries the INTERNAL fallback, and OnError hears
+// about the panic.
+func TestCore_CORE7_ExtractorPanicIsolated(t *testing.T) {
+	var reported []string
+	var mu sync.Mutex
+
+	log, rec := wlogtest.New(t,
+		wlog.WithErrorExtractor(panickingExtractor{}),
+		wlog.OnError(func(err error, source string) {
+			mu.Lock()
+			defer mu.Unlock()
+			reported = append(reported, source+": "+err.Error())
+		}),
+	)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.Error(ctx, errors.New("backend refused"))
+	end()
+
+	info, _ := rec.Last()["error"].(map[string]any)
+	if info == nil {
+		t.Fatalf("no error field on the event: %v", rec.Last())
+	}
+	if info["code"] != "INTERNAL" {
+		t.Errorf("code = %v, want INTERNAL", info["code"])
+	}
+	if !strings.Contains(fmt.Sprint(info["message"]), "panicked") {
+		t.Errorf("message = %v, want the panic text", info["message"])
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(reported) == 0 {
+		t.Error("OnError heard nothing about the panic")
+	}
+}
+
+// TestCore_CORE7_TypedNilError proves that an error whose value is a nil pointer
+// never reaches the extractor, so a nil dereference cannot panic the caller.
+func TestCore_CORE7_TypedNilError(t *testing.T) {
+	_, rec := wlogtest.New(t)
+	log := wlog.New()
+
+	var typedNil *nilError
+	ctx := log.WithContext(context.Background())
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.Error(ctx, typedNil)
+	end()
+
+	if _, ok := rec.Last()["error"]; ok {
+		t.Errorf("a typed nil error was recorded: %v", rec.Last()["error"])
+	}
+}
+
+// TestCore_CORE8_OnErrorPanicIsolated proves that a panic inside OnError never
+// reaches the caller of a logging call.
+func TestCore_CORE8_OnErrorPanicIsolated(t *testing.T) {
+	log := wlog.New(
+		wlog.WithDrains(panickingDrain{}),
+		wlog.OnError(func(error, string) { panic("onerror boom") }),
+	)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.Set(ctx, "user_id", "u1")
+	end()
+}
+
+// panickingDrain panics on every event, which OnError has to survive.
+type panickingDrain struct{}
+
+// Send panics on purpose.
+func (panickingDrain) Send(context.Context, map[string]any) { panic("drain boom") }
