@@ -142,7 +142,7 @@ func applyMethodChains(pkg *packages.Package, file *ast.File, byCall map[*ast.Ca
 
 // matchRegistration reports whether call registers a handler, and with which rule.
 func matchRegistration(pkg *packages.Package, call *ast.CallExpr, regs []registration) (registration, bool) {
-	obj := calleeObject(pkg, call)
+	obj := Callee(pkg, call)
 	if obj == nil || obj.Pkg() == nil {
 		return registration{}, false
 	}
@@ -154,8 +154,9 @@ func matchRegistration(pkg *packages.Package, call *ast.CallExpr, regs []registr
 	return registration{}, false
 }
 
-// calleeObject resolves a call's callee to a function or method.
-func calleeObject(pkg *packages.Package, call *ast.CallExpr) *types.Func {
+// Callee resolves a call's callee to a function or method. It returns nil when the
+// callee is not a plain function or method.
+func Callee(pkg *packages.Package, call *ast.CallExpr) *types.Func {
 	switch fn := call.Fun.(type) {
 	case *ast.Ident:
 		obj, _ := pkg.TypesInfo.Uses[fn].(*types.Func)
@@ -180,7 +181,7 @@ func pointFor(pkg *packages.Package, enclosing *ast.FuncDecl, call *ast.CallExpr
 		return nil, false
 	}
 	handlerArg := call.Args[len(call.Args)-1]
-	function, pos, ok := handlerTarget(pkg, handlerArg)
+	function, node, ok := handlerTarget(pkg, handlerArg)
 	if !ok {
 		return nil, false
 	}
@@ -189,7 +190,7 @@ func pointFor(pkg *packages.Package, enclosing *ast.FuncDecl, call *ast.CallExpr
 	}
 
 	method, route := routeFor(call, reg)
-	position := pkg.Fset.Position(pos)
+	position := pkg.Fset.Position(node.Pos())
 	return &Point{
 		Package:   pkg.PkgPath,
 		Function:  function,
@@ -198,26 +199,42 @@ func pointFor(pkg *packages.Package, enclosing *ast.FuncDecl, call *ast.CallExpr
 		Framework: reg.pkgPath,
 		Method:    method,
 		Route:     route,
-		Node:      handlerArg,
+		Node:      node,
 	}, true
 }
 
-// handlerTarget names the handler: a function literal reports the enclosing function
-// and the literal's own position, a named function reports its name and declaration.
-func handlerTarget(pkg *packages.Package, arg ast.Expr) (string, token.Pos, bool) {
+// handlerTarget resolves the handler: a function literal reports the enclosing function
+// and the literal itself, a named function reports its name and declaration.
+func handlerTarget(pkg *packages.Package, arg ast.Expr) (string, ast.Node, bool) {
 	switch expr := arg.(type) {
 	case *ast.FuncLit:
-		return "", expr.Pos(), true
+		return "", expr, true
 	case *ast.Ident:
 		if fn, ok := pkg.TypesInfo.Uses[expr].(*types.Func); ok {
-			return fn.Name(), fn.Pos(), true
+			if decl := declFor(pkg, fn.Pos()); decl != nil {
+				return fn.Name(), decl, true
+			}
 		}
 	case *ast.SelectorExpr:
 		if fn, ok := pkg.TypesInfo.Uses[expr.Sel].(*types.Func); ok {
-			return fn.Name(), fn.Pos(), true
+			if decl := declFor(pkg, fn.Pos()); decl != nil {
+				return fn.Name(), decl, true
+			}
 		}
 	}
-	return "", token.NoPos, false
+	return "", nil, false
+}
+
+// declFor finds the declaration of a named function by position.
+func declFor(pkg *packages.Package, pos token.Pos) *ast.FuncDecl {
+	for _, file := range pkg.Syntax {
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Pos() == pos {
+				return fn
+			}
+		}
+	}
+	return nil
 }
 
 // routeFor reads the method and route from a registration call.
