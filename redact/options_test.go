@@ -1,6 +1,7 @@
 package redact_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -96,5 +97,63 @@ func TestRedact_Fingerprint_ChangesOnAddRemove(t *testing.T) {
 	b := redact.MustNew(redact.ReplaceKeys("alpha"), redact.AddKeys("beta"))
 	if a.Fingerprint() == b.Fingerprint() {
 		t.Error("fingerprint did not change after AddKeys")
+	}
+}
+
+// TestRedact_RED2_WithKeepsPatternsTransformsReplaceFunc proves that With starts
+// from every resolved setting of the receiver: denylist, pattern toggles, custom
+// patterns, transforms, ReplaceFunc, masks, and limits.
+func TestRedact_RED2_WithKeepsPatternsTransformsReplaceFunc(t *testing.T) {
+	transformed := false
+	base := redact.MustNew(
+		redact.RemovePatterns("jwt"),
+		redact.AddPatterns(redact.Pattern{Name: "tenant", Regex: `tenant_[0-9]+`}),
+		redact.Transform(func(event map[string]any) { transformed = true; event["seen"] = true }),
+		redact.ReplaceFunc(func(match string) string { return "<" + match + ">" }),
+		redact.MaskClientIP(),
+		redact.MaxDepth(4),
+	)
+
+	derived, err := base.With(redact.AddKeys("extra_secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	event := map[string]any{
+		"tenant_id":    "tenant_42",
+		"jwt":          "a.b.c",
+		"password":     "hunter2",
+		"extra_secret": "also",
+		"http":         map[string]any{"client_ip": "203.0.113.7"},
+	}
+	derived.Apply(event)
+	if !transformed {
+		t.Error("With dropped the transform")
+	}
+	if event["tenant_id"] == "tenant_42" {
+		t.Errorf("tenant_id = %v, want the custom pattern masked", event["tenant_id"])
+	}
+	// ReplaceFunc covers a key, a path, and a glob match; a pattern keeps its own
+	// masker, so the custom pattern proves only that With kept it.
+	if fmt.Sprint(event["password"]) != "<hunter2>" {
+		t.Errorf("password = %v, want ReplaceFunc to build the mask", event["password"])
+	}
+	if event["jwt"] != "a.b.c" {
+		t.Errorf("jwt = %v, want it left alone: RemovePatterns was dropped", event["jwt"])
+	}
+	if fmt.Sprint(event["password"]) == "hunter2" || fmt.Sprint(event["extra_secret"]) == "also" {
+		t.Errorf("keys = %v, want the inherited and the added key masked", event)
+	}
+	if got := event["http"].(map[string]any)["client_ip"]; got == "203.0.113.7" {
+		t.Errorf("http.client_ip = %v, want the mask kept", got)
+	}
+}
+
+// TestRedact_RED2_DisabledWithFails proves that a disabled redactor cannot derive
+// one, because Disabled() means "no redaction" and a derived redactor would be a
+// surprise.
+func TestRedact_RED2_DisabledWithFails(t *testing.T) {
+	if _, err := redact.Disabled().With(redact.AddKeys("password")); err == nil {
+		t.Fatal("Disabled().With returned nil error")
 	}
 }

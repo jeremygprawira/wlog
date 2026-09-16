@@ -57,15 +57,19 @@ func NoBuiltinPatterns() Option {
 // NoBuiltinPatterns into the final ordered, name-unique pattern list.
 func buildPatterns(c *config) ([]builtinPattern, error) {
 	var patterns []builtinPattern
-	if !c.noBuiltinPatterns {
-		for _, p := range allBuiltinPatterns {
-			if p.enabledByDefault || indexFold(c.enabledPatterns, p.name) >= 0 {
-				patterns = append(patterns, p)
-			}
+	for _, p := range allBuiltinPatterns {
+		switch {
+		case !c.noBuiltinPatterns && (p.enabledByDefault || indexFold(c.enabledPatterns, p.name) >= 0):
+			patterns = append(patterns, p)
+		case c.noBuiltinPatterns && indexFold(c.enabledPatterns, p.name) >= 0:
+			// With replays the exact set of built-ins the receiver holds, so a
+			// pattern that RemovePatterns took out never comes back.
+			patterns = append(patterns, p)
 		}
 	}
 
 	for _, up := range c.customPatterns {
+		up := up
 		if patternIndex(patterns, up.Name) >= 0 {
 			return nil, fmt.Errorf("redact: duplicate pattern name %q", up.Name)
 		}
@@ -73,7 +77,7 @@ func buildPatterns(c *config) ([]builtinPattern, error) {
 		if err != nil {
 			return nil, fmt.Errorf("redact: invalid pattern %q: %w", up.Name, err)
 		}
-		patterns = append(patterns, builtinPattern{name: up.Name, re: re, masker: up.masker()})
+		patterns = append(patterns, builtinPattern{name: up.Name, re: re, masker: up.masker(), custom: true})
 	}
 
 	for _, rem := range c.removedPatterns {

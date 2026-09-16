@@ -13,21 +13,24 @@ import (
 // Redactor masks sensitive keys and values in an event. It is immutable after New
 // returns; to change what it masks, derive a new one with With.
 type Redactor struct {
-	disabled      bool            // Disabled(): Apply is a no-op, nothing else below is set
-	raw           []string        // the effective raw key entries, post add/remove
-	leafTokens    map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
-	leafGlobs     []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
-	paths         [][]segMatcher  // dotted entries, one segMatcher per "." segment
-	patterns      []builtinPattern
-	maskClientIP  bool
-	transforms    []func(map[string]any)
-	replacement   string
-	replaceFunc   func(string) string
-	maxDepth      int
-	maxStringScan int
-	tokenCache    sync.Map     // key string -> []string; a real event reuses the same
-	cacheEntries  atomic.Int64 // field names on every call, so a fresh tokenize is waste
-	maxLeafTokens int          // longest denylist entry in tokens, which bounds a run
+	disabled        bool            // Disabled(): Apply is a no-op, nothing else below is set
+	raw             []string        // the effective raw key entries, post add/remove
+	leafTokens      map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
+	leafGlobs       []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
+	paths           [][]segMatcher  // dotted entries, one segMatcher per "." segment
+	patterns        []builtinPattern
+	maskClientIP    bool
+	transforms      []func(map[string]any)
+	replacement     string
+	replaceFunc     func(string) string
+	maxDepth        int
+	maxStringScan   int
+	tokenCache      sync.Map     // key string -> []string; a real event reuses the same
+	cacheEntries    atomic.Int64 // field names on every call, so a fresh tokenize is waste
+	maxLeafTokens   int          // longest denylist entry in tokens, which bounds a run
+	customPatterns  []Pattern    // the patterns a caller added, for a later With
+	builtins        []string     // the active built-in pattern names, for a later With
+	caseInsensitive bool         // whether key matching folds case
 }
 
 // cachedTokenize is tokenize(key), memoized per Redactor. Safe for concurrent use
@@ -191,10 +194,39 @@ func Disabled() *Redactor {
 
 // With derives a new Redactor from r's effective config plus opts. r is unchanged.
 func (r *Redactor) With(opts ...Option) (*Redactor, error) {
+	if r.disabled {
+		// Disabled() means "no redaction", and a derived redactor would silently
+		// turn masking back on. Say so instead.
+		return nil, fmt.Errorf("redact: With on a disabled redactor")
+	}
+	c := r.config()
+	return build(c, opts)
+}
+
+// config returns the resolved configuration of a redactor, so With can start from
+// every setting rather than from the defaults: the denylist, the pattern toggles,
+// the custom patterns, the transforms, the ReplaceFunc, the masks, and the limits.
+//
+// A redactor keeps the raw denylist, so a key that RemoveKeys took out stays out
+// and a key it kept stays in. The pattern toggles are replayed from the compiled
+// set: a built-in name is enabled when the redactor holds it, and every custom
+// pattern is kept whole.
+func (r *Redactor) config() *config {
 	c := newConfig()
 	c.keys = append([]string(nil), r.raw...)
-	c.maskClientIP, c.replacement, c.maxDepth, c.maxStringScan = r.maskClientIP, r.replacement, r.maxDepth, r.maxStringScan
-	return build(c, opts)
+	c.maskClientIP = r.maskClientIP
+	c.replacement = r.replacement
+	c.maxDepth = r.maxDepth
+	c.maxStringScan = r.maxStringScan
+	c.transforms = append(c.transforms, r.transforms...)
+	c.replaceFunc = r.replaceFunc
+	c.customPatterns = append([]Pattern(nil), r.customPatterns...)
+	// A built-in pattern that the receiver holds is enabled here, and one it lost
+	// stays lost, so With never turns a removed pattern back on.
+	c.noBuiltinPatterns = true
+	c.enabledPatterns = append([]string(nil), r.builtins...)
+	c.removedPatterns = nil
+	return c
 }
 
 func newConfig() *config {
@@ -231,6 +263,9 @@ func build(c *config, opts []Option) (*Redactor, error) {
 		replaceFunc:   c.replaceFunc,
 		maxDepth:      c.maxDepth,
 		maxStringScan: c.maxStringScan,
+		// With starts from these, so a derived redactor keeps the custom patterns,
+		// the case setting, and the exact set of built-in patterns in force.
+		customPatterns: append([]Pattern(nil), c.customPatterns...),
 	}
 	for _, k := range r.raw {
 		switch {
@@ -255,6 +290,11 @@ func build(c *config, opts []Option) (*Redactor, error) {
 			if len(tokens) > r.maxLeafTokens {
 				r.maxLeafTokens = len(tokens)
 			}
+		}
+	}
+	for _, p := range r.patterns {
+		if !p.custom {
+			r.builtins = append(r.builtins, p.name)
 		}
 	}
 	if r.maxLeafTokens == 0 {

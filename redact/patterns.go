@@ -22,6 +22,8 @@ type builtinPattern struct {
 	// this existed. nil means always try the regex (used by user-supplied patterns,
 	// which have no safe cheap precondition to infer).
 	prefilter func(string) bool
+	// custom marks a pattern that AddPatterns added, so a later With keeps it.
+	custom bool
 }
 
 // valueMasker adapts a simple func(matchedText string) string into the func(Match)
@@ -55,14 +57,14 @@ func hasBearer(s string) bool {
 // allBuiltinPatterns is every built-in value pattern (SPEC-redact.md's pattern table).
 // Patterns run in this order over one string, each seeing the previous one's output.
 var allBuiltinPatterns = []builtinPattern{
-	{"credit_card", regexp.MustCompile(`\b\d(?:[ -]?\d){12,18}\b`), valueMasker(maskCreditCard), true, hasDigit},
-	{"email", regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`), valueMasker(maskEmail), true, func(s string) bool { return strings.Contains(s, "@") }},
-	{"jwt", regexp.MustCompile(`\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`), valueMasker(maskJWT), true, func(s string) bool { return strings.Count(s, ".") >= 2 }},
-	{"bearer", regexp.MustCompile(`(?i)\bBearer\s+\S+`), valueMasker(maskBearer), true, hasBearer},
-	{"ipv4", reIPv4, valueMasker(maskIPv4), true, func(s string) bool { return strings.Count(s, ".") >= 3 }},
-	{"phone", rePhone, valueMasker(maskPhone), true, hasDigit},
-	{"iban", reIBAN, valueMasker(maskIBAN), true, hasUpper},
-	{"nik", reNIK, valueMasker(maskNIK), false, hasDigit},
+	{"credit_card", regexp.MustCompile(`\b\d(?:[ -]?\d){12,18}\b`), valueMasker(maskCreditCard), true, hasDigit, false},
+	{"email", regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`), valueMasker(maskEmail), true, func(s string) bool { return strings.Contains(s, "@") }, false},
+	{"jwt", regexp.MustCompile(`\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`), valueMasker(maskJWT), true, func(s string) bool { return strings.Count(s, ".") >= 2 }, false},
+	{"bearer", regexp.MustCompile(`(?i)\bBearer\s+\S+`), valueMasker(maskBearer), true, hasBearer, false},
+	{"ipv4", reIPv4, valueMasker(maskIPv4), true, func(s string) bool { return strings.Count(s, ".") >= 3 }, false},
+	{"phone", rePhone, valueMasker(maskPhone), true, hasDigit, false},
+	{"iban", reIBAN, valueMasker(maskIBAN), true, hasUpper, false},
+	{"nik", reNIK, valueMasker(maskNIK), false, hasDigit, false},
 }
 
 // applyPatterns runs every active pattern over s and returns the result. path is the
