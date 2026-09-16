@@ -118,7 +118,7 @@
 - [x] CT3 herr catalog bridge
 - [x] LM1 LLM record and event fields
 - [x] LM2 Pricing, cost, enricher
-- [ ] AX1 Audit record extras
+- [x] AX1 Audit record extras
 - [ ] AX2 `audit.Diff` and the test mock
 - [ ] AX3 HMAC signing and catalog-driven audit
 - [ ] MQ1 Memory named stores and queries

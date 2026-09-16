@@ -78,6 +78,7 @@ type Record struct {
     Version        int            // schema version of this record, default 1
     IdempotencyKey string         // dedupes a retried write
     Context        map[string]any // free-form facts, such as a request id or a ticket
+    ErrorCode      string         // the code behind an "error" outcome, set by Wrap
 }
 ```
 

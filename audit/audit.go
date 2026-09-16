@@ -30,6 +30,23 @@ type Record struct {
 	Target  Target `json:"target"`
 	Outcome string `json:"outcome"`
 	Reason  string `json:"reason,omitempty"`
+
+	// Version is this record's schema version. Zero means 1.
+	Version int `json:"version,omitempty"`
+	// IdempotencyKey dedupes a retried write.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	// Context carries free-form facts, such as a request id or a ticket.
+	Context map[string]any `json:"context,omitempty"`
+	// ErrorCode is the code of the error behind an "error" outcome, set by Wrap.
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
+// versionOf fills a zero Version with 1, the current schema version.
+func versionOf(r Record) int {
+	if r.Version == 0 {
+		return 1
+	}
+	return r.Version
 }
 
 // Do records r. Inside an active wlog.Start, it sets the "audit" field on that event so
@@ -37,6 +54,7 @@ type Record struct {
 // and immediately closes its own event via wlog.Start(ctx, "audit."+r.Action), so an
 // audit call never depends on the caller already being inside a request.
 func Do(ctx context.Context, r Record) {
+	r.Version = versionOf(r)
 	if wlog.HasEvent(ctx) {
 		wlog.Set(ctx, "audit", r)
 		return
