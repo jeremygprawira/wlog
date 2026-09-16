@@ -63,6 +63,10 @@ Better Auth integration, CLI telemetry. Error catalogs are covered by herr.
 
 Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separate spec).
 
+The 2026-09-16 evlog docs audit in [SPEC parity](evlog-parity.md) lists 15 further
+non-TypeScript-specific gaps, each marked as a v1.2 candidate.
+
+
 ## Specs
 
 | Module id | Spec | Status |

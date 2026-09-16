@@ -96,4 +96,4 @@ proves each one.
 | 12 | One plugin, many hooks, panic isolated | `TestCore_Plugin_AllHooksWired`, `TestCore_Plugin_PanicIsolatedAndReported` |
 | 13 | Typed fields and StrictKeys | `TestCore_Key_SetStoresUnderItsName`, `TestCore_StrictKeys_FlagsUnregisteredKey_InDev`, `TestTypedKeys_SetAndFlagTypo` |
 | 14 | `wlog map` is deterministic and gates CI | `TestGolden`, `TestGates`, `make map` |
-| 15 | evlog parity | [docs/evlog-parity.md](docs/evlog-parity.md) |
+| 15 | evlog parity | [docs/evlog-parity.md](docs/evlog-parity.md): every evlog page mapped, with the open gaps ranked |
