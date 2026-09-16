@@ -30,6 +30,10 @@ func (m *Memory) Query(f Filter) []map[string]any {
 	return matches
 }
 
+// Matches reports whether one event passes the filter. Read and Tail in drain/file use
+// it, so one filter type covers every reader.
+func Matches(event map[string]any, f Filter) bool { return matchesFilter(event, f) }
+
 // matchesFilter reports whether one event passes every filter field, cheapest first.
 func matchesFilter(event map[string]any, f Filter) bool {
 	if f.Level != "" {
