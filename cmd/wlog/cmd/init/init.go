@@ -4,7 +4,6 @@
 package init
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -119,6 +118,29 @@ func detectFramework(dir string) (string, error) {
 	return found, nil
 }
 
+// packageName reads the package clause from the module's first Go file.
+func packageName(dir string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		source, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return "", err
+		}
+		for _, line := range strings.Split(string(source), "\n") {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "package "); ok {
+				return strings.TrimSpace(rest), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no package clause found in %s", dir)
+}
+
 // goFiles returns the source of every .go file in dir.
 func goFiles(dir string) ([][]byte, error) {
 	entries, err := os.ReadDir(dir)
@@ -163,7 +185,11 @@ func buildPlan(opts Options) ([]write, error) {
 			return nil, err
 		}
 	}
-	setup, err := setupFor(framework, opts.Drain, module)
+	pkg, err := packageName(dir)
+	if err != nil {
+		return nil, err
+	}
+	setup, err := setupFor(framework, opts.Drain, module, pkg)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +261,3 @@ type setup struct {
 	wlogGo     string
 	envExample string
 }
-
-// Ensure context stays imported for the helper signature below.
-var _ = context.Background

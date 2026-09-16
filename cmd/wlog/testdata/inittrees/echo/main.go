@@ -1,0 +1,12 @@
+// Command app is an init fixture with an Echo v4 router.
+package main
+
+import (
+	"github.com/labstack/echo/v4"
+)
+
+func main() {
+	e := echo.New()
+	e.GET("/", func(c echo.Context) error { return c.NoContent(200) })
+	e.Start(":8080")
+}

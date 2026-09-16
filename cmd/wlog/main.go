@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
 	"github.com/jeremygprawira/wlog/cmd/wlog/report"
 	"github.com/jeremygprawira/wlog/cmd/wlog/rules"
@@ -24,6 +25,9 @@ func main() {
 // run is main without the process exit, so a test can call it. It returns the exit
 // code: 0 pass, 1 gate failure, 2 load or config error.
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "init" {
+		return wloginit.Run(args[1:], stdout, stderr)
+	}
 	if len(args) == 0 || args[0] != "map" {
 		_, _ = fmt.Fprintln(stderr, "usage: wlog map [flags] <package patterns...>")
 		return 2
