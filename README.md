@@ -43,7 +43,7 @@ has its own module.
 
 | Package | Import path | Module |
 |---|---|---|
-| core, redact, pipeline, sample, enrich, drain/memory, drain/axiom, drain/loki, drain/file, drain/webhook, drain/otlp, audit, wlogtest, http-std, log/slog | `github.com/jeremygprawira/wlog/...` | root |
+| core, redact, pipeline, sample, enrich, drain/memory, drain/axiom, drain/loki, drain/file, drain/webhook, drain/otlp, drain/sentry, drain/clickhouse, drain/datadog, audit, wlogtest, http-std, log/slog | `github.com/jeremygprawira/wlog/...` | root |
 | herr extractor | `github.com/jeremygprawira/wlog/errors/herr` | own |
 | Echo v4, Echo v5, Gin | `github.com/jeremygprawira/wlog/middleware/echo`, `.../echo5`, `.../gin` | own each |
 | slog in and out | `github.com/jeremygprawira/wlog/log/slog` | root |
@@ -91,7 +91,7 @@ proves each one.
 | 7 | Denylist add and remove, runtime swap | `TestRedactor_Denies`, `TestCore_SetRedactor_ConcurrentSwapsAndEmits`, `FuzzRedact_NeverLeaks` |
 | 8 | Gates G1–G4 and Go 1.23 | `make race`, `make compat` |
 | 9 | Budget under 50us p50 | `BenchmarkMiddleware` in `middleware/nethttp/bench_test.go` |
-| 10 | v1 drains and the audit journal | `TestAxiom_SendBatch_NDJSON`, `TestLoki_SendBatch_GroupsByLabelSet`, `TestFile_AppendNDJSON`, `TestWebhook_JSONArray`, `TestOTLP_SendBatch_Golden`, `TestAudit_Journal_WritesVerifiableNDJSON` |
+| 10 | v1 drains, v1.1 drains, and the audit journal | `TestAxiom_SendBatch_NDJSON`, `TestLoki_SendBatch_GroupsByLabelSet`, `TestFile_AppendNDJSON`, `TestWebhook_JSONArray`, `TestOTLP_SendBatch_Golden`, `TestSentry_SendBatch_ErrorEnvelope`, `TestClickHouse_SendBatch_JSONEachRow`, `TestDatadog_SendBatch_JSONArray`, `TestAudit_Journal_WritesVerifiableNDJSON` |
 | 11 | Audit survives a 0% sampler and verifies | `TestAudit_RefundScenario`, `TestAudit_BypassesSampling`, `TestAudit_Verify_DetectsEditedByte` |
 | 12 | One plugin, many hooks, panic isolated | `TestCore_Plugin_AllHooksWired`, `TestCore_Plugin_PanicIsolatedAndReported` |
 | 13 | Typed fields and StrictKeys | `TestCore_Key_SetStoresUnderItsName`, `TestCore_StrictKeys_FlagsUnregisteredKey_InDev`, `TestTypedKeys_SetAndFlagTypo` |

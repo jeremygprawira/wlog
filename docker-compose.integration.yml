@@ -29,3 +29,12 @@ services:
       - "4318:4318"
     volumes:
       - ./.integration-out:/out
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.10
+    ports:
+      - "8123:8123"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144

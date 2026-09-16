@@ -114,6 +114,10 @@ wlog.WithDrains(pipeline.Wrap(
 ))
 ```
 
+The v1.1 drains use the same shape: `sentry.MustNew()`, `clickhouse.MustNew()`, and
+`datadog.MustNew()`. ClickHouse needs `clickhouse.DDL(table)` run once before the
+drain inserts.
+
 Fan several drains out with `pipeline.FanOut(a, b, c)`. A drain never blocks the caller
 and never panics into the request.
 
@@ -189,6 +193,9 @@ NDJSON file, and `audit.Verify(path)` checks it.
 | file | `WLOG_FILE_PATH` |
 | webhook | `WLOG_WEBHOOK_URL` |
 | OTLP | `OTEL_EXPORTER_OTLP_ENDPOINT` `OTEL_EXPORTER_OTLP_HEADERS` |
+| Sentry | `SENTRY_DSN` `SENTRY_ALL_EVENTS` |
+| ClickHouse | `CLICKHOUSE_URL` `CLICKHOUSE_USER` `CLICKHOUSE_PASSWORD` `CLICKHOUSE_DATABASE` `CLICKHOUSE_TABLE` |
+| Datadog | `DD_API_KEY` `DD_SITE` (`DD_ENV` and `DD_SERVICE` as fallbacks) |
 
 ## `wlog map` rules
 
