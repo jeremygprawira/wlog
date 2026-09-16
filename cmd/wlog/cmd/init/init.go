@@ -41,21 +41,21 @@ func Run(args []string, stdout, stderr io.Writer) int {
 func run(opts Options, stdout, stderr io.Writer) int {
 	plan, err := buildPlan(opts)
 	if err != nil {
-		fmt.Fprintln(stderr, "wlog init:", err)
+		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
 	if opts.DryRun {
 		for _, write := range plan {
-			fmt.Fprintf(stdout, "--- %s\n%s\n", write.path, write.content)
+			_, _ = fmt.Fprintf(stdout, "--- %s\n%s\n", write.path, write.content)
 		}
 		return 0
 	}
 	if err := apply(plan); err != nil {
-		fmt.Fprintln(stderr, "wlog init:", err)
+		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
 	for _, write := range plan {
-		fmt.Fprintln(stdout, "wrote", write.path)
+		_, _ = fmt.Fprintln(stdout, "wrote", write.path)
 	}
 	return 0
 }

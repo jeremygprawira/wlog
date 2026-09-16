@@ -48,25 +48,25 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 	writes, err := plan(*dir, *skillsDir, *agentsMD)
 	if err != nil {
-		fmt.Fprintln(stderr, "wlog agents:", err)
+		_, _ = fmt.Fprintln(stderr, "wlog agents:", err)
 		return 1
 	}
 	if *dryRun {
 		for _, write := range writes {
-			fmt.Fprintf(stdout, "--- %s\n%s\n", write.path, write.content)
+			_, _ = fmt.Fprintf(stdout, "--- %s\n%s\n", write.path, write.content)
 		}
 		return 0
 	}
 	for _, write := range writes {
 		if err := os.MkdirAll(filepath.Dir(write.path), 0o755); err != nil {
-			fmt.Fprintln(stderr, "wlog agents:", err)
+			_, _ = fmt.Fprintln(stderr, "wlog agents:", err)
 			return 1
 		}
 		if err := os.WriteFile(write.path, []byte(write.content), 0o644); err != nil {
-			fmt.Fprintln(stderr, "wlog agents:", err)
+			_, _ = fmt.Fprintln(stderr, "wlog agents:", err)
 			return 1
 		}
-		fmt.Fprintln(stdout, "wrote", write.path)
+		_, _ = fmt.Fprintln(stdout, "wrote", write.path)
 	}
 	return 0
 }

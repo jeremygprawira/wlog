@@ -44,10 +44,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		}
 		if *jsonOut {
 			data, _ := json.Marshal(check)
-			fmt.Fprintln(stdout, string(data))
+			_, _ = fmt.Fprintln(stdout, string(data))
 			continue
 		}
-		fmt.Fprintf(stdout, "%-5s %-12s %s\n", strings.ToUpper(check.Status), check.Name, check.Message)
+		_, _ = fmt.Fprintf(stdout, "%-5s %-12s %s\n", strings.ToUpper(check.Status), check.Name, check.Message)
 	}
 	return exited
 }
