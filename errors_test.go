@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -257,3 +258,109 @@ type panickingDrain struct{}
 
 // Send panics on purpose.
 func (panickingDrain) Send(context.Context, map[string]any) { panic("drain boom") }
+
+// stringCoder carries a stable code, the shape herr and similar libraries use.
+type stringCoder struct{ code string }
+
+// Error returns a message.
+func (e stringCoder) Error() string { return "coded" }
+
+// Code returns the stable code.
+func (e stringCoder) Code() string { return e.code }
+
+// anyCoder carries its code as any, which a catalog extractor may fill.
+type anyCoder struct{ code any }
+
+// Error returns a message.
+func (e anyCoder) Error() string { return "coded-any" }
+
+// Code returns the code.
+func (e anyCoder) Code() any { return e.code }
+
+// TestCore_CORE24_WrappedCatalogCode proves that the default extractor finds a
+// Code method through wrapping, for both the string and the any form, and that it
+// names the Go type of the error.
+func TestCore_CORE24_WrappedCatalogCode(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.Error(ctx, fmt.Errorf("wrap: %w", stringCoder{code: "PAYMENT_DECLINED"}))
+	end()
+
+	info, _ := rec.Last()["error"].(map[string]any)
+	if info["code"] != "PAYMENT_DECLINED" {
+		t.Errorf("code = %v, want PAYMENT_DECLINED through the wrap", info["code"])
+	}
+	if info["type"] == nil || info["type"] == "" {
+		t.Errorf("type = %v, want the Go type of the error", info["type"])
+	}
+
+	log2, rec2 := wlogtest.New(t)
+	ctx2 := log2.WithContext(context.Background())
+	ctx2, end2 := wlog.Start(ctx2, "op")
+	wlog.Error(ctx2, anyCoder{code: 42})
+	end2()
+
+	info2, _ := rec2.Last()["error"].(map[string]any)
+	if info2["code"] != "42" {
+		t.Errorf("code = %v, want the 42 from Code() any", info2["code"])
+	}
+}
+
+// TestCore_CORE24_JoinCauses proves that a joined error lists its causes.
+func TestCore_CORE24_JoinCauses(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	joined := errors.Join(errors.New("first failed"), fmt.Errorf("second: %w", errors.New("inner")))
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.Error(ctx, joined)
+	end()
+
+	info, _ := rec.Last()["error"].(map[string]any)
+	causes, _ := info["causes"].([]any)
+	if len(causes) == 0 {
+		t.Fatalf("causes = %v, want the two causes", info["causes"])
+	}
+	if causes[0] != "first failed" {
+		t.Errorf("causes[0] = %v, want first failed", causes[0])
+	}
+	joined2, err := json.Marshal(info["causes"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(joined2), "second") {
+		t.Errorf("causes = %s, want the second cause too", joined2)
+	}
+}
+
+// pkgErrorsLike carries a stack the way pkg/errors does, without the import.
+type pkgErrorsLike struct{}
+
+// Error returns a message.
+func (pkgErrorsLike) Error() string { return "stacked" }
+
+// StackTrace returns the program counters of the caller's frames, as pkg/errors
+// captures them.
+func (pkgErrorsLike) StackTrace() []uintptr {
+	pc := make([]uintptr, 8)
+	n := runtime.Callers(1, pc)
+	return pc[:n]
+}
+
+// TestCore_CORE24_PkgErrorsStack proves that a stack which arrives as program
+// counters is read through reflection, so core needs no import of the library.
+func TestCore_CORE24_PkgErrorsStack(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "op")
+	wlog.Error(ctx, fmt.Errorf("wrap: %w", pkgErrorsLike{}))
+	end()
+
+	info, _ := rec.Last()["error"].(map[string]any)
+	if _, ok := info["stack"]; !ok {
+		t.Errorf("stack missing, so the counters were not read: %v", info)
+	}
+}

@@ -5,25 +5,35 @@ import (
 	stderrors "errors"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 )
 
 // maxErrorList caps how many earlier errors one event keeps in errors[] (gate G4).
 const maxErrorList = 10
 
+// maxCauses caps how many causes one error lists, so a wide join stays bounded.
+const maxCauses = 16
+
 // ErrorInfo is the detail Error stores for one error, in the shape every sink emits.
 // An ErrorExtractor fills this in from whatever error type the caller's error library
 // uses, so core never needs to know about that library.
 type ErrorInfo struct {
-	Code    string         `json:"code,omitempty"`
-	Message string         `json:"message,omitempty"`
-	Kind    string         `json:"kind,omitempty"`
-	Status  int            `json:"status,omitempty"`
-	Cause   string         `json:"cause,omitempty"`
-	Stack   string         `json:"stack,omitempty"`
-	Why     string         `json:"why,omitempty"`
-	Fix     string         `json:"fix,omitempty"`
-	Link    string         `json:"link,omitempty"`
-	Attrs   map[string]any `json:"attrs,omitempty"`
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	Status  int    `json:"status,omitempty"`
+	Cause   string `json:"cause,omitempty"`
+	Stack   string `json:"stack,omitempty"`
+	// Type is the Go type of the error, such as "*foo.barError".
+	Type string `json:"type,omitempty"`
+	// Causes lists the messages of an errors.Join or a multi-%w error, capped at
+	// maxCauses entries so a wide join never grows an event without bound.
+	Causes []string       `json:"causes,omitempty"`
+	Why    string         `json:"why,omitempty"`
+	Fix    string         `json:"fix,omitempty"`
+	Link   string         `json:"link,omitempty"`
+	Attrs  map[string]any `json:"attrs,omitempty"`
 	// Data is safe to send back to a client, such as a rejected field name.
 	Data map[string]any `json:"data,omitempty"`
 	// Internal is log-only detail, such as a row id or a query.
@@ -42,24 +52,105 @@ type defaultExtractor struct{}
 // Extract gives every plain error a usable, safe-to-log fallback: an "INTERNAL" code,
 // its Error() text as the message, and its unwrapped cause if it has one.
 func (defaultExtractor) Extract(err error) ErrorInfo {
-	info := ErrorInfo{Code: "INTERNAL", Message: err.Error()}
-	// An error library can expose a stable code through a Code() string method. core
-	// reads the method and never the type, so it stays library-agnostic. A plain error
-	// keeps INTERNAL.
-	if coded, ok := err.(interface{ Code() string }); ok {
+	info := ErrorInfo{Code: "INTERNAL", Message: err.Error(), Type: typeName(err)}
+
+	// An error library can expose a stable code through a Code method, in the
+	// string form or the any form. errors.As finds the method through any
+	// wrapping, so a coded error inside a fmt.Errorf still reports its code. core
+	// reads the method and never the type, which keeps it library-agnostic.
+	var coded interface{ Code() string }
+	if stderrors.As(err, &coded) {
 		if code := coded.Code(); code != "" {
 			info.Code = code
 		}
 	}
+	var codedAny interface{ Code() any }
+	if stderrors.As(err, &codedAny) {
+		if value := codedAny.Code(); value != nil {
+			info.Code = fmt.Sprint(value)
+		}
+	}
+
+	// A joined error lists every cause it holds, and a single wrap keeps its one
+	// cause in cause. errors.Unwrap returns the first cause of a chain, while an
+	// Unwrap method that returns a slice names them all.
 	if cause := stderrors.Unwrap(err); cause != nil {
 		info.Cause = cause.Error()
 	}
-	// Any error can opt into carrying its own stack this way — http-std's recovered
-	// panics do — without core needing to know about panics specifically.
-	if s, ok := err.(interface{ Stack() string }); ok {
-		info.Stack = s.Stack()
+	info.Causes = causesOf(err, 0)
+
+	// Any error can opt into carrying its own stack this way — http-std's
+	// recovered panics do — without core needing to know about panics.
+	var stacked interface{ Stack() string }
+	if stderrors.As(err, &stacked) {
+		info.Stack = stacked.Stack()
+	}
+	// pkg/errors and cockroachdb/errors hand out program counters from a
+	// StackTrace method. Reflection reads them with no import of either library.
+	if info.Stack == "" {
+		info.Stack = stackFromFrames(err)
 	}
 	return info
+}
+
+// causesOf returns the messages of every cause an error holds, capped at
+// maxCauses and maxCauseDepth.
+//
+// A multi-error, which errors.Join and a double %w produce, exposes its causes
+// through an Unwrap method that returns a slice. Each cause is walked in turn, so
+// a join of joins still lists the leaves a reader needs.
+func causesOf(err error, depth int) []string {
+	if depth > 8 {
+		return nil
+	}
+	multi, ok := err.(interface{ Unwrap() []error })
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, cause := range multi.Unwrap() {
+		if cause == nil {
+			continue
+		}
+		if len(out) >= maxCauses {
+			break
+		}
+		out = append(out, cause.Error())
+		out = append(out, causesOf(cause, depth+1)...)
+		if len(out) > maxCauses {
+			out = out[:maxCauses]
+		}
+	}
+	return out
+}
+
+// frameReader is the method pkg/errors uses to carry a stack.
+type frameReader interface {
+	StackTrace() []uintptr
+}
+
+// stackFromFrames renders the program counters an error carries.
+//
+// The counters arrive through an interface, so core reads them with reflection
+// and never imports the library that produced them. An error without the method,
+// or one whose counters resolve to no frame, gives an empty string.
+func stackFromFrames(err error) string {
+	var reader frameReader
+	if !stderrors.As(err, &reader) {
+		return ""
+	}
+	frames := runtime.CallersFrames(reader.StackTrace())
+	var b strings.Builder
+	for {
+		frame, more := frames.Next()
+		if frame.Function != "" {
+			fmt.Fprintf(&b, "%s\n\t%s:%d\n", frame.Function, frame.File, frame.Line)
+		}
+		if !more || b.Len() > 8<<10 {
+			break
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // DefaultExtractor returns the extractor New uses when WithErrorExtractor is not set.
