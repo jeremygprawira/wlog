@@ -8,7 +8,7 @@
 - [x] T0.2 Agent guidance + README stub
 - [x] T0.3 CI workflow
 - [x] T0.4 Write SPEC-core.md (drafted, awaiting approval)
-- [ ] **Checkpoint 0**: scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
+- [x] **Checkpoint 0**: scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
 
 ## Phase 1A — redact
 - [x] R1 Key-token matching, end to end
@@ -95,9 +95,9 @@
 - [x] S5 Spec: cli-map
 - [x] MP1 CLI skeleton + net/http/mux entry points
 - [x] MP2 Echo v4/v5 + Gin entry points
-- [ ] MP3 Rules: coverage, context, errors
-- [ ] MP4 Rules: sensitive-route audit, print logging, denylisted keys
-- [ ] MP5 Score, report, CI gates
+- [x] MP3 Rules: coverage, context, errors
+- [x] MP4 Rules: sensitive-route audit, print logging, denylisted keys
+- [x] MP5 Score, report, CI gates
 - [x] MP6 go vet analyzer + dogfooding
 - [x] REL1 v1 documentation + parity audit
 - [x] **Checkpoint 5**: v1 release gate (tag v0.1.0 still needs approval)
