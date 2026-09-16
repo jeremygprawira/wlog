@@ -80,7 +80,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	points = kept
 
-	total := score.Total(checksByPoint)
+	total := score.Total(points, checksByPoint)
 	gatePass := minScore == 0 || total >= minScore
 	if *baselinePath != "" {
 		baseline, err := readBaseline(*baselinePath)

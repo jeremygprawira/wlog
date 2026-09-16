@@ -25,6 +25,7 @@ type Handler struct {
 	Method    string        `json:"method"`
 	Route     string        `json:"route"`
 	Sensitive bool          `json:"sensitive"`
+	Class     string        `json:"class"`
 	Checks    []rules.Check `json:"checks"`
 }
 
@@ -34,6 +35,7 @@ type Map struct {
 	Score    int       `json:"score"`
 	MinScore int       `json:"min_score"`
 	Pass     bool      `json:"pass"`
+	Grade    string    `json:"grade"`
 	Handlers []Handler `json:"handlers"`
 	TopFixes []string  `json:"top_fixes"`
 }
@@ -56,6 +58,7 @@ func Build(points []entry.Point, checksByPoint [][]rules.Check, minScore int, ga
 			Method:    point.Method,
 			Route:     point.Route,
 			Sensitive: point.Sensitive,
+			Class:     rules.Class(point),
 			Checks:    checks,
 		})
 	}
@@ -79,9 +82,11 @@ func Build(points []entry.Point, checksByPoint [][]rules.Check, minScore int, ga
 		return a.Method < b.Method
 	})
 
+	total := score.Total(points, checksByPoint)
 	return Map{
 		Version:  Version,
-		Score:    score.Total(checksByPoint),
+		Score:    total,
+		Grade:    score.Grade(total),
 		MinScore: minScore,
 		Pass:     gatePass,
 		Handlers: handlers,

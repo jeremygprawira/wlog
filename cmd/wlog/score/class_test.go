@@ -37,11 +37,12 @@ func TestScore_Class(t *testing.T) {
 // TestScore_SensitiveWeighsMore proves the same miss costs a sensitive entry more than a
 // read entry.
 func TestScore_SensitiveWeighsMore(t *testing.T) {
-	read := []entry.Point{{Route: "/health"}}
-	sensitive := []entry.Point{{Route: "/orders/refund"}}
+	read := []entry.Point{{Route: "/health"}, {Route: "/status"}}
+	sensitive := []entry.Point{{Route: "/health"}, {Route: "/orders/refund"}}
+	byHandler := [][]rules.Check{passingHandler(40), failingHandler(40)}
 
-	readScore := Total(read, [][]rules.Check{failingHandler(30)})
-	sensitiveScore := Total(sensitive, [][]rules.Check{failingHandler(30)})
+	readScore := Total(read, byHandler)
+	sensitiveScore := Total(sensitive, byHandler)
 	if sensitiveScore >= readScore {
 		t.Errorf("sensitive score %d >= read score %d, want the sensitive entry to weigh more", sensitiveScore, readScore)
 	}

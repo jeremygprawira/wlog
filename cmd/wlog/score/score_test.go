@@ -41,10 +41,10 @@ func TestTotal(t *testing.T) {
 		{check("a", 30, true), check("b", 70, false)},
 		{check("a", 30, true), check("b", 70, false)},
 	}
-	if got := score.Total(byHandler); got != 30 {
+	if got := score.Total(nil, byHandler); got != 30 {
 		t.Errorf("Total = %d, want 30", got)
 	}
-	if got := score.Total(nil); got != 100 {
+	if got := score.Total(nil, nil); got != 100 {
 		t.Errorf("Total of no handlers = %d, want 100", got)
 	}
 }

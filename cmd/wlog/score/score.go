@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
 	"github.com/jeremygprawira/wlog/cmd/wlog/rules"
 )
 
@@ -23,19 +24,28 @@ func Percent(checks []rules.Check) int {
 	return percent(earned, applicable)
 }
 
-// Total is the app score: every handler's weight counts once, before the division. A
-// run with no handlers scores 100.
-func Total(byHandler [][]rules.Check) int {
-	earned, applicable := 0, 0
-	for _, checks := range byHandler {
+// Total is the app score. Every handler's rule weight is scaled by its class weight,
+// so a miss on a sensitive route costs more than the same miss on a health check. A run
+// with no handlers scores 100.
+func Total(points []entry.Point, byHandler [][]rules.Check) int {
+	earned, applicable := 0.0, 0.0
+	for i, checks := range byHandler {
+		weight := 1.0
+		if i < len(points) {
+			weight = classWeight(rules.Class(points[i]))
+		}
 		for _, check := range checks {
-			applicable += check.Weight
+			scaled := weight * float64(check.Weight)
+			applicable += scaled
 			if check.Pass {
-				earned += check.Weight
+				earned += scaled
 			}
 		}
 	}
-	return percent(earned, applicable)
+	if applicable == 0 {
+		return 100
+	}
+	return int(math.Round(100 * earned / applicable))
 }
 
 // percent divides earned by applicable and rounds to the nearest whole number.

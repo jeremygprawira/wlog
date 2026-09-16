@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "score": 88,
+  "score": 91,
   "min_score": 0,
   "pass": true,
+  "grade": "A",
   "handlers": [
     {
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/nethttp_app",
@@ -13,6 +14,7 @@
       "method": "GET",
       "route": "/orders/{id}",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -33,6 +35,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -43,6 +57,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -55,6 +83,7 @@
       "method": "",
       "route": "/health",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -75,6 +104,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -85,6 +126,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     }

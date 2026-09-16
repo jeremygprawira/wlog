@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "score": 87,
+  "score": 89,
   "min_score": 0,
   "pass": true,
+  "grade": "B",
   "handlers": [
     {
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
@@ -13,6 +14,7 @@
       "method": "",
       "route": "/good",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -33,6 +35,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -43,6 +57,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -55,6 +83,7 @@
       "method": "",
       "route": "/nocontext",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -75,6 +104,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -85,6 +126,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -97,6 +152,7 @@
       "method": "",
       "route": "/print",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -112,6 +168,18 @@
         },
         {
           "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
           "weight": 15,
           "pass": true,
           "detail": ""
@@ -127,6 +195,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -139,6 +221,7 @@
       "method": "",
       "route": "/keys",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -159,6 +242,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -169,6 +264,20 @@
           "weight": 5,
           "pass": false,
           "detail": "denylisted key: password"
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -181,6 +290,7 @@
       "method": "",
       "route": "/refund/{id}",
       "sensitive": true,
+      "class": "sensitive",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -196,6 +306,18 @@
         },
         {
           "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
           "weight": 15,
           "pass": true,
           "detail": ""
@@ -217,6 +339,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": false,
+          "detail": "write route records no audit",
+          "suggestion": true
         }
       ]
     },
@@ -229,6 +365,7 @@
       "method": "",
       "route": "/refund/audit",
       "sensitive": true,
+      "class": "sensitive",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -244,6 +381,18 @@
         },
         {
           "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
           "weight": 15,
           "pass": true,
           "detail": ""
@@ -265,6 +414,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     }

@@ -110,6 +110,18 @@ func Sensitive(route string, extra []string) bool {
 	return false
 }
 
+// Class returns one entry point's class: "sensitive" for a money, auth, or admin route,
+// "write" for a state-changing method or route, and "read" otherwise.
+func Class(point entry.Point) string {
+	if point.Sensitive || Sensitive(point.Route, nil) {
+		return "sensitive"
+	}
+	if isWriteRoute(point) {
+		return "write"
+	}
+	return "read"
+}
+
 // Evaluate runs every applicable rule for one handler.
 func Evaluate(pkg *packages.Package, point entry.Point, cfg Config) []Check {
 	checks := []Check{

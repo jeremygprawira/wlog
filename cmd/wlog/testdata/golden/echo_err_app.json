@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "score": 77,
+  "score": 79,
   "min_score": 0,
   "pass": true,
+  "grade": "C",
   "handlers": [
     {
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
@@ -13,6 +14,7 @@
       "method": "GET",
       "route": "/ok",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -33,6 +35,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": false,
+          "detail": "error reaches the event with no why and no fix"
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -43,6 +57,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -55,6 +83,7 @@
       "method": "GET",
       "route": "/fail",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -75,6 +104,18 @@
           "detail": "handler returns a non-nil error without calling wlog.Error"
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -85,6 +126,20 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     },
@@ -97,6 +152,7 @@
       "method": "GET",
       "route": "/responder",
       "sensitive": false,
+      "class": "read",
       "checks": [
         {
           "id": "middleware.coverage",
@@ -117,6 +173,18 @@
           "detail": ""
         },
         {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
@@ -127,12 +195,27 @@
           "weight": 5,
           "pass": true,
           "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
         }
       ]
     }
   ],
   "top_fixes": [
     "context.set: 40 points lost across 2 handlers",
+    "error-guidance: 15 points lost across 1 handler",
     "errors.reach_wlog: 15 points lost across 1 handler"
   ]
 }
