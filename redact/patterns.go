@@ -61,6 +61,10 @@ var allBuiltinPatterns = []builtinPattern{
 	{"email", regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`), valueMasker(maskEmail), true, func(s string) bool { return strings.Contains(s, "@") }, false},
 	{"jwt", regexp.MustCompile(`\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`), valueMasker(maskJWT), true, func(s string) bool { return strings.Count(s, ".") >= 2 }, false},
 	{"bearer", regexp.MustCompile(`(?i)\bBearer\s+\S+`), valueMasker(maskBearer), true, hasBearer, false},
+	{"url_credentials", regexp.MustCompile(`([a-z][a-z0-9+.\-]*://[^:/@\s]+:)([^@/\s]+)(@)`), valueMasker(maskURLPassword), true, func(s string) bool { return strings.Contains(s, "://") }, false},
+	{"url_query_secret", reQuerySecret, valueMasker(maskQuerySecret), true, func(s string) bool { return strings.Contains(s, "=") }, false},
+	{"basic_auth", regexp.MustCompile(`(?i)\bBasic\s+[A-Za-z0-9+/=]{8,}`), valueMasker(maskBasicAuth), true, hasBasic, false},
+	{"api_key_prefix", regexp.MustCompile(`\b(?:sk_live_|sk_test_|AKIA|ghp_|xoxb-|glpat-)[A-Za-z0-9_\-]{4,}`), valueMasker(maskAPIKey), true, hasAPIKeyPrefix, false},
 	{"ipv4", reIPv4, valueMasker(maskIPv4), true, func(s string) bool { return strings.Count(s, ".") >= 3 }, false},
 	{"phone", rePhone, valueMasker(maskPhone), true, hasDigit, false},
 	{"iban", reIBAN, valueMasker(maskIBAN), true, hasUpper, false},
@@ -175,4 +179,65 @@ func maskJWT(match string) string {
 
 func maskBearer(string) string {
 	return "Bearer ***"
+}
+
+// reQuerySecret matches a query parameter whose name names a secret, so the value
+// is masked while the harmless parameters of the same URL stay readable.
+var reQuerySecret = regexp.MustCompile(`(?i)([?&](?:api[_-]?key|access[_-]?key|auth|authorization|credential|dsn|key|passphrase|password|secret|session|signature|token)[^=&\s]*=)([^&\s]+)`)
+
+// maskURLPassword keeps the scheme, the user, and the host, and masks only the
+// password of a URL, so a reader still learns which backend answered.
+func maskURLPassword(match string) string {
+	i := strings.Index(match, "://")
+	if i < 0 {
+		return "[REDACTED]"
+	}
+	rest := match[i+3:]
+	at := strings.LastIndex(rest, "@")
+	if at < 0 {
+		return "[REDACTED]"
+	}
+	creds := rest[:at]
+	colon := strings.Index(creds, ":")
+	if colon < 0 {
+		return "[REDACTED]"
+	}
+	return match[:i+3] + creds[:colon] + ":[REDACTED]" + rest[at:]
+}
+
+// maskQuerySecret masks the value of a query parameter and keeps its name.
+func maskQuerySecret(match string) string {
+	eq := strings.Index(match, "=")
+	if eq < 0 {
+		return "[REDACTED]"
+	}
+	return match[:eq+1] + "[REDACTED]"
+}
+
+// maskBasicAuth keeps the scheme, because the header still says what it is.
+func maskBasicAuth(string) string { return "Basic [REDACTED]" }
+
+// maskAPIKey keeps the prefix, so an operator can tell which provider leaked a key.
+func maskAPIKey(match string) string {
+	for _, prefix := range []string{"sk_live_", "sk_test_", "AKIA", "ghp_", "xoxb-", "glpat-"} {
+		if strings.HasPrefix(match, prefix) {
+			return prefix + "[REDACTED]"
+		}
+	}
+	return "[REDACTED]"
+}
+
+// hasBasic reports whether a string may hold a Basic header.
+func hasBasic(s string) bool {
+	return strings.Contains(s, "Basic") || strings.Contains(s, "basic")
+}
+
+// hasAPIKeyPrefix reports whether a string may start a known key.
+func hasAPIKeyPrefix(s string) bool {
+	for _, prefix := range []string{"sk_live_", "sk_test_", "AKIA", "ghp_", "xoxb-", "glpat-"} {
+		if strings.Contains(s, prefix) {
+			return true
+		}
+	}
+	return false
 }

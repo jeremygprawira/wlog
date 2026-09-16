@@ -53,9 +53,26 @@ func NoBuiltinPatterns() Option {
 	return func(c *config) { c.noBuiltinPatterns = true }
 }
 
+// builtinNames returns the name of every built-in pattern.
+func builtinNames() []string {
+	names := make([]string, 0, len(allBuiltinPatterns))
+	for _, p := range allBuiltinPatterns {
+		names = append(names, p.name)
+	}
+	return names
+}
+
 // buildPatterns resolves defaults, EnablePatterns, AddPatterns, RemovePatterns and
 // NoBuiltinPatterns into the final ordered, name-unique pattern list.
 func buildPatterns(c *config) ([]builtinPattern, error) {
+	// A pattern name that no built-in carries is a typo, and a typo must not read
+	// as "the pattern is off".
+	for _, name := range append(append([]string(nil), c.enabledPatterns...), c.removedPatterns...) {
+		if indexFold(builtinNames(), name) < 0 {
+			return nil, fmt.Errorf("redact: unknown pattern name %q", name)
+		}
+	}
+
 	var patterns []builtinPattern
 	for _, p := range allBuiltinPatterns {
 		switch {
