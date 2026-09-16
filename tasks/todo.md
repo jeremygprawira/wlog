@@ -92,7 +92,7 @@
 - [x] **Checkpoint 4**: drains work from env alone, G1 covered per drain
 
 ## Phase 5 — cli-map + v1
-- [ ] S5 Spec: cli-map
+- [x] S5 Spec: cli-map
 - [ ] MP1 CLI skeleton + net/http/mux entry points
 - [ ] MP2 Echo v4/v5 + Gin entry points
 - [ ] MP3 Rules: coverage, context, errors
