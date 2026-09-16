@@ -94,10 +94,8 @@ func TestPipeline_Retry_ExhaustedCallsOnDropped(t *testing.T) {
 
 // retryAfterSender fails with a RetryError that asks for a huge wait.
 type retryAfterSender struct {
-	after   time.Duration
-	calls   atomic.Int64
-	mu      sync.Mutex
-	backoff []time.Duration
+	after time.Duration
+	calls atomic.Int64
 }
 
 // SendBatch fails with the configured Retry-After.
