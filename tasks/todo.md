@@ -138,9 +138,9 @@
 - [x] **Checkpoint 8**: v1.3 (tag v0.4.0 still needs approval)
 
 ## Phase 9 — v1.4, drains, example, docs (evlog gaps 11, 13, 14)
-- [ ] DP PostHog drain
-- [ ] DB Better Stack drain
-- [ ] DH HyperDX drain
+- [x] DP PostHog drain
+- [x] DB Better Stack drain
+- [x] DH HyperDX drain
 - [ ] EXL AWS Lambda example
 - [ ] REL2 Best-practice guide and parity close-out
 - [ ] **Checkpoint 9**: v1.4 (ask first: tag v1.0.0, the first stable API promise)

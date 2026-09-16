@@ -97,10 +97,19 @@ func parseHeaders(raw string) map[string]string {
 	return headers
 }
 
-// SendBatch maps every event to one log record and posts one request. Events are
-// grouped by resource, so a batch with two services still reports each service's own
-// attributes.
+// SendBatch maps every event to one log record and posts one request.
 func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
+	body, err := Encode(events)
+	if err != nil {
+		return err
+	}
+	return d.client.Post(ctx, body, "application/json")
+}
+
+// Encode renders the OTLP/HTTP JSON request body for a batch. Events are grouped by
+// resource, so a batch with two services still reports each service's own attributes.
+// A sibling drain that speaks OTLP reuses this encoder.
+func Encode(events []map[string]any) ([]byte, error) {
 	groups := map[string]*resourceLogs{}
 	order := []string{}
 	for _, event := range events {
@@ -125,7 +134,7 @@ func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
-		return fmt.Errorf("otlp: marshal request: %w", err)
+		return nil, fmt.Errorf("otlp: marshal request: %w", err)
 	}
-	return d.client.Post(ctx, body, "application/json")
+	return body, nil
 }
