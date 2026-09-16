@@ -94,7 +94,7 @@
 ## Phase 5 — cli-map + v1
 - [x] S5 Spec: cli-map
 - [x] MP1 CLI skeleton + net/http/mux entry points
-- [ ] MP2 Echo v4/v5 + Gin entry points
+- [x] MP2 Echo v4/v5 + Gin entry points
 - [ ] MP3 Rules: coverage, context, errors
 - [ ] MP4 Rules: sensitive-route audit, print logging, denylisted keys
 - [ ] MP5 Score, report, CI gates
