@@ -127,7 +127,7 @@
 - [x] **Checkpoint 7**: v1.2 (tag v0.3.0 still needs approval)
 
 ## Phase 8 — v1.3, CLI (evlog gaps 6, 7, 8, 9, 10)
-- [ ] MR1 Rule: error guidance
+- [x] MR1 Rule: error guidance
 - [ ] MR2 Rule: swallowed error
 - [ ] MR3 Suggestions: catalog use and audit coverage
 - [ ] MS1 Entry classes, grades, per-entry weighting

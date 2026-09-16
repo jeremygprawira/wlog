@@ -21,6 +21,7 @@ const (
 	RuleSensitiveAudit = "sensitive.audit"
 	RuleNoPrint        = "logging.no_print"
 	RuleNoDenylisted   = "keys.no_denylisted"
+	RuleErrorGuidance  = "error-guidance"
 )
 
 // Rule weights. A rule's weight counts toward a handler's score only when the rule
@@ -32,6 +33,7 @@ const (
 	WeightSensitiveAudit = 20
 	WeightNoPrint        = 10
 	WeightNoDenylisted   = 5
+	WeightErrorGuidance  = 15
 )
 
 // Package paths the rules recognize.
@@ -53,6 +55,7 @@ func Order() []Rule {
 		{RuleMiddleware, WeightMiddleware},
 		{RuleContext, WeightContext},
 		{RuleErrors, WeightErrors},
+		{RuleErrorGuidance, WeightErrorGuidance},
 		{RuleSensitiveAudit, WeightSensitiveAudit},
 		{RuleNoPrint, WeightNoPrint},
 		{RuleNoDenylisted, WeightNoDenylisted},
@@ -104,6 +107,7 @@ func Evaluate(pkg *packages.Package, point entry.Point, cfg Config) []Check {
 		coverage(pkg, point),
 		contextSet(pkg, point),
 		errorsReachWlog(pkg, point),
+		errorGuidance(pkg, point),
 	}
 	if Sensitive(point.Route, cfg.SensitivePatterns) {
 		checks = append(checks, sensitiveAudit(pkg, point))
