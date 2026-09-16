@@ -105,7 +105,7 @@ func TestRuleOrder(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 
 	checks := rules.Evaluate(pkgs[0], pointIn(t, points, "handleGood"), rules.Config{})
-	want := []string{rules.RuleMiddleware, rules.RuleContext, rules.RuleErrors, rules.RuleErrorGuidance, rules.RuleNoPrint, rules.RuleNoDenylisted}
+	want := []string{rules.RuleMiddleware, rules.RuleContext, rules.RuleErrors, rules.RuleErrorGuidance, rules.RuleSwallowedError, rules.RuleNoPrint, rules.RuleNoDenylisted}
 	if len(checks) != len(want) {
 		t.Fatalf("checks = %+v, want %v", checks, want)
 	}

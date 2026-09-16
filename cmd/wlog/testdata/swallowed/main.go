@@ -31,20 +31,24 @@ func handleGood(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleUnresolvable returns the error to a caller the rule cannot see, so the rule
+// handleUnresolvable hands the error to a goroutine the rule cannot see, so the rule
 // stays quiet.
-func handleUnresolvable(w http.ResponseWriter, r *http.Request) error {
+func handleUnresolvable(w http.ResponseWriter, r *http.Request) {
 	if err := doWork(); err != nil {
-		return err
+		go reportAsync(err)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
 	w.WriteHeader(http.StatusOK)
-	return nil
 }
+
+func reportAsync(err error) { _ = err }
 
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/discard", handleDiscard)
 	mux.HandleFunc("/empty", handleEmptyBranch)
 	mux.HandleFunc("/good", handleGood)
+	mux.HandleFunc("/unresolvable", handleUnresolvable)
 	http.ListenAndServe(":8080", wlogstd.Middleware(wlog.New())(mux))
 }
