@@ -141,6 +141,6 @@
 - [x] DP PostHog drain
 - [x] DB Better Stack drain
 - [x] DH HyperDX drain
-- [ ] EXL AWS Lambda example
+- [x] EXL AWS Lambda example
 - [ ] REL2 Best-practice guide and parity close-out
 - [ ] **Checkpoint 9**: v1.4 (ask first: tag v1.0.0, the first stable API promise)

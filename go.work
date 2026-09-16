@@ -13,6 +13,7 @@ use ./middleware/echo5
 use (
 	./cmd/wlog
 	./examples
+	./examples/lambda
 	./log/logrus
 	./log/zap
 	./log/zerolog
