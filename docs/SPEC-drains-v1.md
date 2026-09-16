@@ -5,6 +5,7 @@
 > `.../drain/file`, `.../drain/webhook`, `.../drain/otlp`. All live in the root module, so
 > every drain uses only the standard library. Depends on `core`, `pipeline`, and
 > `internal/httpdrain`. Project-wide rules in [SPEC.md](SPEC.md) apply.
+> v1.2 additions to the file and memory modules: [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md).
 
 ## Objective
 
@@ -60,8 +61,8 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
   `http.user_agent`, `error.message`, and `user.id`. A label later added to the event is
   ignored, so a bad key fails fast at startup instead of overloading Loki.
 - Env: `LOKI_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`, `LOKI_TENANT_ID`.
-- Auth: basic auth when both username and password are set. `X-Scope-OrgID` is set when
-  `LOKI_TENANT_ID` is set.
+- Auth: when both username and password are set, basic auth is sent. `LOKI_TENANT_ID` sets
+  the `X-Scope-OrgID` header.
 - Options: `WithURL`, `WithBasicAuth`, `WithTenantID`, `WithLabels`, `WithGzip` (default off).
 
 ## drain-file
@@ -71,11 +72,11 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
   `WithMaxBackups`.
 - Defaults: `maxSize` 100 MiB, `maxAge` 24h, `maxBackups` 3.
 - Mode: every file is created with mode 0600.
-- Rotation by size: before a write, if the file has content and its size plus the new
-  blob would pass `maxSize`, rotate first. An empty file never rotates for size, so a
-  first blob larger than `maxSize` still lands in the main file.
-- Rotation by age: before a write, if the file's modification time is older than `maxAge`,
-  rotate first.
+- Rotation by size: rotate before a write on any file with content whose size plus the new
+  blob exceeds `maxSize`. An empty file never rotates for size, so a first blob larger than
+  `maxSize` still lands in the main file.
+- Rotation by age: rotate before a write on any file whose modification time is older
+  than `maxAge`.
 - One rotation: close the current file, shift `path.N` to `path.N+1` for N from
   `maxBackups-1` down to 1, delete `path.maxBackups`, rename `path` to `path.1`, then open a
   new `path`. `maxBackups` 0 means delete the rotated file instead of keeping it.
@@ -116,8 +117,8 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
   - a slice to `arrayValue` with each element mapped the same way
   - a nested map to dotted keys, for example `http.status`
   - `timestamp` and `level` are not attributes, because the record already carries them
-- `traceId` and `spanId` are set from `trace.trace_id` and `trace.span_id` when present. Those
-  two keys are not attributes, since the record already carries them.
+- A present `trace.trace_id` and `trace.span_id` set `traceId` and `spanId`. Those two keys
+  are not attributes, since the record already carries them.
 - `timeUnixNano` and `observedTimeUnixNano` are the event's `timestamp` in Unix nanoseconds.
 - One `SendBatch` sends one request with one `scopeLogs` and one `logRecords` entry per event.
 - `drain/otlp/testdata/export.golden.json` pins the exact JSON for one fixed event.
@@ -139,18 +140,19 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
 
 - Package `<name>_test`, black box. HTTP drains use `internal/httpfake`, never a real network.
 - `file` uses `t.TempDir()`.
-- Each package has one G1 test: a real `wlog.Logger` with the drain wrapped by `pipeline.Wrap`,
-  a `password` field set to a value the default redactor denies, and an assertion that the raw
-  value never appears in the received body or file.
+- Each package has one G1 test. The test builds a real `wlog.Logger` and wraps the drain
+  with `pipeline.Wrap`. It sets a `password` field to a value the default redactor denies.
+  It then asserts the raw value never appears in the received body or file.
 - `drain/otlp` also has a golden-file test for the exact JSON bytes.
 - Optional `//go:build integration` tests hit docker Loki and an OTel collector.
 
 ## Boundaries
 
-- **Always:** read env when an option is absent; send identity headers through `internal/httpdrain`.
+- **Always:** an absent option falls back to env. Send identity headers through
+  `internal/httpdrain`.
 - **Ask first:** adding a vendor SDK, adding a sixth v1 drain, changing a default label set.
-- **Never:** make a real network call in a default `go test`; block or panic in `SendBatch`; let a
-  drain re-encode a value the redactor removed.
+- **Never:** make a real network call in a default `go test`. Never block or panic in
+  `SendBatch`. Never let a drain re-encode a value the redactor removed.
 
 ## Open Questions
 

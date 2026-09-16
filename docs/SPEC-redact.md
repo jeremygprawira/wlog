@@ -2,26 +2,27 @@
 
 > Module id `redact` · package `github.com/jeremygprawira/wlog/redact` · root module · depends on: nothing.
 > Project-wide rules in [SPEC.md](SPEC.md) apply.
+> v1.2 additions to this module: [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md).
 
 ## Objective
 
-Scrub sensitive data from a wide event before any sink sees it, using a **denylist the user can
-add to and remove from**, with useful defaults. Replaces the boilerplate's
+Scrub sensitive data from a wide event before any sink sees it. The **denylist is a set the
+user can add to and remove from**, with useful defaults. Replaces the boilerplate's
 `internal/pkg/logger/masking.go` and fixes its problems:
 
 | Boilerplate today | redact |
 |---|---|
-| Global `SensitiveFields` slice mutated by `AddSensitiveField` → data race under load | Immutable `*Redactor` value; changes produce a new value, swapped atomically by core |
-| Substring match: `auth` masks `author`, `cert` masks `concert` | Token match: `auth` masks `x-auth-token`, `authHeader`; not `author` |
-| Keys only; secrets inside values (a JWT in a `note` field) leak | Keys **and** value patterns (JWT, card, email, phone, …) |
-| Opt-in (`AddSafe`); plain `Add` leaks | Runs on every event, always; no "unsafe" variant exists |
+| Global `SensitiveFields` slice mutated by `AddSensitiveField` → data race under load | Immutable `*Redactor` value. Changes produce a new value, swapped atomically by core |
+| Substring match: `auth` masks `author`, `cert` masks `concert` | Token match: `auth` masks `x-auth-token`, `authHeader`. Not `author` |
+| Keys only. Secrets inside values (a JWT in a `note` field) leak | Keys **and** value patterns (JWT, card, email, phone, …) |
+| Opt-in (`AddSafe`). Plain `Add` leaks | Runs on every event, always. No "unsafe" variant exists |
 
 ## Runtime policy (decided: hybrid C)
 
 - A `*Redactor` never changes after `New`/`With` returns, so `Apply` needs no locks.
 - Core stores the active redactor in an `atomic.Pointer[redact.Redactor]`:
-  `wlog.WithRedactor(r)` at construction, `log.SetRedactor(next)` at runtime (e.g. from remote config).
-- An invalid config fails in `New`/`With` **before** it can be swapped in; the previous redactor stays active.
+  `wlog.WithRedactor(r)` at construction, `log.SetRedactor(next)` at runtime (for example, from remote config).
+- An invalid config fails in `New`/`With` **before** it can be swapped in. The previous redactor stays active.
 - Each emitted event records `redact.fingerprint` (short hash of the effective config), so you can
   audit which denylist was active for any log line. Disable with a core option.
 
@@ -29,28 +30,29 @@ add to and remove from**, with useful defaults. Replaces the boilerplate's
 
 ### Input contract
 
-`Apply(event map[string]any)` receives a **private snapshot** owned by core, already normalized
-to a JSON tree (`map[string]any`, `[]any`, `string`, `float64`/`int64`, `bool`, `nil`). It masks
+`Apply(event map[string]any)` receives a **private snapshot** owned by core. Core already
+normalized it to a JSON tree (`map[string]any`, `[]any`, `string`, `float64`/`int64`, `bool`,
+`nil`). It masks
 **in place**. Structs are normalized by core via JSON tags first, so `json:"password"` is matched.
-Key and path rules match **canonical** (default namespaced) key names; field renaming presets are
-applied by core *after* redaction, so denylist entries don't change when output names change.
+Key and path rules match **canonical** (default namespaced) key names. Core applies field
+renaming presets *after* redaction, so denylist entries do not change with the output names.
 
 ### Stage order (per event)
 
-1. **Transforms**: user funcs `func(event map[string]any)`, e.g. drop `http.request.body` for a regulated tenant.
+1. **Transforms**: user funcs `func(event map[string]any)`, for example drop `http.request.body` for a regulated tenant.
 2. **Key/path rules**: matched key → whole value (including nested maps/arrays) replaced with `"[REDACTED]"`.
-3. **Built-in value patterns**: scan remaining strings; partial masking (table below).
+3. **Built-in value patterns**: scan remaining strings. Partial masking (table below).
 4. **Custom value patterns**: user regexes with string or func replacement.
 
-A panic in a transform or replacement func is recovered; the affected value becomes
+A panic in a transform or replacement func is recovered. The affected value becomes
 `"[REDACTED]"` (fail closed), and the event still emits.
 
 ### Key matching
 
 - Case-insensitive. Keys are tokenized on `_ - . space` and camelCase boundaries:
   `accessToken` → `[access token]`, `X-Auth-Token` → `[x auth token]`, `HTTPAuthToken` → `[http auth token]`.
-- Entry **without dot and without `*`** → matches if its token sequence appears contiguously in the
-  key's tokens, at any depth. `api_key` matches `stripe_api_key`, `apiKey`; `token` matches `refresh_token`.
+- An entry **without dot and without `*`** matches a token sequence that appears contiguously in
+  the key's tokens, at any depth. `api_key` matches `stripe_api_key`, `apiKey`. `token` matches `refresh_token`.
 - Entry **with `*`** → glob on the whole lowercased key within one segment: `*_pin`, `x-*-secret`.
 - Entry **with dot** → path from event root, each segment matched as above: `http.request.headers.cookie`, `user.*`.
 - Array elements inherit their parent path (`items.card_number` matches every element).
@@ -66,7 +68,7 @@ social_security aws_secret_access_key aws_access_key_id aws_session_token
 connection_string db_password x_api_key pin otp
 ```
 
-Changes vs boilerplate: removed `public_key` (not secret); added `pin`, `otp`.
+Changes vs boilerplate: removed `public_key` (not secret). Added `pin`, `otp`.
 *Ask-first boundary: changing this list.*
 
 ### Built-in value patterns
@@ -75,12 +77,12 @@ Changes vs boilerplate: removed `public_key` (not secret); added `pin`, `otp`.
 |---|---|---|---|---|
 | `credit_card` | on | `4111111111111111` | `****1111` | 13–19 digits, spaces/dashes allowed, **Luhn-validated** |
 | `email` | on | `alice@example.com` | `a***@***.com` | |
-| `ipv4` | on | `192.168.1.100` | `***.***.***.100` | skips `127.0.0.1`, `0.0.0.0`; core's own `http.client_ip` is exempt unless `MaskClientIP()` |
+| `ipv4` | on | `192.168.1.100` | `***.***.***.100` | skips `127.0.0.1`, `0.0.0.0`. Core's own `http.client_ip` is exempt unless `MaskClientIP()` |
 | `phone` | on | `+62 812-3456-7890`, `081234567890` | `+62 ****7890` | E.164 + Indonesian local `08…` |
 | `jwt` | on | `eyJhbGciOi…` | `eyJ***.***` | three base64url segments |
 | `bearer` | on | `Bearer sk_live_abc` | `Bearer ***` | |
 | `iban` | on | `FR76 3000 6000 …189` | `FR76****189` | |
-| `nik` | **off** | `3171234567890001` | `3171********0001` | Indonesian national ID; opt-in via `EnablePatterns("nik")` (false-positive risk) |
+| `nik` | **off** | `3171234567890001` | `3171********0001` | Indonesian national ID. Opt-in via `EnablePatterns("nik")` (false-positive risk) |
 
 ### Public API
 
@@ -151,19 +153,19 @@ if err == nil {
 ## Success Criteria
 
 1. Every example in the key-matching section and pattern table is an executable test case.
-2. `RemoveKeys("session")` → `session_id` emitted as-is; `AddKeys("nik")` → `customer.profile.nik` masked at depth 3.
+2. `RemoveKeys("session")` → `session_id` emitted as-is. `AddKeys("nik")` → `customer.profile.nik` masked at depth 3.
 3. `New`/`With` return an error (never panic) for: invalid regex, invalid glob, duplicate pattern name,
-   removing an unknown key or pattern, enabling an unknown built-in.
+   removing an unknown key or pattern, or an unknown built-in name in `EnablePatterns`.
 4. **G1:** `FuzzRedact_NeverLeaks`: for random nested events containing a denied key or a
    pattern-matching secret, the serialized output never contains the secret. 30s fuzz clean in CI.
-5. **G2:** `Apply` from 64 goroutines on one `*Redactor` passes `-race`; `With` never mutates the parent;
-   concurrent `SetRedactor` + emit in core passes `-race` (tested in core, specified here).
+5. **G2:** `Apply` from 64 goroutines on one `*Redactor` passes `-race`. `With` never mutates the parent.
+   Concurrent `SetRedactor` + emit in core passes `-race` (tested in core, specified here).
 6. A panicking `Replace`/`Transform` yields `"[REDACTED]"` for that value and does not propagate.
-7. Defaults do **not** mask `author`, `concert`, `tokenizer_version`, `spin_count`; they **do** mask `authHeader`, `X-Auth-Token`, `user_password`, `login_pin`.
+7. Defaults do **not** mask `author`, `concert`, `tokenizer_version`, `spin_count`. They **do** mask `authHeader`, `X-Auth-Token`, `user_password`, `login_pin`.
 8. `Fingerprint()` is equal for equivalent configs regardless of option order, and differs after any add/remove.
 9. Benchmark: 50-field, 3-level event with 10 string values ≤ 30µs/op and ≤ 10 allocs/op on M-series
-   (fits inside the project's 50µs request budget; tune after first measurement).
-10. Zero imports outside the standard library; passes on Go 1.23.
+   (fits inside the project's 50µs request budget. Tune after first measurement).
+10. Zero imports outside the standard library. Passes on Go 1.23.
 
 ## Testing
 
@@ -175,9 +177,9 @@ if err == nil {
 
 ## Boundaries (module-specific)
 
-- **Always:** compile everything in `New`/`With`; `Apply` does no regex compilation, no locking, no I/O.
+- **Always:** compile everything in `New`/`With`. `Apply` does no regex compilation, no locking, no I/O.
 - **Ask first:** changing defaults, mask formats or tokenization rules.
-- **Never:** return the original value on any error path; log from inside `redact`.
+- **Never:** return the original value on any error path. Log from inside `redact`.
 
 ## Open Questions
 

@@ -2,20 +2,21 @@
 
 > Module id `core` · package `github.com/jeremygprawira/wlog` (import path is the module root) ·
 > root module · depends on: `redact`. Project-wide rules in [SPEC.md](SPEC.md) apply. Every
-> value below already exists as a decision in SPEC.md's Decisions table; this file gives it an
+> value below already exists as a decision in SPEC.md's Decisions table. This file gives it an
 > exact name, type, and test.
+> v1.2 additions to this module: [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md).
 
 ## Objective
 
 Give every other module one stable surface: a `Logger`, a `context.Context` API to build one
-event, and the interfaces (`Drain`, `ErrorExtractor`, `Enricher`, `Keeper`, plugin hooks) that
-let redaction, sampling, HTTP capture, error libraries, and backends plug in without core
-knowing about any of them.
+event, and the interfaces (`Drain`, `ErrorExtractor`, `Enricher`, `Keeper`, plugin hooks).
+Those interfaces let redaction, sampling, HTTP capture, error libraries, and backends plug in
+without core knowing about any of them.
 
 ## Reserved keys (default namespaced layout)
 
-Every key below is reserved. A user `Set` of a reserved top-level key is allowed (it overwrites
-the default value) but a linter rule in `cli-map` (MP4) flags it as likely a mistake.
+Every key below is reserved. A user `Set` of a reserved top-level key is allowed, because it
+overwrites the default value. A linter rule in `cli-map` (MP4) flags it as likely a mistake.
 
 ```
 timestamp            RFC3339Nano, set at Start
@@ -53,16 +54,16 @@ func Start(ctx context.Context, operation string) (context.Context, func())
 func Detach(ctx context.Context, operation string) (context.Context, func())
 ```
 
-`Start` reads the `*Logger` from `ctx` (put there by middleware, or `l.Context(ctx)` for
-non-HTTP code), creates an event, and returns a child `ctx` plus an `end` func. Calling `end`
+`Start` reads the `*Logger` from `ctx`, which middleware or `l.Context(ctx)` put there for
+non-HTTP code. It creates an event and returns a child `ctx` plus an `end` func. Calling `end`
 runs the fixed stage order (SPEC.md: keep/sample → enrich → redact → rename → sinks) once, then
 seals the event. `Detach` is the same, except the new event carries `trace.request_id`,
 `trace.trace_id`, and `trace.parent_operation` copied from the parent, and is independent: it
 has its own sampling decision and its own `end`.
 
-A sealed event (after `end` ran) ignores every further `Set`/`SetGroup`/`Append`/`Error`/
-`SetLevel` call and increments `wlog.late_writes` on the **parent's next** still-open event, or
-is dropped silently if none is open (never blocks, never panics — G3).
+A sealed event, one that already ran `end`, ignores every later write. The write increments
+`wlog.late_writes` on the **parent's next** still-open event. With no open ancestor, it is
+dropped silently. A write never blocks and never panics (G3).
 
 ### Enrichment API
 
@@ -109,8 +110,8 @@ func (k Key[T]) Name() string
 func StrictKeys(keys ...interface{ Name() string }) Option // any Key[T] satisfies this
 ```
 
-`Key[T].Set` compiles only for the declared `T`; it calls the same `Set` under the hood.
-`StrictKeys` records the registered names; in `local`/`dev` env, an untyped `Set` call with a
+`Key[T].Set` compiles only for the declared `T`. It calls the same `Set` under the hood.
+`StrictKeys` records the registered names. In `local`/`dev` env, an untyped `Set` call with a
 name not in that list adds its name to `wlog.unknown_keys` on the event. In other envs it is a
 no-op check (never rejects the write).
 
@@ -131,9 +132,10 @@ type ErrorExtractor interface {
 }
 ```
 
-Default extractor (used when `WithErrorExtractor` is not set): `Code = "INTERNAL"`,
-`Message = err.Error()`, walks `errors.Unwrap` for `Cause`. `Stack` is populated when `err`
-implements `interface{ Stack() string }` (http-std's recovered panics do this), else left empty.
+Default extractor, used with no `WithErrorExtractor` option: `Code = "INTERNAL"`,
+`Message = err.Error()`, walks `errors.Unwrap` for `Cause`. An error that implements
+`interface{ Stack() string }` populates `Stack`, as http-std's recovered panics do. Every other
+error leaves it empty.
 `wlog.Error` appends the
 previous `error` value (if any) to `errors[]` (cap 10, overflow counted in
 `wlog.dropped_fields`) before replacing it.
@@ -156,10 +158,10 @@ type RequestFinisher interface{ OnRequestFinish(ctx context.Context) }
 type Setup interface{ Setup(l *Logger) error }
 ```
 
-A panic in any `Enricher`, `Keeper`, `Drain`, or plugin hook is recovered, reported to
-`OnError(err error, source string)`, and does not affect the event, the response, or other
-drains/plugins (G3). `WithDrains` fans out the same redacted snapshot to every drain
-concurrently; `WithPlugins` and `WithEnrichers` run in the order given.
+A panic in any `Enricher`, `Keeper`, `Drain`, or plugin hook is recovered. The panic is
+reported to `OnError(err error, source string)`. It never affects the event, the response, or
+other drains and plugins (G3). `WithDrains` fans out the same redacted snapshot to every drain
+concurrently. `WithPlugins` and `WithEnrichers` run in the order given.
 
 Enrichers and Keepers run with the context the event was started from, so they can read
 request-scoped values (an active trace span, a tenant id). Drains receive that same context
@@ -169,15 +171,15 @@ drain's network call.
 ### Stage order (C7, locking SPEC.md's decision)
 
 ```
-1. keep/sample   — WithSampler(Keeper); no Keeper configured = always keep (SPEC.md default)
-2. enrich        — WithEnrichers(...), in order
-3. redact        — the active *redact.Redactor (C8)
-4. rename        — the active field-name preset (C9)
-5. sinks/drains  — WithSinks(stdout json|pretty), WithDrains(...)
+1. keep/sample    WithSampler(Keeper). No Keeper configured = always keep (SPEC.md default)
+2. enrich         WithEnrichers(...), in order
+3. redact         the active *redact.Redactor (C8)
+4. rename         the active field-name preset (C9)
+5. sinks/drains   WithSinks(stdout json|pretty), WithDrains(...)
 ```
 
-A dropped event (step 1 returns false and no `Keeper` force-kept it) skips steps 2–5 entirely,
-except an event with a non-nil `audit` field always skips step 1 (SPEC.md: audit bypasses
+A dropped event skips steps 2 to 5 entirely. A `Keeper` that returns false drops the event at
+step 1. An event with a non-nil `audit` field always skips step 1 (SPEC.md: audit bypasses
 sampling).
 
 ### Redactor (C8)
@@ -188,7 +190,7 @@ func (l *Logger) SetRedactor(r *redact.Redactor)   // atomic.Pointer swap
 ```
 
 No `WithRedactor` given: `redact.Default()`. Every event's step 3 uses whichever `*Redactor` is
-current at that moment; `redact.fingerprint` (from `r.Fingerprint()`) is set on the event unless
+current at that moment. `redact.fingerprint` (from `r.Fingerprint()`) is set on the event unless
 `WithRedactFingerprint(false)`.
 
 ### Field-name presets (C9)
@@ -211,10 +213,9 @@ func WithSinks(s ...Sink) Option   // default: one auto-format stdout sink
 type Sink interface{ Write(event map[string]any) }
 ```
 
-Stdout sink picks JSON or pretty console per `WLOG_FORMAT` / `WithFormat`, defaulting to pretty
-when `WLOG_ENV` (or `WithService` env arg) is `local` or `dev` and `NO_COLOR` is unset, JSON
-otherwise. A sink failure calls `OnError` and does not block or retry (that is `pipeline`'s job
-for drains, not a sink's).
+The stdout sink picks JSON or the pretty console from `WLOG_FORMAT` or `WithFormat`. Pretty
+wins for a `local` or `dev` env with `NO_COLOR` unset. JSON wins otherwise. A sink failure
+calls `OnError` and does not block or retry (that is `pipeline`'s job for drains, not a sink's).
 
 ### Config (C14)
 
@@ -225,9 +226,9 @@ func WithFormat(f Format) Option   // JSON | Pretty | Auto (default)
 func OnError(fn func(err error, source string)) Option
 ```
 
-Env fallbacks, read once in `New`, overridden by the matching `Option` when both are set:
+Env fallbacks are read once in `New`. A matching `Option` overrides each one:
 `WLOG_SERVICE`, `WLOG_VERSION`, `WLOG_ENV`, `WLOG_LEVEL`, `WLOG_FORMAT`. An invalid env value
-calls `OnError` and falls back to the built-in default; it never panics.
+calls `OnError` and falls back to the built-in default. It never panics.
 
 ## Success Criteria
 
@@ -241,7 +242,7 @@ calls `OnError` and falls back to the built-in default; it never panics.
    `wlog.late_writes` (G3, G4).
 5. A `Keeper` returning `false` with no other `Keeper` returning `true` means no `Enricher`,
    redactor, or `Drain` is invoked for that event (proves stage order).
-6. An event with `audit` set is kept even when every configured `Keeper` returns `false`.
+6. An event with `audit` set is kept, whatever every configured `Keeper` returns.
 7. `SetRedactor` under 1000 concurrent emits passes `-race`, and no event mixes fields from two
    different redactor configs (G2).
 8. `FieldsOTel()` and `FieldsFlat()` each match a golden JSON file for the same input event.
@@ -254,16 +255,17 @@ calls `OnError` and falls back to the built-in default; it never panics.
 
 ## Testing
 
-Per SPEC.md: black-box tests in `package wlog_test`, table-driven, `-race` on every
-concurrency-sensitive test (C2, C5, C8), golden files under `testdata/` for C9 and C13, one
-`Example*` test per exported function, benchmark in `bench_test.go` for criterion 10.
+Per SPEC.md, tests are black-box in `package wlog_test` and table-driven. Every
+concurrency-sensitive test runs under `-race` (C2, C5, C8). Golden files under `testdata/`
+cover C9 and C13. One `Example*` test covers each exported function, and `bench_test.go`
+covers criterion 10.
 
 ## Boundaries (module-specific)
 
-- **Always:** keep the stage order fixed; every new hook point (drain, enricher, plugin) gets
+- **Always:** keep the stage order fixed. Every new hook point (drain, enricher, plugin) gets
   panic isolation before it ships.
-- **Ask first:** adding or renaming a reserved key; changing a default cap.
-- **Never:** import `redact`'s internals directly — use its public API only.
+- **Ask first:** adding or renaming a reserved key. Changing a default cap.
+- **Never:** import `redact`'s internals directly. Use its public API only.
 
 ## Open Questions
 

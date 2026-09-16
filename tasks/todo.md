@@ -110,7 +110,7 @@
 - [x] **Checkpoint 6**: v1.1 (tag v0.2.0 still needs approval)
 
 ## Phase 7 — v1.2, public API (evlog gaps 1, 2, 3, 4, 5, 12, 15)
-- [ ] D1 Plain-English pass over the older specs
+- [x] D1 Plain-English pass over the older specs
 - [ ] CE1 `ErrorInfo` data and internal split
 - [ ] CE2 Global modes: enabled, silent, raw values
 - [ ] CT1 Catalog registry
