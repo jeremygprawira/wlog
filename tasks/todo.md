@@ -114,8 +114,8 @@
 - [x] CE1 `ErrorInfo` data and internal split
 - [x] CE2 Global modes: enabled, silent, raw values
 - [x] CT1 Catalog registry
-- [ ] CT2 Catalog extractor, agnostic proof
-- [ ] CT3 herr catalog bridge
+- [x] CT2 Catalog extractor, agnostic proof
+- [x] CT3 herr catalog bridge
 - [ ] LM1 LLM record and event fields
 - [ ] LM2 Pricing, cost, enricher
 - [ ] AX1 Audit record extras
