@@ -150,10 +150,7 @@ func TestPipeline_PIPE5_RetryAfterOverflow(t *testing.T) {
 	w.Send(context.Background(), map[string]any{"n": 1})
 
 	bedrock := time.After(3 * time.Second)
-	for {
-		if sender.calls.Load() >= 3 {
-			break
-		}
+	for sender.calls.Load() < 3 {
 		select {
 		case <-bedrock:
 			t.Fatalf("the worker made %d attempts, want 3: an overflowed wait stopped it or spun", sender.calls.Load())
@@ -175,10 +172,7 @@ func TestPipeline_PIPE22_BackoffBounded(t *testing.T) {
 	// Forty attempts on a curve that doubles from a millisecond would take
 	// centuries without the cap, so finishing inside this window proves the cap.
 	bedrock := time.After(5 * time.Second)
-	for {
-		if sender.calls.Load() >= 40 {
-			break
-		}
+	for sender.calls.Load() < 40 {
 		select {
 		case <-bedrock:
 			t.Fatalf("the backoff was not capped: %d attempts in 5s", sender.calls.Load())
