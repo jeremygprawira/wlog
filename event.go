@@ -266,6 +266,12 @@ func normalize(v any) any {
 
 // emit builds the final event map, redacts it, and writes one JSON line to stdout.
 func (l *Logger) emit(e *event) {
+	// A closed drain would drop the event silently, so report it instead.
+	if l.closed.Load() {
+		l.reportError(fmt.Errorf("Logger.Close was called: the event was dropped"), "emit")
+		return
+	}
+
 	e.mu.Lock()
 	fields := make(map[string]any, len(e.fields))
 	maps.Copy(fields, e.fields)

@@ -11,11 +11,12 @@ import (
 	"github.com/jeremygprawira/wlog"
 )
 
-// recorder collects events and counts Close calls.
+// recorder collects events and counts the Flush and Close calls.
 type recorder struct {
-	mu     sync.Mutex
-	events []map[string]any
-	closes int
+	mu      sync.Mutex
+	events  []map[string]any
+	flushes int
+	closes  int
 }
 
 func (r *recorder) Send(_ context.Context, event map[string]any) {
@@ -24,6 +25,15 @@ func (r *recorder) Send(_ context.Context, event map[string]any) {
 	r.events = append(r.events, event)
 }
 
+// Flush counts a flush and keeps the drain open for the next invocation.
+func (r *recorder) Flush(context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.flushes++
+	return nil
+}
+
+// Close counts a close, which the handler must never call while it stays warm.
 func (r *recorder) Close(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -72,8 +82,11 @@ func TestHandler_SetsFaasFieldsAndFlushes(t *testing.T) {
 	if event["faas.remaining_ms"] == nil {
 		t.Error("faas.remaining_ms missing")
 	}
-	if rec.closes == 0 {
-		t.Error("Close was not called, so a frozen Lambda would lose the batch")
+	if rec.flushes == 0 {
+		t.Error("Flush was not called, so a frozen Lambda would lose the batch")
+	}
+	if rec.closes != 0 {
+		t.Error("Close was called, so the next invocation could not log")
 	}
 }
 

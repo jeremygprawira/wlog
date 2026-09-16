@@ -2,7 +2,9 @@ package wlog
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 )
 
 // Drain receives every emitted event, already redacted, alongside the built-in
@@ -18,9 +20,15 @@ type Drain interface {
 }
 
 // drainCloser is the optional interface a Drain can also implement so Logger.Close
-// flushes or disconnects it. Checked with a type assertion, never required.
+// disconnects it. Checked with a type assertion, never required.
 type drainCloser interface {
 	Close(ctx context.Context) error
+}
+
+// drainFlusher is the optional interface a Drain can also implement so
+// Logger.Flush pushes its buffer out. A flush never stops the drain.
+type drainFlusher interface {
+	Flush(ctx context.Context) error
 }
 
 // DrainFunc adapts a plain function to the Drain interface, the same way http.HandlerFunc
@@ -91,21 +99,80 @@ func (l *Logger) flushReports() {
 	}
 }
 
-// Close calls Close(ctx) on every drain that implements it (drainCloser), stopping at
-// ctx's deadline. It returns the first error encountered, if any, but always attempts
-// every drain regardless — one slow or failing drain does not skip the rest.
+// Flush pushes the buffer of every drain that implements drainFlusher (a batched
+// pipeline, a file writer) and keeps them running, so the next event still arrives.
+// It returns the first error, and it always attempts every drain.
+func (l *Logger) Flush(ctx context.Context) error {
+	var firstErr error
+	for _, d := range l.drains {
+		f, ok := d.(drainFlusher)
+		if !ok {
+			continue
+		}
+		if err := l.safeFlush(ctx, f); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// Close closes every drain that implements drainCloser at the same time, and it
+// returns once they all finish or once ctx ends. One slow drain never delays the
+// others, and a drain that cannot finish inside ctx does not hold the process.
+//
+// An event that arrives after Close sends nothing and reports through OnError,
+// because a closed drain would drop it silently.
 func (l *Logger) Close(ctx context.Context) error {
+	l.closed.Store(true)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	var firstErr error
 	for _, d := range l.drains {
 		c, ok := d.(drainCloser)
 		if !ok {
 			continue
 		}
-		if err := l.safeClose(ctx, c); err != nil && firstErr == nil {
-			firstErr = err
-		}
+		wg.Add(1)
+		go func(c drainCloser) {
+			defer wg.Done()
+			if err := l.safeClose(ctx, c); err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
+		}(c)
 	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		// The deadline came first, so a drain is still running. Say so rather
+		// than report a clean close.
+		l.reportError(fmt.Errorf("close: %w", ctx.Err()), "drains")
+		mu.Lock()
+		defer mu.Unlock()
+		return errors.Join(firstErr, ctx.Err())
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
 	return firstErr
+}
+
+// safeFlush runs one Flush under recover.
+func (l *Logger) safeFlush(ctx context.Context, f drainFlusher) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+			l.reportError(err, sourceName(f))
+		}
+	}()
+	return f.Flush(ctx)
 }
 
 func (l *Logger) safeClose(ctx context.Context, c drainCloser) (err error) {

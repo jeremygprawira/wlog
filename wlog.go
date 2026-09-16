@@ -39,6 +39,7 @@ type Logger struct {
 	drains            []Drain
 	onError           func(err error, source string)
 	pendingErrors     []report
+	closed            atomic.Bool
 	samplers          []Keeper
 	enrichers         []Enricher
 	fieldNames        FieldNames

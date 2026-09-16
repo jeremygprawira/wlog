@@ -58,9 +58,12 @@ func Handler(log *wlog.Logger, fn func(ctx context.Context, in map[string]any) (
 		}
 		end()
 
-		closeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		// A Lambda container stays warm, so the handler flushes the drains on a
+		// deadline and keeps them open for the next invocation. Close is for the
+		// end of the process, and an emit after it sends nothing.
+		flushCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = log.Close(closeCtx)
+		_ = log.Flush(flushCtx)
 		return out, err
 	}
 }
