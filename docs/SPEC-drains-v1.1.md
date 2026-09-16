@@ -47,8 +47,7 @@ vendor SDK.
   `attributes` carries the whole event under `wlog`. Error events still get their `event`
   item, so an error is never only a log line.
 - A batch with no error event and no `AllEvents` sends nothing and returns nil.
-- Options: `WithDSN`, `WithAllEvents`, `WithClient` (an `*http.Client`, for tests and
-  proxies).
+- Options: `WithDSN`, `WithAllEvents`.
 
 ## drain-clickhouse
 
@@ -87,15 +86,14 @@ vendor SDK.
 - `DDL(table string) string` returns the `CREATE TABLE IF NOT EXISTS` statement for the
   recommended schema. The drain never creates or alters a table: a missing table is a
   ClickHouse error that `pipeline` reports.
-- Options: `WithURL`, `WithBasicAuth`, `WithDatabase`, `WithTable`, `WithClient`.
+- Options: `WithURL`, `WithBasicAuth`, `WithDatabase`, `WithTable`.
 
 ## drain-datadog
 
 - Intake: `https://http-intake.logs.{DD_SITE}/api/v2/logs`, where `DD_SITE` defaults to
   `datadoghq.com`. `WithSite` wins over env, and `WithURL` wins over both so a test can
   point at a fake.
-- Auth: `DD-API-KEY: {DD_API_KEY}`. Options `WithAPIKey`, `WithSite`, `WithURL`,
-  `WithClient`.
+- Auth: `DD-API-KEY: {DD_API_KEY}`. Options `WithAPIKey`, `WithSite`, `WithURL`.
 - Wire format: one JSON array, content type `application/json`. Each element is one event:
   ```json
   {"ddsource":"wlog","service":"orders","ddtags":"env:prod,version:1.4.0",

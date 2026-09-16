@@ -104,7 +104,7 @@
 
 ## Phase 6 — v1.1 drains
 - [x] S6 Specs: sentry, clickhouse, datadog
-- [ ] DS Sentry drain
+- [x] DS Sentry drain
 - [ ] DC ClickHouse drain
 - [ ] DD Datadog drain
 - [ ] **Checkpoint 6**: v1.1 (ask first: tag v0.2.0)
