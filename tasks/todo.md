@@ -106,5 +106,5 @@
 - [x] S6 Specs: sentry, clickhouse, datadog
 - [x] DS Sentry drain
 - [x] DC ClickHouse drain
-- [ ] DD Datadog drain
+- [x] DD Datadog drain
 - [ ] **Checkpoint 6**: v1.1 (ask first: tag v0.2.0)
