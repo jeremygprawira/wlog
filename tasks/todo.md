@@ -99,8 +99,8 @@
 - [ ] MP4 Rules: sensitive-route audit, print logging, denylisted keys
 - [ ] MP5 Score, report, CI gates
 - [x] MP6 go vet analyzer + dogfooding
-- [ ] REL1 v1 documentation + parity audit
-- [ ] **Checkpoint 5**: v1 release gate (ask first: remote, push, tag v0.1.0)
+- [x] REL1 v1 documentation + parity audit
+- [x] **Checkpoint 5**: v1 release gate (tag v0.1.0 still needs approval)
 
 ## Phase 6 — v1.1 drains
 - [ ] S6 Specs: sentry, clickhouse, datadog
