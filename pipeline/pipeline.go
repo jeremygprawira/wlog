@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jeremygprawira/wlog"
@@ -38,6 +39,7 @@ type wrapped struct {
 	buf        []map[string]any
 	oldestTime time.Time
 
+	closed    atomic.Bool
 	closeOnce sync.Once
 	closeSig  chan struct{}
 	done      chan struct{}
@@ -64,6 +66,12 @@ func Wrap(next Sender, opts ...Option) wlog.Drain {
 // Send buffers event and returns immediately; it never calls next itself and never
 // blocks (gate G3). A full buffer drops the oldest queued event.
 func (w *wrapped) Send(ctx context.Context, event map[string]any) {
+	if w.closed.Load() {
+		// A closed worker never sends again, so the event is reported rather than
+		// buffered where nothing will read it.
+		w.reportDrop([]map[string]any{event}, errClosed)
+		return
+	}
 	w.mu.Lock()
 	if len(w.buf) == 0 {
 		w.oldestTime = time.Now()
@@ -118,6 +126,9 @@ func (w *wrapped) takeBatchIfReady() []map[string]any {
 	w.buf = nil
 	return batch
 }
+
+// errClosed is the reason a Send reports when the pipeline already closed.
+var errClosed = errors.New("pipeline: closed")
 
 // RetryError lets a Sender's error say more than "failed": whether it is even worth
 // retrying, and how long to wait if the server said so (e.g. a 429's Retry-After).
@@ -216,9 +227,28 @@ func (w *wrapped) flushAll(ctx context.Context) {
 	}
 }
 
+// Flush sends every buffered event now and keeps the worker running, so a caller
+// that is about to lose its process (a Lambda freeze, a container stop) can push
+// what it holds without ending the drain.
+func (w *wrapped) Flush(ctx context.Context) error {
+	if w.closed.Load() {
+		return nil
+	}
+	w.mu.Lock()
+	batch := w.buf
+	w.buf = nil
+	w.mu.Unlock()
+	if len(batch) == 0 {
+		return nil
+	}
+	w.sendBatch(ctx, batch)
+	return nil
+}
+
 // Close stops the background goroutine after flushing every buffered event, or
 // returns ctx's error if its deadline passes first.
 func (w *wrapped) Close(ctx context.Context) error {
+	w.closed.Store(true)
 	w.closeOnce.Do(func() { close(w.closeSig) })
 	select {
 	case <-w.done:
