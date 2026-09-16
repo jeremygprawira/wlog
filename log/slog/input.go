@@ -69,7 +69,7 @@ func (h *handler) WithGroup(name string) slog.Handler {
 // logLine converts a slog record, plus any WithAttrs/WithGroup state, into the shape
 // core folds into logs[]. The level is lower-cased to match core's Level strings.
 func (h *handler) logLine(r slog.Record) wlog.LogLine {
-	attrs := make([]slog.Attr, 0, len(h.attrs)+int(r.NumAttrs()))
+	attrs := make([]slog.Attr, 0, len(h.attrs)+r.NumAttrs())
 	attrs = append(attrs, h.attrs...)
 	r.Attrs(func(a slog.Attr) bool {
 		attrs = append(attrs, a)

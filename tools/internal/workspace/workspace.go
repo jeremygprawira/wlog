@@ -9,6 +9,7 @@
 package workspace
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -137,7 +138,7 @@ func Affected(root, base string) ([]string, error) {
 
 // changedFiles runs git diff --name-only for base inside root.
 func changedFiles(root, base string) ([]string, error) {
-	cmd := exec.Command("git", "-C", root, "diff", "--name-only", base)
+	cmd := exec.CommandContext(context.Background(), "git", "-C", root, "diff", "--name-only", base)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git diff --name-only %s: %w", base, err)

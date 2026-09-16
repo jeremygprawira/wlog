@@ -1,6 +1,7 @@
 package entry_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
@@ -47,7 +48,7 @@ func TestFind_NetHTTP(t *testing.T) {
 	if named == nil {
 		t.Fatal("handleOrders not found")
 	}
-	if named.Framework != "net/http" || named.Method != "GET" || named.Route != "/orders/{id}" {
+	if named.Framework != "net/http" || named.Method != http.MethodGet || named.Route != "/orders/{id}" {
 		t.Errorf("handleOrders = %s %s, want GET /orders/{id}", named.Method, named.Route)
 	}
 	if named.File != "main.go" || named.Line == 0 {
@@ -71,7 +72,7 @@ func TestFind_Mux(t *testing.T) {
 		t.Fatalf("found %d points, want 1: %+v", len(points), points)
 	}
 	point := points[0]
-	if point.Framework != "github.com/gorilla/mux" || point.Method != "GET" || point.Route != "/orders/{id}" {
+	if point.Framework != "github.com/gorilla/mux" || point.Method != http.MethodGet || point.Route != "/orders/{id}" {
 		t.Errorf("point = %s %s %s, want mux GET /orders/{id}", point.Framework, point.Method, point.Route)
 	}
 	if point.Function != "main" {

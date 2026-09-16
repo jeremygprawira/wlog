@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"io"
 	"strconv"
 	"testing"
@@ -164,9 +165,10 @@ func TestHTTPDrain_RetryAfterHonoured(t *testing.T) {
 }
 
 func asStatusError(err error, target **httpdrain.StatusError) bool {
-	se, ok := err.(*httpdrain.StatusError)
-	if ok {
+	var se *httpdrain.StatusError
+	if errors.As(err, &se) {
 		*target = se
+		return true
 	}
-	return ok
+	return false
 }

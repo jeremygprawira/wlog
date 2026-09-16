@@ -121,7 +121,9 @@ func run(root string, out io.Writer) error {
 		return probs[i].line < probs[j].line
 	})
 	for _, p := range probs {
-		fmt.Fprintln(out, p)
+		if _, err := fmt.Fprintln(out, p); err != nil {
+			return err
+		}
 	}
 	if len(probs) > 0 {
 		return fmt.Errorf("%d problem(s)", len(probs))
@@ -401,8 +403,7 @@ func nestedModules(mods []workspace.Module, m workspace.Module) []string {
 		if other.Dir == m.Dir {
 			continue
 		}
-	dir := rel("", other.Dir)
-		dir = strings.TrimPrefix(filepath.ToSlash(other.Dir), "./")
+		dir := strings.TrimPrefix(filepath.ToSlash(other.Dir), "./")
 		if dir == "" {
 			continue
 		}

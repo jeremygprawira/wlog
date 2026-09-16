@@ -90,6 +90,10 @@ func TestExtractor_PlainError_Fallback(t *testing.T) {
 	}
 }
 
+// useExtractor takes the wlog interface, so a call proves that the argument
+// satisfies it at compile time.
+func useExtractor(wlog.ErrorExtractor) {}
+
 func TestExtractor_ImplementsWlogErrorExtractor(t *testing.T) {
-	var _ = wlog.ErrorExtractor(Extractor())
+	useExtractor(Extractor())
 }

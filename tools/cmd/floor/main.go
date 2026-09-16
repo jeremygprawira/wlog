@@ -13,6 +13,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -81,9 +82,13 @@ func check(root string, dirs []string, run runner, out io.Writer) error {
 			continue
 		}
 		bad++
-		fmt.Fprintf(out, "%s: FLOOR1: tests fail at Go %s\n%s", rel(root, dir), m.Floor, text)
+		if _, err := fmt.Fprintf(out, "%s: FLOOR1: tests fail at Go %s\n%s", rel(root, dir), m.Floor, text); err != nil {
+			return err
+		}
 		if len(text) > 0 && text[len(text)-1] != '\n' {
-			fmt.Fprintln(out)
+			if _, err := fmt.Fprintln(out); err != nil {
+				return err
+			}
 		}
 	}
 	if bad > 0 {
@@ -174,7 +179,7 @@ func restore(dir string, gomod, gosum []byte) {
 
 // runGo runs one go command in dir with GOWORK=off and the floor toolchain.
 func runGo(dir, floor string, args []string) ([]byte, error) {
-	cmd := exec.Command("go", args...)
+	cmd := exec.CommandContext(context.Background(), "go", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN="+toolchain(floor))
 	return cmd.CombinedOutput()

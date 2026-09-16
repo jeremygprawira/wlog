@@ -1,0 +1,59 @@
+# Nightly checks for wlog.
+#
+# The nightly run covers what a push cannot afford: ten minutes of fuzzing per
+# target, a vulnerability scan of the dependency set that users get, and the
+# Docker integration stack.
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # fuzz-long runs every fuzz target for ten minutes, and opens an issue when a
+  # target finds a crash.
+  fuzz-long:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make fuzz FUZZTIME=10m
+      - name: Report a crash
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const title = `fuzz crash in the nightly run ${new Date().toISOString().slice(0, 10)}`;
+            const body = `The nightly fuzz job failed. Run [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) holds the failure and any crash input.`;
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "fuzz",
+            });
+            if (existing.data.some((issue) => issue.title === title)) return;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ["fuzz"],
+            });
+
+  # integration boots the Docker Compose stack and runs the integration tests
+  # against it. A service that is not ready fails the job.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make integration

@@ -3,6 +3,7 @@ package clickhouse_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -58,7 +59,7 @@ func TestClickHouse_SendBatch_JSONEachRow(t *testing.T) {
 	if req == nil {
 		t.Fatal("no request reached the fake")
 	}
-	if req.Method != "POST" {
+	if req.Method != http.MethodPost {
 		t.Errorf("method = %s, want POST", req.Method)
 	}
 	query := req.Query.Get("query")

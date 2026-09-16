@@ -1,64 +1,135 @@
+# Continuous integration for wlog.
+#
+# Two ideas drive the shape of this file. First, a job proves what it claims:
+# the test job runs with GOWORK=off, so a module must resolve its own
+# dependencies, and the floor job runs the oldest Go that each module claims.
+# Second, a push only tests what it touched: the affected job turns a diff into
+# a list of modules, and the test and floor jobs fan out over that list.
 name: ci
 
 on:
   push:
   pull_request:
 
+# The affected job diffs a base commit, so the checkout needs full history.
+permissions:
+  contents: read
+
 jobs:
-  test:
+  # affected lists the modules a diff touches, plus every module that depends on
+  # them. A missing or unknown base falls back to every module, because a job
+  # that silently tests nothing is worse than a slow job.
+  affected:
     runs-on: ubuntu-latest
+    outputs:
+      dirs: ${{ steps.list.outputs.dirs }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
         with:
-          go-version: "1.26"
-      - run: make test
-
-  race:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
-      - run: make race
+          go-version: stable
+      - name: List affected modules
+        id: list
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+            echo "no usable base ref, testing every module" >&2
+            echo "dirs=$(go run ./tools/cmd/modules | jq -c '[.[].dir]')" >> "$GITHUB_OUTPUT"
+          else
+            dirs="$(go run ./tools/cmd/affected -base "$base" \
+              | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+            echo "affected from $base: $dirs" >&2
+            echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+          fi
 
+  # lint runs go vet and golangci-lint v2 in every module. The action pins a
+  # golangci-lint built for a recent Go, so a new Go release never blocks it.
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
-      - uses: golangci/golangci-lint-action@v6
+          go-version: stable
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11.3
       - run: make lint
 
-  compat:
+  # test runs the race detector on each affected module, on the newest Go and on
+  # the one before it. GOWORK=off proves the module stands alone.
+  test:
+    needs: affected
+    if: needs.affected.outputs.dirs != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        go-version: ["1.23", "1.26"]
+        dir: ${{ fromJSON(needs.affected.outputs.dirs) }}
+        go-version: [stable, oldstable]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
-      - run: make compat
+      - name: Test ${{ matrix.dir }} on Go ${{ matrix.go-version }}
+        run: cd "${{ matrix.dir }}" && GOWORK=off go test -race ./...
 
+  # floor tests each affected module on the oldest Go its go line claims, and
+  # against an upgraded dependency set, which is what a user gets from a newer
+  # library the day after the release.
+  floor:
+    needs: affected
+    if: needs.affected.outputs.dirs != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJSON(needs.affected.outputs.dirs) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: Floor of ${{ matrix.dir }}
+        run: go run ./tools/cmd/floor -libs "${{ matrix.dir }}"
+
+  # tidy checks the module files: every sibling require is present, at the
+  # release version, with a local replace, and go mod tidy changes nothing.
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make requires
+      - run: make tidy-check
+
+  # fuzz runs every fuzz target for a short time on each push. The nightly job
+  # gives them ten minutes.
   fuzz:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
-      - run: make fuzz
+          go-version: stable
+      - run: make fuzz FUZZTIME=30s
 
-  bench:
+  # map scores the example tree, then runs the same rules as a go vet tool, so
+  # an agent finds the findings in the file and line it edits.
+  map:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
-      - run: make bench
+          go-version: stable
+      - run: make map
+      - name: Build the vet tool
+        run: go build -o /tmp/wlogvet ./cmd/wlog/cmd/wlogvet
+      - name: Vet the examples and the fixture apps
+        run: go vet -vettool=/tmp/wlogvet ./examples/... ./cmd/wlog/testdata/mux_app

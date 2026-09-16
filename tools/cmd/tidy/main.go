@@ -10,6 +10,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -61,7 +62,7 @@ func runTidyDiff(dir string) ([]byte, error) {
 
 // runTidy runs `go mod tidy` with extra args and GOWORK=off in one module dir.
 func runTidy(dir string, args ...string) ([]byte, error) {
-	cmd := exec.Command("go", append([]string{"mod", "tidy"}, args...)...)
+	cmd := exec.CommandContext(context.Background(), "go", append([]string{"mod", "tidy"}, args...)...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	return cmd.CombinedOutput()
@@ -89,7 +90,9 @@ func check(root string, diff func(dir string) ([]byte, error), out io.Writer) er
 			continue
 		}
 		bad++
-		fmt.Fprintf(out, "%s: TIDY1: go mod tidy would change this module\n%s", rel(root, dir), text)
+		if _, err := fmt.Fprintf(out, "%s: TIDY1: go mod tidy would change this module\n%s", rel(root, dir), text); err != nil {
+			return err
+		}
 	}
 	if bad > 0 {
 		return fmt.Errorf("%d module(s) are not tidy", bad)
