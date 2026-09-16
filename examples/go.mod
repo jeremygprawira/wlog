@@ -9,6 +9,8 @@ require (
 	go.uber.org/zap v1.28.0
 )
 
+require go.uber.org/multierr v1.10.0 // indirect
+
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
@@ -21,6 +23,11 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
+	github.com/jeremygprawira/wlog v0.1.0
+	github.com/jeremygprawira/wlog/log/zap v0.1.0
+	github.com/jeremygprawira/wlog/middleware/echo v0.1.0
+	github.com/jeremygprawira/wlog/middleware/echo5 v0.1.0
+	github.com/jeremygprawira/wlog/middleware/gin v0.1.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
@@ -44,3 +51,13 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
+
+replace github.com/jeremygprawira/wlog => ..
+
+replace github.com/jeremygprawira/wlog/log/zap => ../log/zap
+
+replace github.com/jeremygprawira/wlog/middleware/echo => ../middleware/echo
+
+replace github.com/jeremygprawira/wlog/middleware/echo5 => ../middleware/echo5
+
+replace github.com/jeremygprawira/wlog/middleware/gin => ../middleware/gin

@@ -1,0 +1,12 @@
+go 1.21
+
+use (
+	.
+	./appclean
+	./appdeep
+	./appindirect
+	./appmissing
+	./appreplace
+	./appversion
+	./lib
+)

@@ -2,4 +2,9 @@ module github.com/jeremygprawira/wlog/middleware/echo5
 
 go 1.26.1
 
-require github.com/labstack/echo/v5 v5.3.1 // indirect
+require (
+	github.com/jeremygprawira/wlog v0.1.0
+	github.com/labstack/echo/v5 v5.3.1
+)
+
+replace github.com/jeremygprawira/wlog => ../..

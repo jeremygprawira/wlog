@@ -69,7 +69,7 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - Each sub-module requires its siblings at the release version in `tools/version.txt`, with a relative `replace`, and no `// indirect` on a direct import.
 - `GOWORK=off go build ./...` passes in every module.
 
-**Verify:** `cd tools && go test -race -run 'TestRequires_|TestTidy_' ./... && go run ./tools/cmd/requires && go run ./tools/cmd/tidy -check`.
+**Verify:** `go test -race -run 'TestRequires_|TestTidy_' ./tools/... && go run ./tools/cmd/requires && go run ./tools/cmd/tidy -check`.
 **Deps:** 10-CI-1. **Size:** M. **Closes:** REL-2, CLI-2, CAT-10.
 **Files:**
 
@@ -84,7 +84,7 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - Each sub-module's `go` line is the lowest its code and dependencies allow.
 - `tools floor` passes every module at its floor, and a fixture using a newer Go feature makes it fail. Module directories given as arguments limit the run to those modules.
 
-**Verify:** `cd tools && go test -race -run 'TestFloor_' ./... && go run ./tools/cmd/floor`.
+**Verify:** `go test -race -run 'TestFloor_' ./tools/... && go run ./tools/cmd/floor`.
 **Deps:** 10-CI-2. **Size:** M. **Closes:** REL-3.
 **Files:**
 
@@ -115,7 +115,7 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - `tools ste` ports the Simple English lint to Go and reproduces the Python linter's result on 5 fixture files. A `ste-known-bad.txt` list holds the older specs that fail today: SPEC-drains-v1.1, SPEC-enrich, SPEC-http-std, SPEC-llm, SPEC-pipeline, SPEC-sample, SPEC-v1.2-additions, and SPEC-wlogtest.
 - `tools verifyplan` fails on a `Verify` command that runs zero tests.
 
-**Verify:** `cd tools && go test -race -run 'TestSnippets_|TestSte_|TestVerifyPlan_' ./...`.
+**Verify:** `go test -race -run 'TestSnippets_|TestSte_|TestVerifyPlan_' ./tools/...`.
 **Deps:** 10-CI-1. **Size:** M. **Closes:** DOC-1 (tool part), DOC-7, REL-6.
 **Files:**
 
@@ -131,7 +131,7 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - `tools bench` compares against `bench/baseline.txt` with benchstat, and fails on a 25% slowdown fixture.
 - `make fuzz` runs every `Fuzz` target, and `testdata/fuzz/` is tracked in git.
 
-**Verify:** `cd tools && go test -race -run 'TestCover_|TestBench_' ./... && make fuzz FUZZTIME=5s`.
+**Verify:** `go test -race -run 'TestCover_|TestBench_' ./tools/... && make fuzz FUZZTIME=5s`.
 **Deps:** 10-CI-1. **Size:** M. **Closes:** REL-4 (gates), REL-5 (gate), RED-11 (CI part).
 **Files:**
 
@@ -147,7 +147,7 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - `examples/mux/mux` is untracked, and `.gitignore` covers module binaries.
 - `CHANGELOG.md`, `SECURITY.md`, and `CONTRIBUTING.md` exist. `tools release -dry-run` prints the tag order and apidiff results.
 
-**Verify:** `cd tools && go test -race -run 'TestRelease_' ./... && go test -race ./internal/... ./internal/httpdrain`.
+**Verify:** `go test -race -run 'TestRelease_' ./tools/... && go test -race ./internal/... ./internal/httpdrain`.
 **Deps:** 10-CI-2. **Size:** M. **Closes:** REL-7, REL-8, PIPE-23.
 **Files:**
 

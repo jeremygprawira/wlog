@@ -31,6 +31,22 @@ type Module struct {
 	Dependents []string `json:"dependents"`
 }
 
+// FindRoot walks up from dir until it finds the directory that holds go.work,
+// and returns that directory. It fails when no directory holds go.work, so a
+// command never reads a half-workspace above the repository.
+func FindRoot(dir string) (string, error) {
+	for cur := filepath.Clean(dir); ; {
+		if _, err := os.Stat(filepath.Join(cur, "go.work")); err == nil {
+			return cur, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", fmt.Errorf("no go.work at or above %s", dir)
+		}
+		cur = parent
+	}
+}
+
 // Modules reads go.work in root and returns one entry per module, sorted by dir.
 //
 // A module entry with a missing or unreadable go.mod is an error, because a

@@ -140,6 +140,20 @@ func TestAffected_IncludesRootModule(t *testing.T) {
 	}
 }
 
+// TestWorkspace_FindRoot proves that FindRoot walks up to the directory that
+// holds go.work, so a tools command works from a subdirectory.
+func TestWorkspace_FindRoot(t *testing.T) {
+	root := newWorkspace(t)
+
+	got, err := workspace.FindRoot(filepath.Join(root, "lib"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != root {
+		t.Errorf("FindRoot = %q, want %q", got, root)
+	}
+}
+
 // TestAffected_IgnoresUnrelatedFiles proves that a file outside every module
 // reports no module.
 func TestAffected_IgnoresUnrelatedFiles(t *testing.T) {
