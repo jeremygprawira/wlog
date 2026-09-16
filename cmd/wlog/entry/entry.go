@@ -126,7 +126,7 @@ func applyMethodChains(pkg *packages.Package, file *ast.File, byCall map[*ast.Ca
 			return true
 		}
 		obj, ok := pkg.TypesInfo.Uses[sel.Sel].(*types.Func)
-		if !ok || obj.Pkg() == nil || obj.Pkg().Path() != muxPath {
+		if !ok || obj.Pkg() == nil || obj.Pkg().Path() != MuxPath {
 			return true
 		}
 		inner, ok := sel.X.(*ast.CallExpr)

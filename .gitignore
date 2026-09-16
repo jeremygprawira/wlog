@@ -3,4 +3,5 @@ bin/
 *.test
 testdata/fuzz/
 .integration-out/
+wlog.map.json
 .DS_Store

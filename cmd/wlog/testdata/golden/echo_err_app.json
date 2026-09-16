@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "score": 78,
+  "score": 77,
   "min_score": 0,
   "pass": true,
   "handlers": [
@@ -8,7 +8,7 @@
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
       "function": "handleOK",
       "file": "main.go",
-      "line": 14,
+      "line": 15,
       "framework": "github.com/labstack/echo/v4",
       "method": "GET",
       "route": "/ok",
@@ -50,7 +50,7 @@
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
       "function": "handleFail",
       "file": "main.go",
-      "line": 22,
+      "line": 23,
       "framework": "github.com/labstack/echo/v4",
       "method": "GET",
       "route": "/fail",
@@ -87,10 +87,52 @@
           "detail": ""
         }
       ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
+      "function": "handleResponder",
+      "file": "main.go",
+      "line": 29,
+      "framework": "github.com/labstack/echo/v4",
+      "method": "GET",
+      "route": "/responder",
+      "sensitive": false,
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": false,
+          "detail": "handler sets no business context"
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        }
+      ]
     }
   ],
   "top_fixes": [
-    "context.set: 20 points lost across 1 handler",
+    "context.set: 40 points lost across 2 handlers",
     "errors.reach_wlog: 15 points lost across 1 handler"
   ]
 }

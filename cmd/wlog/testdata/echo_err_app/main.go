@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/labstack/echo/v4"
 
@@ -23,6 +24,12 @@ func handleFail(c echo.Context) error {
 	return errors.New("boom")
 }
 
+// handleResponder returns a framework responder call. It names the response, so the
+// error rule must not treat it as an unreported error.
+func handleResponder(c echo.Context) error {
+	return c.NoContent(http.StatusOK)
+}
+
 func run() error { return nil }
 
 func main() {
@@ -30,5 +37,6 @@ func main() {
 	e.Use(wlogecho.Middleware(wlog.New()))
 	e.GET("/ok", handleOK)
 	e.GET("/fail", handleFail)
+	e.GET("/responder", handleResponder)
 	e.Start(":8080")
 }

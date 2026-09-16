@@ -94,6 +94,10 @@ func TestErrors(t *testing.T) {
 	if bad.Pass {
 		t.Errorf("handleFail passed %s while returning an unreported error", rules.RuleErrors)
 	}
+	responder := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleResponder"), rules.Config{}), rules.RuleErrors)
+	if !responder.Pass {
+		t.Errorf("handleResponder failed %s on a c.NoContent return: %s", rules.RuleErrors, responder.Detail)
+	}
 }
 
 // TestRuleOrder proves the checks come back in the fixed rule order.

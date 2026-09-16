@@ -98,7 +98,7 @@
 - [ ] MP3 Rules: coverage, context, errors
 - [ ] MP4 Rules: sensitive-route audit, print logging, denylisted keys
 - [ ] MP5 Score, report, CI gates
-- [ ] MP6 go vet analyzer + dogfooding
+- [x] MP6 go vet analyzer + dogfooding
 - [ ] REL1 v1 documentation + parity audit
 - [ ] **Checkpoint 5**: v1 release gate (ask first: remote, push, tag v0.1.0)
 

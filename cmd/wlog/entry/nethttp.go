@@ -2,8 +2,8 @@ package entry
 
 // Framework package paths that carry no dependency into this module.
 const (
-	netHTTPPath = "net/http"
-	muxPath     = "github.com/gorilla/mux"
+	NetHTTPPath = "net/http"
+	MuxPath     = "github.com/gorilla/mux"
 )
 
 // registrations returns every known registration, framework by framework.
@@ -37,9 +37,9 @@ func httpMethodRegistrations(pkgPath string) []registration {
 // routeFor splits off.
 func netHTTPRegistrations() []registration {
 	return []registration{
-		{pkgPath: netHTTPPath, name: "HandleFunc", pathArg: 0},
-		{pkgPath: netHTTPPath, name: "Handle", pathArg: 0},
-		{pkgPath: muxPath, name: "HandleFunc", pathArg: 0},
-		{pkgPath: muxPath, name: "Handle", pathArg: 0},
+		{pkgPath: NetHTTPPath, name: "HandleFunc", pathArg: 0},
+		{pkgPath: NetHTTPPath, name: "Handle", pathArg: 0},
+		{pkgPath: MuxPath, name: "HandleFunc", pathArg: 0},
+		{pkgPath: MuxPath, name: "Handle", pathArg: 0},
 	}
 }
