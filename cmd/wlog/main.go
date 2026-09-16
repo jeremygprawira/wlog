@@ -35,6 +35,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	minScoreFlag := flags.Int("min-score", 0, "exit non-zero when the score is below this")
 	baselinePath := flags.String("baseline", "", "exit non-zero when the score is below the score in this file")
 	configPath := flags.String("config", "", "rules config file")
+	allFlag := flags.Bool("all", false, "print the check matrix")
+	entryFlag := flags.String("entry", "", "print the full detail for one entry point")
+	jsonFlag := flags.Bool("json", false, "print the report as JSON")
+	strictFlag := flags.Bool("strict", false, "also fail on a per-rule regression")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -91,6 +95,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if total < baseline.Score {
 			gatePass = false
 		}
+		if *strictFlag {
+			currentPoints := perRulePoints(checksByPoint)
+			baselinePoints := perRulePointsOfMap(baseline)
+			for rule, points := range currentPoints {
+				if points > baselinePoints[rule] {
+					gatePass = false
+				}
+			}
+		}
 	}
 
 	document := report.Build(points, checksByPoint, minScore, gatePass)
@@ -106,15 +119,55 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	_, _ = fmt.Fprintf(stdout, "wlog map: score %d\n", document.Score)
-	for _, fix := range document.TopFixes {
-		_, _ = fmt.Fprintln(stdout, "  fix:", fix)
+	switch {
+	case *jsonFlag:
+		_, _ = stdout.Write(data)
+	case *allFlag:
+		_, _ = fmt.Fprint(stdout, report.Matrix(document))
+	case *entryFlag != "":
+		detail, found := report.Entry(document, *entryFlag)
+		if !found {
+			_, _ = fmt.Fprintf(stderr, "wlog map: no entry point named %q\n", *entryFlag)
+			return 2
+		}
+		_, _ = fmt.Fprint(stdout, detail)
+	default:
+		_, _ = fmt.Fprintf(stdout, "wlog map: score %d (%s)\n", document.Score, document.Grade)
+		for _, fix := range document.TopFixes {
+			_, _ = fmt.Fprintln(stdout, "  fix:", fix)
+		}
 	}
 	if !gatePass {
 		_, _ = fmt.Fprintln(stdout, "wlog map: gate failed")
 		return 1
 	}
 	return 0
+}
+
+// perRulePoints sums the failed weight per rule across the handlers.
+func perRulePoints(byHandler [][]rules.Check) map[string]int {
+	points := map[string]int{}
+	for _, checks := range byHandler {
+		for _, check := range checks {
+			if !check.Pass && check.Weight > 0 {
+				points[check.ID] += check.Weight
+			}
+		}
+	}
+	return points
+}
+
+// perRulePointsOfMap reads the same totals from a previous map file.
+func perRulePointsOfMap(m report.Map) map[string]int {
+	points := map[string]int{}
+	for _, handler := range m.Handlers {
+		for _, check := range handler.Checks {
+			if !check.Pass && check.Weight > 0 {
+				points[check.ID] += check.Weight
+			}
+		}
+	}
+	return points
 }
 
 // loadConfig reads an explicit config file, or finds a default one in the working

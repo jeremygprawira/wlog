@@ -1,0 +1,440 @@
+{
+  "version": 1,
+  "score": 89,
+  "min_score": 0,
+  "pass": true,
+  "grade": "B",
+  "handlers": [
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
+      "function": "handleGood",
+      "file": "main.go",
+      "line": 14,
+      "framework": "net/http",
+      "method": "",
+      "route": "/good",
+      "sensitive": false,
+      "class": "read",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
+      "function": "handleNoContext",
+      "file": "main.go",
+      "line": 19,
+      "framework": "net/http",
+      "method": "",
+      "route": "/nocontext",
+      "sensitive": false,
+      "class": "read",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": false,
+          "detail": "handler sets no business context"
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
+      "function": "handlePrint",
+      "file": "main.go",
+      "line": 23,
+      "framework": "net/http",
+      "method": "",
+      "route": "/print",
+      "sensitive": false,
+      "class": "read",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": false,
+          "detail": "handler uses print logging"
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
+      "function": "handleDeniedKey",
+      "file": "main.go",
+      "line": 29,
+      "framework": "net/http",
+      "method": "",
+      "route": "/keys",
+      "sensitive": false,
+      "class": "read",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": false,
+          "detail": "denylisted key: password"
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
+      "function": "handleSensitive",
+      "file": "main.go",
+      "line": 34,
+      "framework": "net/http",
+      "method": "",
+      "route": "/refund/{id}",
+      "sensitive": true,
+      "class": "sensitive",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "sensitive.audit",
+          "weight": 40,
+          "pass": false,
+          "detail": "sensitive route does not call audit.Do"
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": false,
+          "detail": "write route records no audit",
+          "suggestion": true
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
+      "function": "handleSensitiveAudited",
+      "file": "main.go",
+      "line": 39,
+      "framework": "net/http",
+      "method": "",
+      "route": "/refund/audit",
+      "sensitive": true,
+      "class": "sensitive",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "error-guidance",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "swallowed-error",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "sensitive.audit",
+          "weight": 40,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "use-catalog",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        },
+        {
+          "id": "audit-coverage",
+          "weight": 0,
+          "pass": true,
+          "detail": "",
+          "suggestion": true
+        }
+      ]
+    }
+  ],
+  "top_fixes": [
+    "sensitive.audit: 40 points lost across 1 handler",
+    "context.set: 20 points lost across 1 handler",
+    "logging.no_print: 10 points lost across 1 handler"
+  ]
+}

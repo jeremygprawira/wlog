@@ -131,7 +131,7 @@
 - [x] MR2 Rule: swallowed error
 - [x] MR3 Suggestions: catalog use and audit coverage
 - [x] MS1 Entry classes, grades, per-entry weighting
-- [ ] MS2 Report forms and strict baseline
+- [x] MS2 Report forms and strict baseline
 - [ ] CI1 `wlog init`
 - [ ] CI2 `wlog doctor`
 - [ ] CI3 `wlog agents`
