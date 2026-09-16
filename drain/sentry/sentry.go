@@ -58,7 +58,7 @@ func New(opts ...Option) (*Drain, error) {
 	client := httpdrain.New(endpoint,
 		httpdrain.WithSource("sentry"),
 		httpdrain.WithHeader("X-Sentry-Auth",
-			"Sentry sentry_version=7, sentry_key="+publicKey+", sentry_client=wlog/"+version.Version),
+			"Sentry sentry_version=7, sentry_key="+publicKey+", sentry_client="+version.UserAgent()),
 	)
 	return &Drain{client: client, allEvents: c.allEvents}, nil
 }

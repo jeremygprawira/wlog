@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -56,6 +57,10 @@ func prettyBody(t *testing.T, body []byte) string {
 	return string(pretty) + "\n"
 }
 
+// scopeVersion matches the scope version field of a payload, which follows
+// the build of the library.
+var scopeVersion = regexp.MustCompile(`"version": "[^"]*"`)
+
 // TestOTLP_SendBatch_Golden proves the mapping matches the pinned golden payload. Run
 // with UPDATE_GOLDEN=1 to regenerate it after a deliberate mapping change.
 func TestOTLP_SendBatch_Golden(t *testing.T) {
@@ -91,8 +96,13 @@ func TestOTLP_SendBatch_Golden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read golden: %v (run UPDATE_GOLDEN=1 to create it)", err)
 	}
-	if got != string(want) {
-		t.Errorf("payload does not match %s\n--- got ---\n%s\n--- want ---\n%s", path, got, want)
+
+	// The scope version follows the build, so both sides carry a placeholder in
+	// that one field. The test then never compares a version literal.
+	got = scopeVersion.ReplaceAllString(got, `"version": "<version>"`)
+	body := scopeVersion.ReplaceAllString(string(want), `"version": "<version>"`)
+	if got != body {
+		t.Errorf("payload does not match %s\n--- got ---\n%s\n--- want ---\n%s", path, got, body)
 	}
 }
 

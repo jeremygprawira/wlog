@@ -6,7 +6,7 @@
 MODULES := $(shell go work edit -json | grep '"DiskPath"' | sed -E 's/.*"DiskPath": "(.*)"/\1/')
 FUZZTIME ?= 30s
 
-.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor compat cover vuln map integration
+.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor release-check compat cover vuln map integration
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
@@ -66,6 +66,11 @@ requires:
 # -libs also against an upgraded dependency set.
 floor:
 	go run ./tools/cmd/floor -libs
+
+# release-check prints the plan of the next release: the tag order, the require
+# updates, and the API difference against the last tag.
+release-check:
+	go run ./tools/cmd/release -version $(VERSION)
 
 # compat runs the root module on an older toolchain than the one that builds it.
 compat:

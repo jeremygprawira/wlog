@@ -1,6 +1,12 @@
 coverage/
 bin/
 *.test
+
+# A module binary. `go build` writes one into the module directory, and no
+# module ships it.
+/cmd/wlog/wlog
+/examples/mux/mux
+/examples/lambda/lambda
 .integration-out/
 wlog.map.json
 .DS_Store

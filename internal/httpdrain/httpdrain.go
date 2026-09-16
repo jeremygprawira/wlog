@@ -37,7 +37,7 @@ func New(url string, opts ...Option) *Client {
 		url:        url,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		headers:    map[string]string{},
-		userAgent:  "wlog/" + version.Version,
+		userAgent:  version.UserAgent(),
 	}
 	for _, o := range opts {
 		o(c)

@@ -230,6 +230,42 @@ func unquote(s string) string {
 	return s
 }
 
+// RequireVersions maps every required module path of a go.mod file to the
+// version on its require line.
+//
+// It reads the single and the block form of require. A module that the file
+// does not require is absent from the map, and an unreadable file gives an
+// empty map.
+func RequireVersions(gomod string) map[string]string {
+	data, err := os.ReadFile(gomod)
+	if err != nil {
+		return map[string]string{}
+	}
+	out := map[string]string{}
+	add := func(line string) {
+		fields := strings.Fields(comment(line))
+		if len(fields) >= 2 {
+			out[fields[0]] = fields[1]
+		}
+	}
+	inBlock := false
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(comment(raw))
+		switch {
+		case line == "":
+		case inBlock && line == ")":
+			inBlock = false
+		case inBlock:
+			add(line)
+		case line == "require (":
+			inBlock = true
+		case strings.HasPrefix(line, "require "):
+			add(strings.TrimSpace(line[len("require "):]))
+		}
+	}
+	return out
+}
+
 // readGoMod returns the module path, the Go floor, and the required module
 // paths of one go.mod file.
 //

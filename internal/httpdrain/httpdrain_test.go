@@ -12,6 +12,7 @@ import (
 
 	"github.com/jeremygprawira/wlog/internal/httpdrain"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
+	"github.com/jeremygprawira/wlog/internal/version"
 )
 
 func TestHTTPDrain_Post_Success(t *testing.T) {
@@ -31,8 +32,8 @@ func TestHTTPDrain_Post_Success(t *testing.T) {
 	if req.Headers.Get("Content-Type") != "application/json" {
 		t.Errorf("Content-Type = %q", req.Headers.Get("Content-Type"))
 	}
-	if req.Headers.Get("User-Agent") != "wlog/0.1.0" {
-		t.Errorf("User-Agent = %q, want wlog/0.1.0", req.Headers.Get("User-Agent"))
+	if got, want := req.Headers.Get("User-Agent"), version.UserAgent(); got != want {
+		t.Errorf("User-Agent = %q, want %q", got, want)
 	}
 	if req.Headers.Get("X-Wlog-Source") != "axiom" {
 		t.Errorf("X-Wlog-Source = %q, want axiom", req.Headers.Get("X-Wlog-Source"))
