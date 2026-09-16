@@ -100,7 +100,7 @@
 - [x] MP5 Score, report, CI gates
 - [x] MP6 go vet analyzer + dogfooding
 - [x] REL1 v1 documentation + parity audit
-- [x] **Checkpoint 5**: v1 release gate (tag v0.1.0 still needs approval)
+- [x] **Checkpoint 5**: v1 release gate. Tagged and released as v0.1.0 on GitHub.
 
 ## Phase 6 — v1.1 drains
 - [ ] S6 Specs: sentry, clickhouse, datadog

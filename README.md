@@ -3,8 +3,9 @@
 wlog is a Go library for wide-event logging. Your code adds fields to one event per
 request or job. wlog redacts, samples, and sends that event once, to any backend.
 
-Status: pre-v0. See [SPEC.md](docs/SPEC.md) for the full design and
-[CAPABILITIES.md](docs/CAPABILITIES.md) for the module list and build order.
+Status: [v0.1.0](https://github.com/jeremygprawira/wlog/releases/tag/v0.1.0) released. See
+[SPEC.md](docs/SPEC.md) for the full design and [CAPABILITIES.md](docs/CAPABILITIES.md) for
+the module list and build order.
 
 ## Quick start
 
