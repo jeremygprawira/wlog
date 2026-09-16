@@ -12,7 +12,7 @@ root module (`github.com/jeremygprawira/wlog`). A package with a third-party imp
 | Module id | Responsibility | Depends on | Go module | Phase |
 |---|---|---|---|---|
 | `redact` | Denylist masking: keys, paths, and value patterns. Keys can be added or removed. Values stay immutable | none | root | 1 |
-| `core` | Wide event and ctx API. `Start`/`Detach`, `SetLevel`, errors (`error` and `errors[]`), typed keys (`Key[T]`), plugins, field-name presets, plain log lines. `Drain`/`ErrorExtractor`/`Enricher`/`Keeper` interfaces, JSON and pretty console sinks, env config, atomic redactor swap, fixed pipeline order | redact | root | 1 |
+| `core` | Wide event and ctx API. `Start`/`Detach`, `SetLevel`, errors (`error` and `errors[]`), typed keys (`Key[T]`), plugins, field-name presets, plain log lines. `Drain`/`ErrorExtractor`/`Enricher`/`Keeper` interfaces, JSON and pretty console sinks, env configuration, atomic redactor swap, fixed pipeline order | redact | root | 1 |
 | `pipeline` | Async batching, retry/backoff, fan-out, bounded buffer (drop oldest + `OnDropped`), flush on `Close`, shared HTTP drain helper with identity headers | core | root | 2 |
 | `sample` | Head (rate per level) and tail (status, duration, path, predicate) sampling. Default keeps 100%, plus presets | core | root | 2 |
 | `enrich` | Built-in enrichers: host/pod/region, deploy version, user agent, **geo** (CDN headers), user-id lookup | core | root | 2 |
@@ -59,12 +59,65 @@ and audit. Building it earlier means rewriting rules every time those APIs move.
 | `enrich-llm` | Token usage / model / cost fields for LLM calls (evlog AI SDK equivalent) |
 
 Not adopted from evlog (TypeScript/browser-specific): client/browser logging, Vite plugin, NuxtHub,
-Better Auth integration, CLI telemetry. Error catalogs are covered by herr.
+Better Auth integration, CLI telemetry.
 
 Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separate spec).
 
-The 2026-09-16 evlog docs audit in [SPEC parity](evlog-parity.md) lists 15 further
-non-TypeScript-specific gaps, each marked as a v1.2 candidate.
+## v1.2 to v1.4 modules (proposed 2026-09-16, awaiting approval)
+
+These close the 15 gaps the evlog audit found. See [evlog parity](evlog-parity.md) for the
+audit itself. The gap number in each row points back to that page's ranked table.
+
+Three phases, one release each. The API phase lands first because the CLI phase reads
+those APIs, the same reason `cli-map` came last in v1.
+
+### Phase 7, ships v1.2: public API
+
+| Module id | Responsibility | Gap | Depends on | Go module |
+|---|---|---|---|---|
+| `core` (additions) | `ErrorInfo` gains a `data` and `internal` split. New `wlog.Enabled`, `wlog.Silent`, and a raw-object mode | 12, 15 | none | root |
+| `catalog` | Error-library-agnostic registry. One domain per registry, with prefix, code, status, message template, and audit metadata (target type, severity, reason required) | 2 | core | root |
+| `llm` | Typed `llm.Record` for model, provider, tokens, tool calls, stream timings, and cost. Pricing table and cost calculator. Enricher that writes the record onto the event | 1, 13 | core | root |
+| `audit` (additions) | `version`, `idempotency_key`, `context`, `deny`, `Wrap`, `Diff`, `Only`, HMAC signing, a test mock, and audit entries read from `catalog` | 3 | core, catalog | root |
+| `drain-memory` (additions) | Named stores, filtered reads, and `Clear` | 5 | core | root |
+| `drain-file` (additions) | `Read` and `Tail` with level, time, and custom filters | 4 | core | root |
+| `redact` (addition) | A replacement function of the matched value, next to the fixed replacement string | partial | none | root |
+| `errors/herr` (addition) | Optional bridge that maps a herr `Class` to a `catalog` entry. herr stays optional, never required | 2 | catalog | own |
+
+### Phase 8, ships v1.3: CLI
+
+| Module id | Responsibility | Gap | Depends on | Go module |
+|---|---|---|---|---|
+| `cli-init` | `wlog init` scaffolds wlog into a Go project and writes the starting configuration | 6 | cli-map | own (`cmd/wlog`) |
+| `cli-doctor` | `wlog doctor` reports on the module, middleware, drains, and env vars | 7 | cli-map | own (`cmd/wlog`) |
+| `cli-agents` | `wlog agents` writes an `AGENTS.md` block and installs 3 portable markdown skills | 8 | cli-map | own (`cmd/wlog`) |
+| `cli-map` (rules) | New rules for `why`/`fix` on errors and swallowed errors. New suggestions for catalog use and audit coverage | 9 | catalog, audit | own (`cmd/wlog`) |
+| `cli-map` (report) | `--all` matrix, single-entry view, `--json`, entry classes, grades, per-entry weighting, and per-rule baseline regression | 10 | cli-map | own (`cmd/wlog`) |
+
+### Phase 9, ships v1.4: drains, docs, example
+
+| Module id | Responsibility | Gap | Depends on | Go module |
+|---|---|---|---|---|
+| `drain-posthog` | PostHog drain | 11 | pipeline | root |
+| `drain-betterstack` | Better Stack drain | 11 | pipeline | root |
+| `drain-hyperdx` | HyperDX drain | 11 | pipeline | root |
+| `examples/lambda` | AWS Lambda example and request helper | 14 | core | own |
+| (docs) | Best-practice guide. Cost guide ships with `llm` in phase 7 | 13 | none | none |
+
+### Build order
+
+```
+Phase 7  core additions → catalog → llm → audit additions
+                        → drain-memory, drain-file, redact, errors/herr bridge
+Phase 8  cli-map rules → cli-map report → cli-init, cli-doctor, cli-agents
+Phase 9  drain-posthog, drain-betterstack, drain-hyperdx, lambda example, docs
+```
+
+### Agnostic rule, restated
+
+`catalog` imports nothing outside the standard library and knows about no error library.
+A herr user gets a bridge in `errors/herr`. A user of standard `errors` gets the same
+registry with no bridge at all.
 
 
 ## Specs
@@ -89,4 +142,9 @@ non-TypeScript-specific gaps, each marked as a v1.2 candidate.
 | `drain-axiom` · `drain-loki` · `drain-file` · `drain-webhook` · `drain-otlp` | [SPEC-drains-v1.md](SPEC-drains-v1.md) | approved 2026-09-16 |
 | `cli-map` | [SPEC-cli-map.md](SPEC-cli-map.md) | approved 2026-09-16 |
 | `drain-sentry` · `drain-clickhouse` · `drain-datadog` | [SPEC-drains-v1.1.md](SPEC-drains-v1.1.md) | approved 2026-09-16 |
+| `catalog` | [SPEC-catalog.md](SPEC-catalog.md) | drafted 2026-09-16, awaiting approval |
+| `llm` | [SPEC-llm.md](SPEC-llm.md) | drafted 2026-09-16, awaiting approval |
+| v1.2 additions to core, audit, drain-memory, drain-file, redact, errors-herr | [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md) | drafted 2026-09-16, awaiting approval |
+| `cli-init` · `cli-doctor` · `cli-agents` · cli-map additions | [SPEC-cli-v1.3.md](SPEC-cli-v1.3.md) | drafted 2026-09-16, awaiting approval |
+| `drain-posthog` · `drain-betterstack` · `drain-hyperdx` | [SPEC-drains-v1.4.md](SPEC-drains-v1.4.md) | drafted 2026-09-16, awaiting approval |
 | others | SPEC-<id>.md | not started |
