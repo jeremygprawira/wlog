@@ -1,0 +1,95 @@
+package audit
+
+import (
+	"context"
+	"sync"
+	"testing"
+
+	"github.com/jeremygprawira/wlog"
+)
+
+// Recorder collects the events a Mock logger emitted, so a test can assert on the audit
+// fact without reading stdout.
+type Recorder struct {
+	mu     sync.Mutex
+	events []map[string]any
+}
+
+// Send records one event. It implements wlog.Drain.
+func (r *Recorder) Send(_ context.Context, event map[string]any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, event)
+}
+
+// Events returns every recorded event, oldest first.
+func (r *Recorder) Events() []map[string]any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]map[string]any, len(r.events))
+	copy(out, r.events)
+	return out
+}
+
+// Mock returns a logger that records instead of writing, plus its recorder. Use it in a
+// test that exercises a handler calling audit.Do.
+//
+// The package imports testing only for this helper, so a production binary that imports
+// audit gains the testing flags. Import the package in a test file if that matters.
+func Mock(t testing.TB) (*wlog.Logger, *Recorder) {
+	t.Helper()
+	recorder := &Recorder{}
+	return wlog.New(wlog.WithFormat(wlog.FormatJSON), wlog.WithDrains(recorder)), recorder
+}
+
+// requireAudit returns the last event's audit record, and fails the test when there is
+// none.
+func (r *Recorder) requireAudit(t testing.TB) map[string]any {
+	t.Helper()
+	events := r.Events()
+	if len(events) == 0 {
+		t.Fatal("audit: no event recorded")
+	}
+	record, ok := events[len(events)-1]["audit"].(map[string]any)
+	if !ok {
+		t.Fatalf("audit: last event has no audit record: %v", events[len(events)-1])
+	}
+	return record
+}
+
+// RequireAction fails the test unless the last audit record's action equals action.
+func (r *Recorder) RequireAction(t testing.TB, action string) {
+	t.Helper()
+	if got := r.requireAudit(t)["action"]; got != action {
+		t.Fatalf("audit action = %v, want %s", got, action)
+	}
+}
+
+// RequireOutcome fails the test unless the last audit record's outcome equals outcome.
+func (r *Recorder) RequireOutcome(t testing.TB, outcome string) {
+	t.Helper()
+	if got := r.requireAudit(t)["outcome"]; got != outcome {
+		t.Fatalf("audit outcome = %v, want %s", got, outcome)
+	}
+}
+
+// RequireActor fails the test unless the last audit record's actor matches.
+func (r *Recorder) RequireActor(t testing.TB, actorType, id string) {
+	t.Helper()
+	actor, _ := r.requireAudit(t)["actor"].(map[string]any)
+	if actor["type"] != actorType || actor["id"] != id {
+		t.Fatalf("audit actor = %v, want type=%s id=%s", actor, actorType, id)
+	}
+}
+
+// RequireNoAudit fails the test when the last event carries an audit record.
+func (r *Recorder) RequireNoAudit(t testing.TB) {
+	t.Helper()
+	events := r.Events()
+	if len(events) == 0 {
+		t.Fatal("audit: no event recorded")
+	}
+	if _, ok := events[len(events)-1]["audit"]; ok {
+		t.Fatalf("audit: last event carries an audit record: %v", events[len(events)-1])
+	}
+}

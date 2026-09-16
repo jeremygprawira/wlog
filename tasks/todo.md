@@ -119,7 +119,7 @@
 - [x] LM1 LLM record and event fields
 - [x] LM2 Pricing, cost, enricher
 - [x] AX1 Audit record extras
-- [ ] AX2 `audit.Diff` and the test mock
+- [x] AX2 `audit.Diff` and the test mock
 - [ ] AX3 HMAC signing and catalog-driven audit
 - [ ] MQ1 Memory named stores and queries
 - [ ] FR1 File reader and tailer
