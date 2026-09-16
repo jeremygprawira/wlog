@@ -122,7 +122,7 @@ func TestDatadog_413SplitsBatch(t *testing.T) {
 	var sizes []int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var items []map[string]any
-		json.NewDecoder(r.Body).Decode(&items)
+		_ = json.NewDecoder(r.Body).Decode(&items)
 		mu.Lock()
 		sizes = append(sizes, len(items))
 		mu.Unlock()

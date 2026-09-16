@@ -189,7 +189,7 @@ func TestSentry_FingerprintFallback(t *testing.T) {
 		}
 		_, _, payloads := parseEnvelope(t, srv.Last().Body)
 		var payload map[string]any
-		json.Unmarshal(payloads[0], &payload)
+		_ = json.Unmarshal(payloads[0], &payload)
 		fingerprint, _ := payload["fingerprint"].([]any)
 		srv.Close()
 		if len(fingerprint) != 1 || fingerprint[0] != tc.want {
