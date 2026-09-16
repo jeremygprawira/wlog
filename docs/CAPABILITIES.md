@@ -84,4 +84,5 @@ Out of scope for this initiative: migrating `go-echo-boilerplate` to wlog (separ
 | `trace-otel` | [SPEC-trace-otel.md](SPEC-trace-otel.md) | approved 2026-09-16 |
 | `drain-axiom` · `drain-loki` · `drain-file` · `drain-webhook` · `drain-otlp` | [SPEC-drains-v1.md](SPEC-drains-v1.md) | approved 2026-09-16 |
 | `cli-map` | [SPEC-cli-map.md](SPEC-cli-map.md) | approved 2026-09-16 |
+| `drain-sentry` · `drain-clickhouse` · `drain-datadog` | [SPEC-drains-v1.1.md](SPEC-drains-v1.1.md) | approved 2026-09-16 |
 | others | SPEC-<id>.md | not started |

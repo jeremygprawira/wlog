@@ -103,7 +103,7 @@
 - [x] **Checkpoint 5**: v1 release gate. Tagged and released as v0.1.0 on GitHub.
 
 ## Phase 6 — v1.1 drains
-- [ ] S6 Specs: sentry, clickhouse, datadog
+- [x] S6 Specs: sentry, clickhouse, datadog
 - [ ] DS Sentry drain
 - [ ] DC ClickHouse drain
 - [ ] DD Datadog drain
