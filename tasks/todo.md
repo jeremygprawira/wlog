@@ -5,7 +5,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 
 ## Phase 10, v0.5: honest build and safety fixes
 
-- [ ] 10-CI-1 tools module with `modules` and `affected`
+- [x] 10-CI-1 tools module with `modules` and `affected`
 - [ ] 10-CI-2 `requires` and `tidy -check`, then fix every sub-module go.mod
 - [ ] 10-CI-3 Go floor per module
 - [ ] 10-CI-4 CI workflow rewrite
