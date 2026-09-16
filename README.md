@@ -61,6 +61,7 @@ commit hash or use a `replace` directive on a local checkout.
 - [Event shape](docs/event-shape.md): every reserved key and the stage order.
 - [Customization](docs/customization.md): change capture, redaction, sampling, field
   names, drains, and more.
+- [Cost](docs/cost.md): price model calls and chart spend per route.
 - [evlog parity](docs/evlog-parity.md): how each evlog feature maps to a wlog module.
 - [Examples](examples): a runnable program for every framework and extension point.
 
