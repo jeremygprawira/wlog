@@ -10,6 +10,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -136,7 +137,7 @@ type RetryError interface {
 func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 	var err error
 	for attempt := 1; attempt <= w.cfg.maxAttempts; attempt++ {
-		if err = w.next.SendBatch(ctx, batch); err == nil {
+		if err = w.trySendBatch(ctx, batch); err == nil {
 			return
 		}
 		var re RetryError
@@ -153,9 +154,34 @@ func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 			time.Sleep(delay)
 		}
 	}
-	if w.cfg.onDropped != nil {
-		w.cfg.onDropped(batch, err)
+	w.reportDrop(batch, err)
+}
+
+// trySendBatch calls the next Sender under recover.
+//
+// A Sender is user code, and a backend library that panics on a malformed body must
+// not take the process with it. The panic becomes an ordinary error, so the retry
+// policy and the drop report treat it like any other failure.
+func (w *wrapped) trySendBatch(ctx context.Context, batch []map[string]any) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	return w.next.SendBatch(ctx, batch)
+}
+
+// reportDrop tells the caller that a batch is gone, under recover.
+//
+// OnDropped is user code too, and a panic inside it would otherwise climb out of the
+// worker goroutine and kill the process. It runs without the buffer lock, so a
+// callback may call Send again.
+func (w *wrapped) reportDrop(batch []map[string]any, err error) {
+	if w.cfg.onDropped == nil {
+		return
 	}
+	defer func() { _ = recover() }()
+	w.cfg.onDropped(batch, err)
 }
 
 // retryDelay is the wait before the (attempt+1)th try, per Backoff, capped at

@@ -2,7 +2,9 @@ package pipeline_test
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -109,3 +111,122 @@ func TestPipeline_FanOut_OneHangingDrainDoesNotBlockOthers(t *testing.T) {
 		t.Fatal("a hanging drain blocked delivery to a fast one")
 	}
 }
+
+// closeDrain closes a wrapped drain, which Wrap returns as a wlog.Drain.
+func closeDrain(t *testing.T, d wlog.Drain) {
+	t.Helper()
+	c, ok := d.(interface{ Close(context.Context) error })
+	if !ok {
+		t.Fatal("the wrapped drain has no Close")
+	}
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// panickingSender panics in SendBatch, which the worker must survive.
+type panickingSender struct{ calls atomic.Int64 }
+
+// SendBatch panics on the first call and succeeds after it.
+func (p *panickingSender) SendBatch(context.Context, []map[string]any) error {
+	if p.calls.Add(1) == 1 {
+		panic("sender boom")
+	}
+	return nil
+}
+
+// TestPipeline_PIPE1_SenderPanicSurvives proves that a panicking SendBatch never
+// kills the process, and that the worker keeps sending later batches.
+func TestPipeline_PIPE1_SenderPanicSurvives(t *testing.T) {
+	sender := &panickingSender{}
+	w := pipeline.Wrap(sender, pipeline.BatchSize(1), pipeline.BatchInterval(5*time.Millisecond))
+	ctx := context.Background()
+
+	w.Send(ctx, map[string]any{"n": 1})
+	w.Send(ctx, map[string]any{"n": 2})
+
+	deadline := time.After(2 * time.Second)
+	for sender.calls.Load() < 2 {
+		select {
+		case <-deadline:
+			t.Fatalf("the worker stopped after the panic: %d calls", sender.calls.Load())
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	closeDrain(t, w)
+}
+
+// reentrantSender calls back into the pipeline from OnDropped, which deadlocks
+// when the drop runs while the lock is held.
+type reentrantSender struct {
+	w interface {
+		Send(context.Context, map[string]any)
+	}
+	seen   atomic.Int64
+	events []map[string]any
+	mu     sync.Mutex
+}
+
+// SendBatch returns an error, so the batch is dropped.
+func (r *reentrantSender) SendBatch(context.Context, []map[string]any) error {
+	return errors.New("refused")
+}
+
+// TestPipeline_PIPE3_OnDroppedPanicDoesNotLock proves that OnDropped runs after
+// the lock is released, so a drop that calls back into the pipeline does not
+// deadlock.
+func TestPipeline_PIPE3_OnDroppedPanicDoesNotLock(t *testing.T) {
+	r := &reentrantSender{}
+	w := pipeline.Wrap(r, pipeline.BatchSize(1), pipeline.MaxAttempts(1),
+		pipeline.OnDropped(func(batch []map[string]any, err error) {
+			r.mu.Lock()
+			r.events = append(r.events, batch...)
+			r.mu.Unlock()
+			r.seen.Add(1)
+			// A reentrant Send must not deadlock on the buffer lock.
+			r.w.Send(context.Background(), map[string]any{"nested": true})
+		}))
+	r.w = w
+
+	w.Send(context.Background(), map[string]any{"n": 1})
+
+	deadline := time.After(2 * time.Second)
+	for r.seen.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("OnDropped never ran")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	closeDrain(t, w)
+}
+
+// TestPipeline_PIPE3_OnDroppedReentrant proves that a drop reported from the
+// worker does not hold the buffer lock: a Send during the callback returns.
+func TestPipeline_PIPE3_OnDroppedReentrant(t *testing.T) {
+	blocking := make(chan struct{})
+	w := pipeline.Wrap(&failingSender{}, pipeline.BatchSize(1), pipeline.MaxAttempts(1),
+		pipeline.OnDropped(func([]map[string]any, error) { <-blocking }))
+
+	w.Send(context.Background(), map[string]any{"n": 1})
+	time.Sleep(20 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.Send(context.Background(), map[string]any{"n": 2})
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Send blocked while OnDropped ran: the lock was held")
+	}
+	close(blocking)
+	closeDrain(t, w)
+}
+
+// failingSender refuses every batch.
+type failingSender struct{}
+
+// SendBatch always fails.
+func (failingSender) SendBatch(context.Context, []map[string]any) error { return errors.New("refused") }
