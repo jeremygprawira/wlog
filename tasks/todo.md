@@ -108,3 +108,39 @@
 - [x] DC ClickHouse drain
 - [x] DD Datadog drain
 - [x] **Checkpoint 6**: v1.1 (tag v0.2.0 still needs approval)
+
+## Phase 7 — v1.2, public API (evlog gaps 1, 2, 3, 4, 5, 12, 15)
+- [ ] D1 Plain-English pass over the older specs
+- [ ] CE1 `ErrorInfo` data and internal split
+- [ ] CE2 Global modes: enabled, silent, raw values
+- [ ] CT1 Catalog registry
+- [ ] CT2 Catalog extractor, agnostic proof
+- [ ] CT3 herr catalog bridge
+- [ ] LM1 LLM record and event fields
+- [ ] LM2 Pricing, cost, enricher
+- [ ] AX1 Audit record extras
+- [ ] AX2 `audit.Diff` and the test mock
+- [ ] AX3 HMAC signing and catalog-driven audit
+- [ ] MQ1 Memory named stores and queries
+- [ ] FR1 File reader and tailer
+- [ ] RF1 Redaction replacement function
+- [ ] **Checkpoint 7**: v1.2 (ask first: tag v0.3.0)
+
+## Phase 8 — v1.3, CLI (evlog gaps 6, 7, 8, 9, 10)
+- [ ] MR1 Rule: error guidance
+- [ ] MR2 Rule: swallowed error
+- [ ] MR3 Suggestions: catalog use and audit coverage
+- [ ] MS1 Entry classes, grades, per-entry weighting
+- [ ] MS2 Report forms and strict baseline
+- [ ] CI1 `wlog init`
+- [ ] CI2 `wlog doctor`
+- [ ] CI3 `wlog agents`
+- [ ] **Checkpoint 8**: v1.3 (ask first: tag v0.4.0)
+
+## Phase 9 — v1.4, drains, example, docs (evlog gaps 11, 13, 14)
+- [ ] DP PostHog drain
+- [ ] DB Better Stack drain
+- [ ] DH HyperDX drain
+- [ ] EXL AWS Lambda example
+- [ ] REL2 Best-practice guide and parity close-out
+- [ ] **Checkpoint 9**: v1.4 (ask first: tag v1.0.0, the first stable API promise)
