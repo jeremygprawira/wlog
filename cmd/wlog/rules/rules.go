@@ -23,6 +23,8 @@ const (
 	RuleNoDenylisted   = "keys.no_denylisted"
 	RuleErrorGuidance  = "error-guidance"
 	RuleSwallowedError = "swallowed-error"
+	RuleUseCatalog     = "use-catalog"
+	RuleAuditCoverage  = "audit-coverage"
 )
 
 // Rule weights. A rule's weight counts toward a handler's score only when the rule
@@ -62,15 +64,19 @@ func Order() []Rule {
 		{RuleSensitiveAudit, WeightSensitiveAudit},
 		{RuleNoPrint, WeightNoPrint},
 		{RuleNoDenylisted, WeightNoDenylisted},
+		{RuleUseCatalog, 0},
+		{RuleAuditCoverage, 0},
 	}
 }
 
-// Check is one rule's result for one handler. Detail explains a failure.
+// Check is one rule's result for one handler. Detail explains a failure. A suggestion
+// carries weight 0 and never changes the score.
 type Check struct {
-	ID     string `json:"id"`
-	Weight int    `json:"weight"`
-	Pass   bool   `json:"pass"`
-	Detail string `json:"detail"`
+	ID         string `json:"id"`
+	Weight     int    `json:"weight"`
+	Pass       bool   `json:"pass"`
+	Detail     string `json:"detail"`
+	Suggestion bool   `json:"suggestion,omitempty"`
 }
 
 // Config holds the user's additions to the rules.
@@ -119,6 +125,8 @@ func Evaluate(pkg *packages.Package, point entry.Point, cfg Config) []Check {
 	checks = append(checks,
 		noPrint(pkg, point),
 		noDenylisted(pkg, point),
+		useCatalog(pkg, point),
+		auditCoverage(pkg, point),
 	)
 	return checks
 }
@@ -130,6 +138,16 @@ func pass(id string, weight int) Check {
 
 func fail(id string, weight int, detail string) Check {
 	return Check{ID: id, Weight: weight, Detail: detail}
+}
+
+// suggest builds a failed suggestion, which never changes the score.
+func suggest(id, detail string) Check {
+	return Check{ID: id, Detail: detail, Suggestion: true}
+}
+
+// passSuggestion builds a passing suggestion.
+func passSuggestion(id string) Check {
+	return Check{ID: id, Pass: true, Suggestion: true}
 }
 
 // bodyOf returns the handler's body, whether it is a literal or a declaration.

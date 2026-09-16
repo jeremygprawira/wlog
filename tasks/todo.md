@@ -129,7 +129,7 @@
 ## Phase 8 — v1.3, CLI (evlog gaps 6, 7, 8, 9, 10)
 - [x] MR1 Rule: error guidance
 - [x] MR2 Rule: swallowed error
-- [ ] MR3 Suggestions: catalog use and audit coverage
+- [x] MR3 Suggestions: catalog use and audit coverage
 - [ ] MS1 Entry classes, grades, per-entry weighting
 - [ ] MS2 Report forms and strict baseline
 - [ ] CI1 `wlog init`

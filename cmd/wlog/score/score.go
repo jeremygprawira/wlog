@@ -61,7 +61,7 @@ func Fixes(byHandler [][]rules.Check, limit int) []Fix {
 	handlers := map[string]int{}
 	for _, checks := range byHandler {
 		for _, check := range checks {
-			if check.Pass {
+			if check.Pass || check.Weight == 0 {
 				continue
 			}
 			points[check.ID] += check.Weight
