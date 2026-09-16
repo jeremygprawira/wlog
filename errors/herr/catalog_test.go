@@ -15,7 +15,7 @@ func TestCatalog_MapsClass(t *testing.T) {
 	class := herr.Define(herr.Class{
 		Code:   "NOT_FOUND",
 		Kind:   herr.KindNotFound,
-		Public: herr.Msg("That order does not exist."),
+		Public: herr.Message("That order does not exist."),
 	})
 
 	entries := wlogherr.Catalog(class)
@@ -44,7 +44,7 @@ func TestCatalog_AgnosticProof(t *testing.T) {
 	class := herr.Define(herr.Class{
 		Code:   "NOT_FOUND",
 		Kind:   herr.KindNotFound,
-		Public: herr.Msg("not found"),
+		Public: herr.Message("not found"),
 	})
 	entries := wlogherr.Catalog(class)
 	reg := catalog.New("app", entries...)

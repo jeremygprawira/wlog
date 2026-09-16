@@ -13,7 +13,7 @@ func TestExtractor_MapsHerrFields(t *testing.T) {
 	err := herr.New("ORDER_NOT_FOUND").
 		Kind(herr.KindNotFound).
 		Internal("order 42 missing from store").
-		With("order_id", 42).
+		WithInternal("order_id", 42).
 		Wrap(cause)
 
 	info := Extractor().Extract(err)
@@ -41,7 +41,7 @@ func TestExtractor_MapsHerrFields(t *testing.T) {
 func TestExtractor_PublicMessageHiddenByDefault(t *testing.T) {
 	err := herr.New("BAD_INPUT").
 		Kind(herr.KindInvalid).
-		Public(herr.Msg("Something went wrong, try again"))
+		Public(herr.Message("Something went wrong, try again"))
 	// no Internal(...) set
 
 	info := Extractor().Extract(err)
@@ -54,7 +54,7 @@ func TestExtractor_PublicMessageHiddenByDefault(t *testing.T) {
 func TestExtractor_WithPublicMessage_UsesPublicWhenInternalEmpty(t *testing.T) {
 	err := herr.New("BAD_INPUT").
 		Kind(herr.KindInvalid).
-		Public(herr.Msg("Something went wrong, try again"))
+		Public(herr.Message("Something went wrong, try again"))
 	// no Internal(...) set
 
 	info := Extractor(WithPublicMessage()).Extract(err)
@@ -68,7 +68,7 @@ func TestExtractor_WithPublicMessage_InternalStillWins(t *testing.T) {
 	err := herr.New("BAD_INPUT").
 		Kind(herr.KindInvalid).
 		Internal("field 'email' failed validation").
-		Public(herr.Msg("Something went wrong, try again"))
+		Public(herr.Message("Something went wrong, try again"))
 
 	info := Extractor(WithPublicMessage()).Extract(err)
 

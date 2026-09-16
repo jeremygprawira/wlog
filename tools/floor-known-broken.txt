@@ -4,7 +4,3 @@
 # the upgrade for these modules and says so, because the break belongs to a
 # dependency and needs a version decision rather than a code fix.
 #
-# ./errors/herr: github.com/jeremygprawira/herr v0.1.1 removed herr.Msg, so
-# herr_test.go does not compile. Pin the version, or follow the upstream change
-# when the errors/herr track lands.
-./errors/herr
