@@ -113,7 +113,7 @@
 - [x] D1 Plain-English pass over the older specs
 - [x] CE1 `ErrorInfo` data and internal split
 - [x] CE2 Global modes: enabled, silent, raw values
-- [ ] CT1 Catalog registry
+- [x] CT1 Catalog registry
 - [ ] CT2 Catalog extractor, agnostic proof
 - [ ] CT3 herr catalog bridge
 - [ ] LM1 LLM record and event fields
