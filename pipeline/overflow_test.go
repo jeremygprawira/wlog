@@ -162,9 +162,7 @@ type reentrantSender struct {
 	w interface {
 		Send(context.Context, map[string]any)
 	}
-	seen   atomic.Int64
-	events []map[string]any
-	mu     sync.Mutex
+	seen atomic.Int64
 }
 
 // SendBatch returns an error, so the batch is dropped.
@@ -178,11 +176,12 @@ func (r *reentrantSender) SendBatch(context.Context, []map[string]any) error {
 func TestPipeline_PIPE3_OnDroppedPanicDoesNotLock(t *testing.T) {
 	r := &reentrantSender{}
 	w := pipeline.Wrap(r, pipeline.BatchSize(1), pipeline.MaxAttempts(1),
-		pipeline.OnDropped(func(batch []map[string]any, err error) {
-			r.mu.Lock()
-			r.events = append(r.events, batch...)
-			r.mu.Unlock()
-			r.seen.Add(1)
+		pipeline.OnDropped(func([]map[string]any, error) {
+			if r.seen.Add(1) > 1 {
+				// One nested send is enough to prove the lock is free; a second
+				// would drop again and loop forever.
+				return
+			}
 			// A reentrant Send must not deadlock on the buffer lock.
 			r.w.Send(context.Background(), map[string]any{"nested": true})
 		}))

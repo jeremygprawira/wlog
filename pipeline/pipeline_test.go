@@ -3,12 +3,12 @@ package pipeline_test
 import (
 	"context"
 	"errors"
-	"github.com/jeremygprawira/wlog"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
