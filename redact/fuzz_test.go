@@ -34,3 +34,24 @@ func FuzzRedact_NeverLeaks(f *testing.F) {
 		}
 	})
 }
+
+// FuzzRedact_ReplaceFuncPanic covers the panic path of ReplaceFunc: a mask function that
+// panics must fall back to the fixed replacement, never to the raw value (gate G1).
+func FuzzRedact_ReplaceFuncPanic(f *testing.F) {
+	f.Add("plain secret value")
+	f.Add("4111111111111111")
+	f.Add("")
+
+	r := redact.MustNew(redact.ReplaceFunc(func(string) string { panic("bad mask") }))
+	keys := r.Keys()
+
+	f.Fuzz(func(t *testing.T, value string) {
+		for _, key := range keys {
+			event := map[string]any{key: value}
+			r.Apply(event)
+			if got := event[key]; got != "[REDACTED]" {
+				t.Fatalf("panicking ReplaceFunc leaked for key %q: got=%v", key, got)
+			}
+		}
+	})
+}

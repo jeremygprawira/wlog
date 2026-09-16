@@ -123,7 +123,7 @@
 - [x] AX3 HMAC signing and catalog-driven audit
 - [x] MQ1 Memory named stores and queries
 - [ ] FR1 File reader and tailer
-- [ ] RF1 Redaction replacement function
+- [x] RF1 Redaction replacement function
 - [ ] **Checkpoint 7**: v1.2 (ask first: tag v0.3.0)
 
 ## Phase 8 — v1.3, CLI (evlog gaps 6, 7, 8, 9, 10)

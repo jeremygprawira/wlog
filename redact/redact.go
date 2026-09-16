@@ -21,6 +21,7 @@ type Redactor struct {
 	maskClientIP  bool
 	transforms    []func(map[string]any)
 	replacement   string
+	replaceFunc   func(string) string
 	maxDepth      int
 	maxStringScan int
 	tokenCache    sync.Map // key string -> []string; a real event reuses the same field
@@ -57,6 +58,7 @@ type config struct {
 	noBuiltinPatterns bool
 	transforms        []func(map[string]any)
 	replacement       string
+	replaceFunc       func(string) string
 	maxDepth          int
 	maxStringScan     int
 }
@@ -73,6 +75,14 @@ func Transform(fn func(map[string]any)) Option {
 // "[REDACTED]".
 func Replacement(s string) Option {
 	return func(c *config) { c.replacement = s }
+}
+
+// ReplaceFunc sets a function that computes the mask from the matched value, so a
+// caller can keep a last-4 tail, a domain, or a stable hash. It replaces the fixed
+// replacement text for a key, path, or glob match. A panic in fn falls back to the
+// fixed replacement string, so a bad mask function can never leak the raw value.
+func ReplaceFunc(fn func(match string) string) Option {
+	return func(c *config) { c.replaceFunc = fn }
 }
 
 // MaxDepth caps how many levels of nested maps/arrays Apply walks into. A subtree
@@ -189,6 +199,7 @@ func build(c *config, opts []Option) (*Redactor, error) {
 		patterns:      patterns,
 		transforms:    c.transforms,
 		replacement:   c.replacement,
+		replaceFunc:   c.replaceFunc,
 		maxDepth:      c.maxDepth,
 		maxStringScan: c.maxStringScan,
 	}
@@ -249,6 +260,30 @@ func runTransformSafe(t func(map[string]any), event map[string]any) {
 	t(event)
 }
 
+// maskValue returns the mask for one denied value. With no ReplaceFunc it is the fixed
+// replacement. With one, a string value goes through the function, and a panic falls
+// back to the fixed text.
+func (r *Redactor) maskValue(v any) any {
+	if r.replaceFunc == nil {
+		return r.replacement
+	}
+	raw, ok := v.(string)
+	if !ok {
+		return r.replacement
+	}
+	return r.safeReplace(raw)
+}
+
+// safeReplace runs the replacement function, recovering a panic into the fixed text.
+func (r *Redactor) safeReplace(match string) (out string) {
+	defer func() {
+		if recover() != nil {
+			out = r.replacement
+		}
+	}()
+	return r.replaceFunc(match)
+}
+
 // applyMap walks m, mutating path in place (push the key, recurse, pop) rather than
 // copying it per field. Safe because path never escapes this call tree: nothing keeps
 // a reference to it past the synchronous matchesPath/applyValue calls below.
@@ -256,7 +291,7 @@ func (r *Redactor) applyMap(m map[string]any, path []string, depth int) {
 	for k, v := range m {
 		path = append(path, k)
 		if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(path) {
-			m[k] = r.replacement
+			m[k] = r.maskValue(v)
 		} else {
 			m[k] = r.applyValue(v, path, depth)
 		}
