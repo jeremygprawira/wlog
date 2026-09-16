@@ -48,8 +48,8 @@ func TestGin_HandlerError_ReachesWlogError(t *testing.T) {
 
 	rec.RequireErrorCode(t, "INTERNAL")
 	httpFields := rec.Last()["http"].(map[string]any)
-	if httpFields["status"] != http.StatusTeapot {
-		t.Errorf("event http.status = %v, want %d", httpFields["status"], http.StatusTeapot)
+	if got := httpFields["status"]; got != int64(http.StatusTeapot) && got != http.StatusTeapot {
+		t.Errorf("event http.status = %v (%T), want %d", got, got, http.StatusTeapot)
 	}
 }
 

@@ -55,8 +55,8 @@ func TestEcho_HandlerError_ReachesWlogErrorAndEchoErrorHandler(t *testing.T) {
 
 	rec.RequireErrorCode(t, "INTERNAL")
 	httpFields := rec.Last()["http"].(map[string]any)
-	if httpFields["status"] != http.StatusTeapot {
-		t.Errorf("event http.status = %v, want %d (captured after HTTPErrorHandler wrote the real response)", httpFields["status"], http.StatusTeapot)
+	if got := httpFields["status"]; got != int64(http.StatusTeapot) && got != http.StatusTeapot {
+		t.Errorf("event http.status = %v (%T), want %d (captured after HTTPErrorHandler wrote the real response)", got, got, http.StatusTeapot)
 	}
 }
 

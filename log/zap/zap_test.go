@@ -35,8 +35,8 @@ func TestZapOutput_OneEntryWithNestedField(t *testing.T) {
 	}
 	fields := entry.ContextMap()
 	httpFields, _ := fields["http"].(map[string]any)
-	if httpFields["status"] != 200 {
-		t.Errorf("nested http.status = %v, want 200", fields["http"])
+	if got := httpFields["status"]; got != int64(200) && got != 200 {
+		t.Errorf("nested http.status = %v (%T), want 200", got, got)
 	}
 	if fields["user_id"] != "u1" {
 		t.Errorf("user_id = %v, want u1", fields["user_id"])

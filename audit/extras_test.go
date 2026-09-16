@@ -36,7 +36,7 @@ func TestAudit_Extras(t *testing.T) {
 	end()
 
 	record := recordOf(t, rec.Last())
-	if record["version"] != float64(2) && record["version"] != 2 {
+	if record["version"] != int64(2) {
 		t.Errorf("version = %v, want 2", record["version"])
 	}
 	if record["idempotency_key"] != "key-1" {
@@ -52,7 +52,7 @@ func TestAudit_Extras(t *testing.T) {
 	audit.Do(ctx, audit.Record{Action: "invoice.read"})
 	end()
 
-	if got := recordOf(t, rec.Last())["version"]; got != float64(1) && got != 1 {
+	if got := recordOf(t, rec.Last())["version"]; got != int64(1) {
 		t.Errorf("default version = %v, want 1", got)
 	}
 }

@@ -110,7 +110,7 @@ func testBasicFields(t *testing.T, adapter Adapter) {
 	if httpField == nil || httpField["method"] != http.MethodGet {
 		t.Errorf("http.method missing or wrong: %v", ev["http"])
 	}
-	if httpField["status"] != float64(http.StatusOK) && httpField["status"] != http.StatusOK {
+	if httpField["status"] != int64(http.StatusOK) && httpField["status"] != float64(http.StatusOK) && httpField["status"] != http.StatusOK {
 		t.Errorf("http.status = %v, want 200", httpField["status"])
 	}
 	trace, _ := ev["trace"].(map[string]any)

@@ -53,9 +53,9 @@ func TestLLM_Set(t *testing.T) {
 	group := llmGroup(t, rec)
 	want := map[string]any{
 		"provider": "openai", "model": "gpt-x", "operation": "chat",
-		"input_tokens": 10, "output_tokens": 5, "cached_input_tokens": 3,
-		"reasoning_tokens": 2, "total_tokens": 15,
-		"tool_call_count": 1, "tool_call_failures": 1,
+		"input_tokens": int64(10), "output_tokens": int64(5), "cached_input_tokens": int64(3),
+		"reasoning_tokens": int64(2), "total_tokens": int64(15),
+		"tool_call_count": int64(1), "tool_call_failures": int64(1),
 		"time_to_first_chunk_ms": int64(100), "duration_ms": int64(2000),
 		"streamed": true, "finish_reason": "stop",
 		"cost_micros": int64(300),
@@ -89,14 +89,14 @@ func TestLLM_Add_FoldsTotals(t *testing.T) {
 	end()
 
 	group := llmGroup(t, rec)
-	if group["input_tokens"] != 13 || group["output_tokens"] != 6 || group["total_tokens"] != 19 {
+	if group["input_tokens"] != int64(13) || group["output_tokens"] != int64(6) || group["total_tokens"] != int64(19) {
 		t.Errorf("folded tokens = %v/%v/%v, want 13/6/19", group["input_tokens"], group["output_tokens"], group["total_tokens"])
 	}
 	calls, _ := group["calls"].([]any)
 	if len(calls) != 2 {
 		t.Fatalf("calls = %v, want 2", group["calls"])
 	}
-	if group["tool_call_count"] != 2 || group["tool_call_failures"] != 1 {
+	if group["tool_call_count"] != int64(2) || group["tool_call_failures"] != int64(1) {
 		t.Errorf("tool call totals = %v/%v, want 2/1", group["tool_call_count"], group["tool_call_failures"])
 	}
 }

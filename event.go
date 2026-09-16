@@ -90,6 +90,9 @@ func Set(ctx context.Context, key string, value any) {
 	if e == nil {
 		return
 	}
+	// The copy runs before the lock, so a MarshalJSON method that logs through
+	// wlog on this same event finishes instead of deadlocking.
+	copied := e.copyForStore(value)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
@@ -99,7 +102,7 @@ func Set(ctx context.Context, key string, value any) {
 	if !e.reserveTopLevelSlot(key) {
 		return
 	}
-	e.fields[key] = e.normalizeValue(value)
+	e.fields[key] = copied
 	e.trackUnknownKey(key)
 }
 
@@ -143,6 +146,7 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 	if len(pairs) == 0 {
 		return
 	}
+	copied := copyMap(pairs, 1)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -159,12 +163,12 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 		g = map[string]any{}
 		e.fields[group] = g
 	}
-	for k, v := range pairs {
+	for k, v := range copied {
 		if _, exists := g[k]; !exists && len(g) >= maxGroupFields {
 			e.dropped++
 			continue
 		}
-		g[k] = e.normalizeValue(v)
+		g[k] = v
 	}
 }
 
@@ -175,6 +179,7 @@ func Append(ctx context.Context, key string, value any) {
 	if e == nil {
 		return
 	}
+	copied := e.copyForStore(value)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.sealed {
@@ -192,7 +197,7 @@ func Append(ctx context.Context, key string, value any) {
 		e.dropped++
 		return
 	}
-	e.fields[key] = append(arr, e.normalizeValue(value))
+	e.fields[key] = append(arr, copied)
 }
 
 // reserveTopLevelSlot reports whether key may occupy a top-level field slot: true if
@@ -230,25 +235,14 @@ func kvToMap(kv []any) map[string]any {
 	return m
 }
 
-// normalizeValue stores a value the way the active mode wants it. RawValues mode
-// skips normalize for a value that is already a JSON tree root, because that call is
-// only a type check. Every other value still goes through normalize, so redaction can
-// always walk the stored shape. Callers must hold e.mu.
-func (e *event) normalizeValue(v any) any {
-	if e.rawValues && isTreeValue(v) {
-		return v
-	}
-	return normalize(v)
-}
-
-// isTreeValue reports whether v already is a shape normalize would return unchanged.
-func isTreeValue(v any) bool {
-	switch v.(type) {
-	case nil, string, bool, int, int64, float64, map[string]any, []any:
-		return true
-	default:
-		return false
-	}
+// copyForStore returns the value an event stores for a caller's value.
+//
+// Every value is copied into the tree wlog owns, so a caller can never change an
+// event after the fact and a drain never sees a map that another goroutine still
+// writes. The copy is the same in every mode, because ownership is a gate and
+// not a preference. A caller runs this before it takes e.mu.
+func (e *event) copyForStore(v any) any {
+	return copyValue(v)
 }
 
 // normalize passes JSON-tree values through unchanged and round-trips everything else

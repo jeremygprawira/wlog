@@ -13,7 +13,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CI-6 `cover`, `bench`, `vuln`, all fuzz targets
 - [x] 10-CI-7 Release hygiene
 - [ ] Review point 10-CI: every required CI job is green, then human review
-- [ ] 10-CORE-1 Value copy tree
+- [x] 10-CORE-1 Value copy tree
 - [ ] 10-CORE-2 Event-shape fuzz test
 - [ ] 10-CORE-3 Plain lines, enricher values, drain contract
 - [ ] 10-CORE-4 Hook isolation
