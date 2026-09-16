@@ -204,7 +204,7 @@ func (n FieldNames) Rename(canonical, output string) FieldNames
 ```
 
 Renaming runs after redaction (step 4), so denylist entries always match canonical names
-(`http.request.headers.cookie`), regardless of the output preset.
+(`http.request_headers.cookie`), regardless of the output preset.
 
 ### Sinks (C1, C13)
 

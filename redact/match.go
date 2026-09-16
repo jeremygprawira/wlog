@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"fmt"
 	"path"
 	"strings"
 )
@@ -21,6 +22,92 @@ func newSegMatcher(seg string) (segMatcher, error) {
 		return segMatcher{isGlob: true, glob: strings.ToLower(seg)}, nil
 	}
 	return segMatcher{tokens: tokenize(seg)}, nil
+}
+
+// reservedShape names the reserved fields of the event shape, one segment at a
+// time. A dotted entry whose first segment is a reserved group is checked against
+// this list, because a path that can never match a reserved field is a typo: a
+// caller writes http.request.header.authorization while the shape names
+// http.request_headers, and the mistake would otherwise be silent.
+var reservedShape = [][]string{
+	{"http", "request_headers"},
+	{"http", "request_cookies"},
+	{"http", "request_query"},
+	{"http", "request_body"},
+	{"http", "response_headers"},
+	{"http", "response_body"},
+	{"http", "method"},
+	{"http", "path"},
+	{"http", "route"},
+	{"http", "status"},
+	{"http", "bytes_in"},
+	{"http", "bytes_out"},
+	{"http", "client_ip"},
+	{"http", "user_agent"},
+	{"http", "duration_ms"},
+	{"trace", "request_id"},
+	{"trace", "trace_id"},
+	{"trace", "span_id"},
+	{"trace", "parent_operation"},
+	{"audit", "action"},
+	{"audit", "actor"},
+	{"audit", "target"},
+	{"audit", "outcome"},
+	{"service", "name"},
+	{"service", "version"},
+	{"service", "env"},
+	{"faas", "name"},
+	{"faas", "request_id"},
+	{"llm", "model"},
+	{"llm", "calls"},
+}
+
+// validatePathEntry reports an entry that can never match a reserved field.
+//
+// An entry whose first segment is not a reserved group is a path into the caller's
+// own event, so it is always valid. A reserved entry must follow the shape: each
+// segment must be the start of a reserved segment at that position, which accepts
+// http.request_headers.authorization and rejects http.request.header.
+func validatePathEntry(entry string) error {
+	segments := strings.Split(entry, ".")
+	group := strings.ToLower(segments[0])
+	reserved := false
+	for _, path := range reservedShape {
+		if path[0] == group {
+			reserved = true
+			break
+		}
+	}
+	if !reserved {
+		return nil
+	}
+	for i, segment := range segments {
+		if i >= 2 {
+			// Past the known shape: a header or a field of the caller's own
+			// making, which the redactor cannot check.
+			return nil
+		}
+		found := false
+		for _, path := range reservedShape {
+			if path[0] != group || i >= len(path) {
+				continue
+			}
+			// The second segment must be a reserved field, not a prefix of one,
+			// because the shape names the field in full.
+			match := path[i] == strings.ToLower(segment)
+			if i == 0 {
+				match = path[i] == group
+			}
+			if match {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("path %q can never match a reserved field", entry)
+		}
+	}
+	return nil
 }
 
 // validateGlob reports an error if pattern is not a valid "*"-only glob, e.g. an

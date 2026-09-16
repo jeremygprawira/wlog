@@ -239,6 +239,12 @@ func build(c *config, opts []Option) (*Redactor, error) {
 	for _, opt := range opts {
 		opt(c)
 	}
+	if c.maxDepth < 1 {
+		return nil, fmt.Errorf("redact: MaxDepth(%d) must be positive", c.maxDepth)
+	}
+	if c.maxStringScan < 1 {
+		return nil, fmt.Errorf("redact: MaxStringScan(%d) must be positive", c.maxStringScan)
+	}
 
 	final := c.keys
 	for _, rem := range c.removed {
@@ -270,6 +276,9 @@ func build(c *config, opts []Option) (*Redactor, error) {
 	for _, k := range r.raw {
 		switch {
 		case strings.Contains(k, "."):
+			if err := validatePathEntry(k); err != nil {
+				return nil, fmt.Errorf("redact: %w", err)
+			}
 			var segs []segMatcher
 			for _, seg := range strings.Split(k, ".") {
 				sm, err := newSegMatcher(seg)

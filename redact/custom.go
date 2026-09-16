@@ -94,6 +94,11 @@ func buildPatterns(c *config) ([]builtinPattern, error) {
 		if err != nil {
 			return nil, fmt.Errorf("redact: invalid pattern %q: %w", up.Name, err)
 		}
+		// A pattern that matches the empty string would insert a mask between
+		// every pair of characters, so it is a mistake rather than a rule.
+		if re.MatchString("") {
+			return nil, fmt.Errorf("redact: pattern %q matches the empty string", up.Name)
+		}
 		patterns = append(patterns, builtinPattern{name: up.Name, re: re, masker: up.masker(), custom: true})
 	}
 

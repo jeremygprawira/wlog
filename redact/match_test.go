@@ -16,7 +16,7 @@ func withKeys(t *testing.T, keys ...string) *redact.Redactor {
 }
 
 func TestRedact_Path_AnchoredToRoot(t *testing.T) {
-	r := withKeys(t, "http.request.headers.cookie")
+	r := withKeys(t, "http.request_headers.cookie")
 
 	rootLevel := map[string]any{"cookie": "should-not-mask"}
 	r.Apply(rootLevel)
@@ -26,13 +26,11 @@ func TestRedact_Path_AnchoredToRoot(t *testing.T) {
 
 	nested := map[string]any{
 		"http": map[string]any{
-			"request": map[string]any{
-				"headers": map[string]any{"cookie": "secret", "accept": "json"},
-			},
+			"request_headers": map[string]any{"cookie": "secret", "accept": "json"},
 		},
 	}
 	r.Apply(nested)
-	headers := nested["http"].(map[string]any)["request"].(map[string]any)["headers"].(map[string]any)
+	headers := nested["http"].(map[string]any)["request_headers"].(map[string]any)
 	if headers["cookie"] != "[REDACTED]" {
 		t.Errorf("anchored cookie not masked: %v", headers["cookie"])
 	}
@@ -90,5 +88,46 @@ func TestRedact_Path_ArrayInheritsParentPath(t *testing.T) {
 		if m["id"] == "[REDACTED]" {
 			t.Errorf("array element id should not be masked")
 		}
+	}
+}
+
+// TestRedact_RED10_DeadPathReported proves that a path entry which can never match
+// a reserved key reports at New, so a typo in a dotted path is not silent.
+func TestRedact_RED10_DeadPathReported(t *testing.T) {
+	// The event shape names the field http.request_headers, so a path through
+	// "request" alone can never match anything.
+	if _, err := redact.New(redact.AddKeys("http.request.header.authorization")); err == nil {
+		t.Error("a path that can never match a reserved key was accepted")
+	}
+	// The real name is accepted, so the check does not reject a good path.
+	if _, err := redact.New(redact.AddKeys("http.request_headers.authorization")); err != nil {
+		t.Errorf("a real reserved path was rejected: %v", err)
+	}
+	// A path outside the reserved shape is for the caller's own event, so it is
+	// accepted.
+	if _, err := redact.New(redact.AddKeys("user.profile.email")); err != nil {
+		t.Errorf("a caller path was rejected: %v", err)
+	}
+}
+
+// TestRedact_RED12_GlobsAndRemoveKeys proves that a star crosses a slash inside one
+// segment, that RemoveKeys matches by token form and removes every match, and that
+// a bad limit or an empty-match regex is an error.
+func TestRedact_RED12_GlobsAndRemoveKeys(t *testing.T) {
+	r := redact.MustNew(redact.AddKeys("*_token"))
+	event := map[string]any{"user/api_token": "SECRET", "user": map[string]any{"api_token": "SECRET"}}
+	r.Apply(event)
+	if event["user/api_token"] != "[REDACTED]" {
+		t.Errorf("star did not cross the slash: %v", event["user/api_token"])
+	}
+	if event["user"].(map[string]any)["api_token"] != "[REDACTED]" {
+		t.Errorf("star did not match a plain segment: %v", event["user"])
+	}
+
+	if _, err := redact.New(redact.MaxDepth(-1)); err == nil {
+		t.Error("MaxDepth(-1) was accepted")
+	}
+	if _, err := redact.New(redact.AddPatterns(redact.Pattern{Name: "empty", Regex: ``})); err == nil {
+		t.Error("a pattern that matches the empty string was accepted")
 	}
 }

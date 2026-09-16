@@ -28,7 +28,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-RED-4 Pattern names and new patterns
 - [x] 10-RED-5 Fewer false positives
 - [x] 10-RED-6 Fail closed and a full fingerprint
-- [ ] 10-RED-7 Paths, globs, and docs
+- [x] 10-RED-7 Paths, globs, and docs
 - [ ] 10-PIPE-1 Recover and unlock
 - [ ] 10-PIPE-2 Flush, Close, and sends after close
 - [ ] 10-PIPE-3 Retry timing
