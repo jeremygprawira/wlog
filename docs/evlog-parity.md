@@ -43,14 +43,14 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | evlog page | Status | wlog |
 |---|---|---|
 | overview | built | `cmd/wlog` |
-| init | gap | no scaffolding command |
-| map | partial | `wlog map` finds handlers, scores them, writes `wlog.map.json` |
-| rules | partial | 6 rules vs evlog's 6 requirements and 4 suggestions |
-| scoring | partial | weighted 0-100 score and top-3 fixes. Missing grades, per-entry weighting, entry classes |
-| ci | partial | `--min-score` and `--baseline` compare the score only; evlog also fails on per-requirement regression |
-| observability-score | partial | same source as scoring |
-| doctor | gap | no setup diagnosis command |
-| agents | gap | no shipped agent skills or `AGENTS.md` writer |
+| init | built | `wlog init` detects the framework and writes a compiling setup |
+| map | built | finds handlers, scores them, writes `wlog.map.json`, and prints `--all`, `--entry`, or `--json` |
+| rules | built | 8 requirements and 2 suggestions, with a class per entry point |
+| scoring | built | weighted 0-100 score, A to F grade, read/write/sensitive classes, and top-3 fixes |
+| ci | built | `--min-score`, `--baseline`, and `--strict` for a per-rule regression |
+| observability-score | built | same source as scoring |
+| doctor | built | `wlog doctor` runs seven checks, with `--json` |
+| agents | built | `wlog agents` writes a fenced `AGENTS.md` block and three skills |
 | telemetry | not adopted | wlog sends no telemetry |
 
 ## integrate/adapters
@@ -66,9 +66,9 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | Sentry | partial | `drain/sentry` sends issues and logs; evlog's page focuses on its log adapter |
 | File system | built | `drain/file` writes NDJSON with rotation, and `file.Read`/`file.Tail` read and follow it |
 | Memory | built | ring buffer, `Snapshot`, `Subscribe`, `SSEHandler`, plus `Named`, `Stores`, `Query`, and `Clear` |
-| PostHog | gap | no drain |
-| Better Stack | gap | no drain |
-| HyperDX | gap | no drain |
+| PostHog | built | `drain/posthog` |
+| Better Stack | built | `drain/betterstack` |
+| HyperDX | built | `drain/hyperdx` |
 | NuxtHub | not adopted | Cloudflare and TypeScript specific |
 
 ## integrate/frameworks
@@ -78,7 +78,7 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | overview | built | `middleware/nethttp`, `middleware/echo`, `middleware/echo5`, `middleware/gin` |
 | Nuxt, Next.js, SvelteKit, Nitro, TanStack Start, NestJS, Express, Hono, Fastify, Elysia, React Router, Cloudflare Workers, Astro, oRPC | not adopted | TypeScript frameworks |
 | Standalone TypeScript | built | `wlog.Start` works in any Go program, job, or worker |
-| AWS Lambda | gap | `wlog.Start` works in a handler, but there is no Lambda example or request helper |
+| AWS Lambda | built | `examples/lambda` with a handler wrapper and a flush before return |
 
 ## extend
 
@@ -93,7 +93,7 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | stream | built | `drain/memory` with `SSEHandler` |
 | plugins | built | `Plugin` plus optional `Setup`, `Enricher`, `Keeper`, `Drain`, `RequestStarter`, `RequestFinisher` |
 | tail-sampling | built | `sample` keep rules |
-| fs-reader | gap | no `readFsLogs` or `tailFsLogs` |
+| fs-reader | built | `file.Read` and `file.Tail` |
 | diagnostics-channel | not adopted | Node runtime specific; the Go analogue is the slog input handler, which is built |
 | consumer-recipes | partial | `docs/customization.md` has drain recipes, not the full set |
 
@@ -119,10 +119,10 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | configuration | built | options, env vars, code wins over env, plus `SetEnabled`, `WithSilent`, and `WithRawValues` |
 | performance | built | benchmark budget, `make bench` |
 | cost | partial | `docs/cost.md` prices calls and charts spend. No interactive calculator |
-| best-practices | gap | no Go best-practice page |
+| best-practices | built | `docs/best-practices.md`, every rule tied to a test |
 | vite-plugin | not adopted | Vite and TypeScript specific |
 | vs-other-loggers | not adopted | TypeScript library comparison |
-| agent-skills | gap | wlog ships no agent skills |
+| agent-skills | built | `wlog agents` writes three skills and an `AGENTS.md` block |
 
 ## Gaps that are not TypeScript-specific
 
@@ -135,15 +135,15 @@ Ranked by value, with the evlog page that motivates each one.
 | 3 | ~~Audit extras~~ done in v1.2, except the compliance guide | `use-cases/audit/*` | mostly done |
 | 4 | ~~File reader~~ done in v1.2 as `file.Read` and `file.Tail` | `extend/fs-reader` | done |
 | 5 | ~~Memory queries~~ done in v1.2 as `Named`, `Query`, and `Clear` | `integrate/adapters/self-hosted/memory` | done |
-| 6 | `wlog init`: scaffold wlog into a Go project and write the config | `cli/init` | M |
-| 7 | `wlog doctor`: check that the module, middleware, drains, and env vars are wired | `cli/doctor` | S |
-| 8 | `wlog agents`: ship logging, audit, and log-analysis skills plus an `AGENTS.md` block | `cli/agents`, `reference/agent-skills` | S |
-| 9 | Map rules for structured errors and swallowed errors, plus catalog and audit-coverage suggestions | `cli/rules` | M |
-| 10 | Map report extras: `--all`, single-entry-point view, `--json`, classes, grades, and per-entry weighting | `cli/map`, `cli/scoring` | M |
-| 11 | Three more drains: PostHog, Better Stack, HyperDX | `integrate/adapters/*` | M each |
+| 6 | ~~`wlog init`~~ done in v1.3 | `cli/init` | done |
+| 7 | ~~`wlog doctor`~~ done in v1.3 | `cli/doctor` | done |
+| 8 | ~~`wlog agents`~~ done in v1.3 | `cli/agents`, `reference/agent-skills` | done |
+| 9 | ~~Map rules~~ done in v1.3 | `cli/rules` | done |
+| 10 | ~~Map report extras~~ done in v1.3 | `cli/map`, `cli/scoring` | done |
+| 11 | ~~Three more drains~~ done in v1.4 | `integrate/adapters/*` | done |
 | 12 | ~~Structured error helpers~~ done in v1.2 as `Data`/`Internal`, `Errorf`, and `DefaultExtractor` | `learn/structured-errors` | done |
-| 13 | Cost docs done in v1.2 as `docs/cost.md`. The best-practice guide stays open | `reference/cost`, `reference/best-practices` | partial |
-| 14 | AWS Lambda example | `integrate/frameworks/aws-lambda` | XS |
+| 13 | ~~Cost and best-practice docs~~ done as `docs/cost.md` and `docs/best-practices.md` | `reference/cost`, `reference/best-practices` | done |
+| 14 | ~~AWS Lambda example~~ done in v1.4 | `integrate/frameworks/aws-lambda` | done |
 | 15 | ~~Global enable, silent, and raw modes~~ done in v1.2 | `reference/configuration` | done |
 
 ## Not adopted, and why

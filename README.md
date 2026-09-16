@@ -62,6 +62,7 @@ commit hash or use a `replace` directive on a local checkout.
 - [Customization](docs/customization.md): change capture, redaction, sampling, field
   names, drains, and more.
 - [Cost](docs/cost.md): price model calls and chart spend per route.
+- [Best practices](docs/best-practices.md): five rules for an event worth keeping.
 - [evlog parity](docs/evlog-parity.md): how each evlog feature maps to a wlog module.
 - [Examples](examples): a runnable program for every framework and extension point.
 
