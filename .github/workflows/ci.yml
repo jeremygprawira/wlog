@@ -57,6 +57,7 @@ jobs:
         with:
           version: v2.11.3
       - run: make lint
+      - run: make ste
 
   # test runs the race detector on each affected module, on the newest Go and on
   # the one before it. GOWORK=off proves the module stands alone.
@@ -107,6 +108,39 @@ jobs:
           go-version: stable
       - run: make requires
       - run: make tidy-check
+
+  # snippets compiles every fenced Go block in the documentation, so a reader who
+  # copies a sample gets a working program.
+  snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make snippets
+
+  # verifyplan runs the Verify command of every task in the plan, and fails a
+  # command whose -run pattern matches no test. It only runs when the plan
+  # changes, because the whole plan costs minutes.
+  verifyplan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: Run the Verify commands
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -n "$base" ] && git rev-parse --verify --quiet "$base^{commit}" >/dev/null \
+             && ! git diff --name-only "$base" | grep -q '^tasks/plan.md$'; then
+            echo "the plan is unchanged, nothing to verify" >&2
+            exit 0
+          fi
+          make verifyplan
 
   # fuzz runs every fuzz target for a short time on each push. The nightly job
   # gives them ten minutes.

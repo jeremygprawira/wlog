@@ -6,7 +6,7 @@
 MODULES := $(shell go work edit -json | grep '"DiskPath"' | sed -E 's/.*"DiskPath": "(.*)"/\1/')
 FUZZTIME ?= 30s
 
-.PHONY: test race fuzz bench lint tidy tidy-check requires floor compat cover map integration
+.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor compat cover map integration
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
@@ -30,6 +30,20 @@ tidy:
 
 tidy-check:
 	go run ./tools/cmd/tidy -check
+
+# ste runs the Simple English lint over the markdown documents.
+ste:
+	go run ./tools/cmd/ste
+
+# snippets compiles every fenced Go block in the documentation, and runs the
+# blocks that ask to run.
+snippets:
+	go run ./tools/cmd/snippets
+
+# verifyplan runs the Verify command of every task in tasks/plan.md. It checks
+# one task at a time with ONLY=<task-id>.
+verifyplan:
+	go run ./tools/cmd/verifyplan -only "$(ONLY)"
 
 # requires checks the sibling requires, the release version, and the local replace.
 requires:
