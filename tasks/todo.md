@@ -134,8 +134,8 @@
 - [x] MS2 Report forms and strict baseline
 - [x] CI1 `wlog init`
 - [x] CI2 `wlog doctor`
-- [ ] CI3 `wlog agents`
-- [ ] **Checkpoint 8**: v1.3 (ask first: tag v0.4.0)
+- [x] CI3 `wlog agents`
+- [x] **Checkpoint 8**: v1.3 (tag v0.4.0 still needs approval)
 
 ## Phase 9 — v1.4, drains, example, docs (evlog gaps 11, 13, 14)
 - [ ] DP PostHog drain
