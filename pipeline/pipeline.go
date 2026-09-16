@@ -159,10 +159,17 @@ func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 			delay := w.retryDelay(attempt)
 			if errors.As(err, &re) {
 				if ra := re.RetryAfter(); ra > 0 {
-					delay = ra
+					// A server may ask for any wait, and a Retry-After of hours
+					// would park the worker, so the cap applies here too.
+					delay = min(ra, w.cfg.maxDelay)
 				}
 			}
-			time.Sleep(delay)
+			if !w.wait(ctx, delay) {
+				// The worker is closing, so this batch stops here rather than
+				// holding the shutdown open for the whole wait.
+				w.reportDrop(batch, err)
+				return
+			}
 		}
 	}
 	w.reportDrop(batch, err)
@@ -197,6 +204,9 @@ func (w *wrapped) reportDrop(batch []map[string]any, err error) {
 
 // retryDelay is the wait before the (attempt+1)th try, per Backoff, capped at
 // MaxDelay, plus up to 20% jitter to avoid a thundering herd across many drains.
+//
+// The cap comes before the jitter, so the wait a caller sees never passes
+// MaxDelay, and the doubling stops at 1<<30, which no duration can overflow.
 func (w *wrapped) retryDelay(attempt int) time.Duration {
 	var d time.Duration
 	switch w.cfg.backoff {
@@ -205,7 +215,11 @@ func (w *wrapped) retryDelay(attempt int) time.Duration {
 	case Fixed:
 		d = w.cfg.initialDelay
 	default: // Exponential
-		d = w.cfg.initialDelay * time.Duration(1<<uint(attempt-1))
+		shift := min(attempt-1, 30)
+		if shift < 0 {
+			shift = 0
+		}
+		d = w.cfg.initialDelay * time.Duration(1<<uint(shift))
 	}
 	if d > w.cfg.maxDelay {
 		d = w.cfg.maxDelay
@@ -213,7 +227,29 @@ func (w *wrapped) retryDelay(attempt int) time.Duration {
 	if d <= 0 {
 		return 0
 	}
-	return d + time.Duration(rand.Int63n(int64(d)/5+1))
+	// The jitter stays inside the cap, so the wait never exceeds it.
+	jitter := time.Duration(rand.Int63n(int64(d)/5 + 1))
+	return min(d+jitter, w.cfg.maxDelay)
+}
+
+// wait sleeps for d and reports whether the wait finished.
+//
+// The wait selects on the worker's own context, so a Close that carries a deadline
+// stops a retry in flight instead of waiting for a backoff to end.
+func (w *wrapped) wait(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-w.closeSig:
+		return false
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // flushAll drains and sends everything left in the buffer, for Close.

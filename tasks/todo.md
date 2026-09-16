@@ -31,7 +31,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-RED-7 Paths, globs, and docs
 - [x] 10-PIPE-1 Recover and unlock
 - [x] 10-PIPE-2 Flush, Close, and sends after close
-- [ ] 10-PIPE-3 Retry timing
+- [x] 10-PIPE-3 Retry timing
 - [ ] 10-PIPE-4 Batches, clamps, timer, counters
 - [ ] 10-PIPE-5 FanOut rewrite
 - [ ] 10-PIPE-6 HTTP drain helper
