@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -390,6 +391,27 @@ func (r *Redactor) applyValue(v any, path []string, depth int) any {
 		}
 		r.applyMap(x, path, depth+1)
 		return x
+	case []string:
+		// A typed slice is a tree shape the redactor can walk, so it is not an
+		// unknown type. It keeps its own type, because a reader of the event
+		// expects a list of names there.
+		out := make([]string, len(x))
+		changed := false
+		for i, item := range x {
+			if out[i] = r.applyPatterns(item, path); out[i] != item {
+				changed = true
+			}
+		}
+		if !changed {
+			return x
+		}
+		return out
+	case map[string]string:
+		masked := make(map[string]any, len(x))
+		for key, item := range x {
+			masked[key] = r.applyValue(item, append(path, key), depth+1)
+		}
+		return masked
 	case []any:
 		if depth+1 > r.maxDepth {
 			return "[REDACTED:DEPTH]"
@@ -405,9 +427,51 @@ func (r *Redactor) applyValue(v any, path []string, depth int) any {
 			return "[REDACTED:TOO_LARGE]"
 		}
 		return r.applyPatterns(x, path)
-	default:
+	case int64:
+		return r.applyInteger(strconv.FormatInt(x, 10), x)
+	case uint64:
+		return r.applyInteger(strconv.FormatUint(x, 10), x)
+	case int:
+		return r.applyInteger(strconv.Itoa(x), int64(x))
+	case int32:
+		return r.applyInteger(strconv.FormatInt(int64(x), 10), int64(x))
+	case uint32:
+		return r.applyInteger(strconv.FormatUint(uint64(x), 10), int64(x))
+	case nil, bool, float64, float32:
 		return v
+	default:
+		// A type the redactor cannot walk is a type whose secrets it cannot see,
+		// so the whole value is replaced rather than passed on.
+		return r.replacementText()
 	}
+}
+
+// applyInteger scans a long number with the card pattern, because an identifier
+// with 13 or more digits can be a card number that a caller passed as a number.
+// A shorter number, and a long one that no pattern claims, stays a number.
+func (r *Redactor) applyInteger(text string, original any) any {
+	if len(text) < 13 {
+		return original
+	}
+	masked := r.applyPatterns(text, nil)
+	if masked != text {
+		return masked
+	}
+	return original
+}
+
+// replacementText returns the mask the redactor uses for a whole value.
+//
+// A panicking ReplaceFunc falls back to the fixed text through safeReplace, so a
+// bad mask function can never pass a value through.
+func (r *Redactor) replacementText() string {
+	if r.replaceFunc != nil {
+		return r.safeReplace("")
+	}
+	if r.replacement == "" {
+		return "[REDACTED]"
+	}
+	return r.replacement
 }
 
 // matchesKey reports whether any contiguous run of key's tokens equals a leaf denylist
@@ -479,6 +543,36 @@ func (r *Redactor) Denies(key string) bool {
 // hashes the same regardless of the order options were given, and changes after any
 // add or remove.
 func (r *Redactor) Fingerprint() string {
-	sum := sha256.Sum256([]byte(strings.Join(r.Keys(), "\n")))
+	var parts []string
+	parts = append(parts, "keys:"+strings.Join(r.Keys(), ","))
+	parts = append(parts, fmt.Sprintf("maskIP:%t", r.maskClientIP))
+	parts = append(parts, "replacement:"+r.replacement)
+	parts = append(parts, fmt.Sprintf("replaceFunc:%t", r.replaceFunc != nil))
+	parts = append(parts, fmt.Sprintf("depth:%d", r.maxDepth))
+	parts = append(parts, fmt.Sprintf("scan:%d", r.maxStringScan))
+	parts = append(parts, fmt.Sprintf("disabled:%t", r.disabled))
+	parts = append(parts, fmt.Sprintf("transforms:%d", len(r.transforms)))
+	parts = append(parts, "builtins:"+strings.Join(activePatternNames(r.patterns), ","))
+	parts = append(parts, "raw:"+strings.Join(r.patternConfig(), ","))
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
 	return hex.EncodeToString(sum[:8])
+}
+
+// activePatternNames returns the name of every pattern in force, in order.
+func activePatternNames(patterns []builtinPattern) []string {
+	names := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		names = append(names, p.name)
+	}
+	return names
+}
+
+// patternConfig returns one line per custom pattern, so a change to its regex or
+// its replacement shows up in the fingerprint.
+func (r *Redactor) patternConfig() []string {
+	out := make([]string, 0, len(r.customPatterns))
+	for _, p := range r.customPatterns {
+		out = append(out, p.Name+"="+p.Regex+"/"+p.Replacement)
+	}
+	return out
 }
