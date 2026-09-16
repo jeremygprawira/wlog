@@ -14,24 +14,23 @@ import (
 // Redactor masks sensitive keys and values in an event. It is immutable after New
 // returns; to change what it masks, derive a new one with With.
 type Redactor struct {
-	disabled        bool            // Disabled(): Apply is a no-op, nothing else below is set
-	raw             []string        // the effective raw key entries, post add/remove
-	leafTokens      map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
-	leafGlobs       []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
-	paths           [][]segMatcher  // dotted entries, one segMatcher per "." segment
-	patterns        []builtinPattern
-	maskClientIP    bool
-	transforms      []func(map[string]any)
-	replacement     string
-	replaceFunc     func(string) string
-	maxDepth        int
-	maxStringScan   int
-	tokenCache      sync.Map     // key string -> []string; a real event reuses the same
-	cacheEntries    atomic.Int64 // field names on every call, so a fresh tokenize is waste
-	maxLeafTokens   int          // longest denylist entry in tokens, which bounds a run
-	customPatterns  []Pattern    // the patterns a caller added, for a later With
-	builtins        []string     // the active built-in pattern names, for a later With
-	caseInsensitive bool         // whether key matching folds case
+	disabled       bool            // Disabled(): Apply is a no-op, nothing else below is set
+	raw            []string        // the effective raw key entries, post add/remove
+	leafTokens     map[string]bool // no-dot, no-star entries: joined tokens, e.g. "auth"
+	leafGlobs      []string        // no-dot, has-star entries: lowercased glob, e.g. "*_pin"
+	paths          [][]segMatcher  // dotted entries, one segMatcher per "." segment
+	patterns       []builtinPattern
+	maskClientIP   bool
+	transforms     []func(map[string]any)
+	replacement    string
+	replaceFunc    func(string) string
+	maxDepth       int
+	maxStringScan  int
+	tokenCache     sync.Map     // key string -> []string; a real event reuses the same
+	cacheEntries   atomic.Int64 // field names on every call, so a fresh tokenize is waste
+	maxLeafTokens  int          // longest denylist entry in tokens, which bounds a run
+	customPatterns []Pattern    // the patterns a caller added, for a later With
+	builtins       []string     // the active built-in pattern names, for a later With
 }
 
 // cachedTokenize is tokenize(key), memoized per Redactor. Safe for concurrent use
