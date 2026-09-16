@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	reIPv4  = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
-	rePhone = regexp.MustCompile(`(?:\+\d{1,3}[\d\s-]{6,}\d)|(?:\b0\d{9,12}\b)`)
-	reIBAN  = regexp.MustCompile(`\b[A-Z]{2}\d{2}[ A-Z0-9]{11,30}\b`)
+	reIPv4  = regexp.MustCompile(`(?:^|[^A-Za-z0-9/])((?:\d{1,3}\.){3}\d{1,3})\b`)
+	rePhone = regexp.MustCompile(`(?:\+\d{1,3}[\d\s-]{6,}\d)|(?:\b0[1-9][\d\s-]{6,}\d\b)`)
+	reIBAN  = regexp.MustCompile(`\b[A-Z]{2}\d{2}[A-Z0-9]{13,30}\b`)
 	reNIK   = regexp.MustCompile(`\b\d{16}\b`)
 )
 
@@ -30,7 +30,7 @@ func maskPhone(match string) string {
 	}
 	last4 := digits[len(digits)-4:]
 
-	prefix := "+62"
+	prefix := ""
 	switch {
 	case strings.HasPrefix(match, "+"):
 		i := 1
@@ -38,6 +38,9 @@ func maskPhone(match string) string {
 			i++
 		}
 		prefix = match[:i]
+	}
+	if prefix == "" {
+		return "****" + last4
 	}
 	return prefix + " ****" + last4
 }

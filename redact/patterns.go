@@ -65,7 +65,7 @@ var allBuiltinPatterns = []builtinPattern{
 	{"url_query_secret", reQuerySecret, valueMasker(maskQuerySecret), true, func(s string) bool { return strings.Contains(s, "=") }, false},
 	{"basic_auth", regexp.MustCompile(`(?i)\bBasic\s+[A-Za-z0-9+/=]{8,}`), valueMasker(maskBasicAuth), true, hasBasic, false},
 	{"api_key_prefix", regexp.MustCompile(`\b(?:sk_live_|sk_test_|AKIA|ghp_|xoxb-|glpat-)[A-Za-z0-9_\-]{4,}`), valueMasker(maskAPIKey), true, hasAPIKeyPrefix, false},
-	{"ipv4", reIPv4, valueMasker(maskIPv4), true, func(s string) bool { return strings.Count(s, ".") >= 3 }, false},
+	{"ipv4", reIPv4, valueMasker(maskIPv4KeepLead), true, func(s string) bool { return strings.Count(s, ".") >= 3 }, false},
 	{"phone", rePhone, valueMasker(maskPhone), true, hasDigit, false},
 	{"iban", reIBAN, valueMasker(maskIBAN), true, hasUpper, false},
 	{"nik", reNIK, valueMasker(maskNIK), false, hasDigit, false},
@@ -184,6 +184,25 @@ func maskBearer(string) string {
 // reQuerySecret matches a query parameter whose name names a secret, so the value
 // is masked while the harmless parameters of the same URL stay readable.
 var reQuerySecret = regexp.MustCompile(`(?i)([?&](?:api[_-]?key|access[_-]?key|auth|authorization|credential|dsn|key|passphrase|password|secret|session|signature|token)[^=&\s]*=)([^&\s]+)`)
+
+// maskIPv4KeepLead masks the address and keeps the guard character that the
+// pattern captured, because that character is what excludes a version string.
+func maskIPv4KeepLead(match string) string {
+	start := 0
+	for start < len(match) && (match[start] < '0' || match[start] > '9') {
+		start++
+	}
+	if start == 0 {
+		return maskIPv4(match)
+	}
+	return match[:start] + maskIPv4(match[start:])
+}
+
+// isLoopback reports whether an address is the local host, which every service
+// logs and no one needs masked.
+func isLoopback(address string) bool {
+	return strings.HasPrefix(address, "127.") || address == "0.0.0.0"
+}
 
 // maskURLPassword keeps the scheme, the user, and the host, and masks only the
 // password of a URL, so a reader still learns which backend answered.

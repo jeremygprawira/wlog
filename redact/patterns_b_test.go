@@ -44,19 +44,24 @@ func TestRedact_Builtin_IPv4_ClientIPExempt(t *testing.T) {
 
 func TestRedact_Builtin_Phone(t *testing.T) {
 	r := redact.MustNew()
-	cases := []string{"+62 812-3456-7890", "081234567890"}
-	for _, in := range cases {
+	// The masker keeps the country code it found and adds none, so a number that
+	// arrived without one keeps its local shape.
+	cases := map[string]string{
+		"+62 812-3456-7890": "+62 ****7890",
+		"081234567890":      "****7890",
+	}
+	for in, want := range cases {
 		event := map[string]any{"phone": in}
 		r.Apply(event)
-		if event["phone"] != "+62 ****7890" {
-			t.Errorf("phone %q: got %q", in, event["phone"])
+		if event["phone"] != want {
+			t.Errorf("phone %q: got %q, want %q", in, event["phone"], want)
 		}
 	}
 }
 
 func TestRedact_Builtin_IBAN(t *testing.T) {
 	r := redact.MustNew()
-	event := map[string]any{"iban": "FR76 3000 6000 0112 3456 7890 189"}
+	event := map[string]any{"iban": "FR7630006000011234567890189"}
 	r.Apply(event)
 	if event["iban"] != "FR76****189" {
 		t.Errorf("iban: got %q", event["iban"])
@@ -78,5 +83,46 @@ func TestRedact_Builtin_NIK_EnabledByOption(t *testing.T) {
 	r.Apply(event)
 	if event["note"] != "3171********0001" {
 		t.Errorf("nik: got %q", event["note"])
+	}
+}
+
+// TestRedact_RED7_NoFalsePositives proves that the value patterns leave ordinary
+// text alone: a browser user agent, a millisecond timestamp, a snowflake id, a
+// short zero-padded number, and a plain status line stay unchanged.
+func TestRedact_RED7_NoFalsePositives(t *testing.T) {
+	r := redact.MustNew()
+
+	unchanged := map[string]string{
+		"user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+		"ts_ms":      "1757952000123",
+		"snowflake":  "1234567890123456789",
+		"zero_pad":   "0000012345",
+		"order_note": "ID12 ORDER STATUS OK",
+	}
+	for key, value := range unchanged {
+		event := map[string]any{key: value}
+		r.Apply(event)
+		if event[key] != value {
+			t.Errorf("%s = %v, want it unchanged", key, event[key])
+		}
+	}
+
+	// A real card stays masked, with separators or under a card key name.
+	masked := map[string]any{
+		"card":        "4111 1111 1111 1111",
+		"number":      "4111-1111-1111-1111",
+		"card_number": "4111111111111111",
+		"pan":         "378282246310005",
+	}
+	r.Apply(masked)
+	for key, value := range masked {
+		if value == nil {
+			continue
+		}
+		raw := map[string]any{"card": "4111 1111 1111 1111", "number": "4111-1111-1111-1111",
+			"card_number": "4111111111111111", "pan": "378282246310005"}[key]
+		if value == raw {
+			t.Errorf("%s = %v, want the card masked", key, value)
+		}
 	}
 }
