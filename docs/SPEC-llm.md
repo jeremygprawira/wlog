@@ -105,10 +105,14 @@ llm.provider llm.model llm.operation
 llm.input_tokens llm.output_tokens llm.cached_input_tokens llm.reasoning_tokens
 llm.total_tokens
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
-llm.time_to_first_token_ms llm.duration_ms llm.streamed llm.finish_reason
+llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reason
 llm.cost_micros llm.cost_usd llm.cost_unknown
 llm.calls[]  (one object per call, set by Add)
 ```
+
+The stream timing field avoids the word "token" on purpose. The default redactor
+denies any key whose tokens include "token", so a name such as `time_to_first_token_ms`
+would be masked before it reached a drain.
 
 ## Success Criteria
 

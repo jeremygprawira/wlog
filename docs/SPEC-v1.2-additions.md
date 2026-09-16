@@ -33,10 +33,15 @@ Two helpers cover the common path.
 ```go
 func ErrorData(ctx context.Context) map[string]any // the current error's Data, or nil
 func Errorf(ctx context.Context, format string, a ...any) error
+func Field(ctx context.Context, key string) (any, bool) // one top-level field, for a derived writer
 ```
 
 `Errorf` builds an error, records it through `wlog.Error`, and returns it. This replaces
 the build-then-record pair that every handler writes today.
+
+`Field` reads one top-level field under the event lock. A derived writer, such as `llm.Add`,
+uses it to fold a running total. The value is returned as stored, so a caller must not mutate
+it.
 
 The package's default extractor also reads an error's `Code() string` method, when the error
 has one. An error from a catalog, or from a library such as herr, then keeps its own code with

@@ -103,6 +103,21 @@ func Set(ctx context.Context, key string, value any) {
 	e.trackUnknownKey(key)
 }
 
+// Field returns one top-level field from the current event, and whether that field was
+// present. It is a no-op read that returns false when ctx carries no event. The value is
+// returned as stored, so a caller must not mutate it. A derived writer, such as llm.Add,
+// uses it to fold a running total.
+func Field(ctx context.Context, key string) (any, bool) {
+	e := eventFrom(ctx)
+	if e == nil {
+		return nil, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	value, ok := e.fields[key]
+	return value, ok
+}
+
 // trackUnknownKey records key in unknownKeys (once) if StrictKeys is active for this
 // event and key was never registered. Callers must hold e.mu.
 func (e *event) trackUnknownKey(key string) {

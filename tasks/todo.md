@@ -116,7 +116,7 @@
 - [x] CT1 Catalog registry
 - [x] CT2 Catalog extractor, agnostic proof
 - [x] CT3 herr catalog bridge
-- [ ] LM1 LLM record and event fields
+- [x] LM1 LLM record and event fields
 - [ ] LM2 Pricing, cost, enricher
 - [ ] AX1 Audit record extras
 - [ ] AX2 `audit.Diff` and the test mock
