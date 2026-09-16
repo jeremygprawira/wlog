@@ -45,14 +45,22 @@ func (j *journal) Send(_ context.Context, event map[string]any) {
 		return
 	}
 
-	canon, err := canonicalJSON(event)
-	if err != nil {
-		return
+	// A Chain drain that ran before this one already set the hash. Reuse it, so the
+	// two do not chain the same event twice. With no Chain, Journal chains here, and
+	// resumes its own chain from the file's last line.
+	hash, _ := event["audit.hash"].(string)
+	prev, _ := event["audit.prev_hash"].(string)
+	if hash == "" {
+		canon, err := canonicalJSON(event)
+		if err != nil {
+			return
+		}
+		prev = j.prev
+		sum := sha256.Sum256(append([]byte(prev), canon...))
+		hash = hex.EncodeToString(sum[:])
+		event["audit.prev_hash"] = prev
+		event["audit.hash"] = hash
 	}
-	sum := sha256.Sum256(append([]byte(j.prev), canon...))
-	hash := hex.EncodeToString(sum[:])
-	event["audit.prev_hash"] = j.prev
-	event["audit.hash"] = hash
 
 	line, err := json.Marshal(event)
 	if err != nil {
