@@ -26,7 +26,7 @@ func TestAudit_Mock(t *testing.T) {
 	rec.RequireActor(t, "user", "u-1")
 
 	ctx = log.WithContext(context.Background())
-	ctx, end = wlog.Start(ctx, "op")
+	_, end = wlog.Start(ctx, "op")
 	end()
 	rec.RequireNoAudit(t)
 }

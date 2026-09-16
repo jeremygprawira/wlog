@@ -31,12 +31,12 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | overview | built | README and `docs/event-shape.md` |
 | simple-logging | built | `wlog.Info`, `wlog.Warn`, `wlog.Debug` |
 | wide-events | built | `Start`, `Set`, `SetGroup`, `Append`, `Detach` |
-| structured-errors | partial | `ErrorInfo` with code, message, kind, status, cause, stack, why, fix, link, attrs, plus a pretty error block. Missing `data` and `internal` split, `throwError`, `parseError`, `captureException` |
+| structured-errors | built | `ErrorInfo` with code, message, kind, status, cause, stack, why, fix, link, attrs, plus the `Data` and `Internal` split, `Errorf`, and `DefaultExtractor` |
 | lifecycle | built | fixed stage order and plugin hooks |
 | sampling | built | `sample.New` with `Rate`, `KeepStatus`, `KeepDuration`, `KeepPath`, `KeepFunc` |
 | redaction | partial | `redact` with add/remove keys and patterns, builtins toggle, replacement, transform. Missing a replacement function of the matched value |
 | typed-fields | built | `Key[T]` and `StrictKeys` |
-| catalogs | gap | `hern`-style error codes exist in `errors/herr`; no catalog registry |
+| catalogs | built | `catalog` registry with prefixes, templates, status, guidance, audit policy, and an extractor decorator |
 
 ## cli
 
@@ -64,8 +64,8 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | OTLP | built | `drain/otlp` |
 | Datadog | built | `drain/datadog` |
 | Sentry | partial | `drain/sentry` sends issues and logs; evlog's page focuses on its log adapter |
-| File system | partial | `drain/file` writes NDJSON with rotation. Missing a reader and tailer |
-| Memory | partial | `drain/memory` ring buffer, `Snapshot`, `Subscribe`, `SSEHandler`. Missing named stores, filter queries, and a `clear` call |
+| File system | built | `drain/file` writes NDJSON with rotation, and `file.Read`/`file.Tail` read and follow it |
+| Memory | built | ring buffer, `Snapshot`, `Subscribe`, `SSEHandler`, plus `Named`, `Stores`, `Query`, and `Clear` |
 | PostHog | gap | no drain |
 | Better Stack | gap | no drain |
 | HyperDX | gap | no drain |
@@ -104,10 +104,10 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | overview | built | README and `examples/` |
 | enrichers | built | `enrich.Host`, `Deployment`, `UserAgent`, `Geo`, `User` |
 | structured-logging-nodejs | built | README quick start covers the Go shape |
-| audit: overview, schema, recording, pipeline, compliance, recipes | partial | `audit.Do` with actor, action, target, outcome, reason, hash chain, journal, and `Verify`. Missing `version`, `idempotencyKey`, `context`, `deny`, `withAudit`, `auditDiff`, `auditOnly`, HMAC signing, `mockAudit`, audit catalogs, and the compliance guidance |
+| audit: overview, schema, recording, pipeline, compliance, recipes | built | `audit.Do` plus version, idempotency key, context, `Deny`, `Only`, `Wrap`, `Diff`, `Sign`, `Mock`, and catalog-driven policy. The compliance guidance is not written yet |
 | client-logging | not adopted | browser specific |
 | better-auth: overview, middleware, identify-user, client-sync, performance | not adopted | TypeScript auth library; the concept maps to `enrich.User` and `WithUserFunc` |
-| AI SDK: overview, usage, options, metadata, telemetry | designed for | `enrich-llm` in CAPABILITIES.md |
+| AI SDK: overview, usage, options, metadata, telemetry | built | `llm` records tokens, tools, stream timing, and exact cost. It is not an SDK wrapper, so a caller fills the record |
 | eve | not adopted | Vercel agent framework; the concept is covered by the `enrich-llm` plan |
 | telemetry: overview, setup, ingest, reference | not adopted | product telemetry for CLI authors |
 
@@ -116,9 +116,9 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | evlog page | Status | wlog |
 |---|---|---|
 | overview | built | this docs set |
-| configuration | partial | options, env vars, code wins over env. Missing a global enable switch, a silent switch, and a raw-object stringify mode |
+| configuration | built | options, env vars, code wins over env, plus `SetEnabled`, `WithSilent`, and `WithRawValues` |
 | performance | built | benchmark budget, `make bench` |
-| cost | gap | no cost calculator or cost docs |
+| cost | partial | `docs/cost.md` prices calls and charts spend. No interactive calculator |
 | best-practices | gap | no Go best-practice page |
 | vite-plugin | not adopted | Vite and TypeScript specific |
 | vs-other-loggers | not adopted | TypeScript library comparison |
@@ -130,21 +130,21 @@ Ranked by value, with the evlog page that motivates each one.
 
 | # | Gap | Source | Effort |
 |---|---|---|---|
-| 1 | AI and LLM observability: token usage, tool calls, streaming metrics, and cost on the event | `use-cases/ai-sdk/*` | M, `enrich-llm` |
-| 2 | Error catalogs: one registry per domain with prefix, status, message template, and audit action metadata | `learn/catalogs` | M |
-| 3 | Audit extras: `version`, `idempotencyKey`, `context`, `deny`, `withAudit`, `auditDiff`, `auditOnly`, HMAC signing, `mockAudit`, audit catalogs | `use-cases/audit/*` | M |
-| 4 | File reader: `readFsLogs` and `tailFsLogs` with level, time, and custom filters | `extend/fs-reader` | S |
-| 5 | Memory queries: named stores, filtered reads, and a clear call | `integrate/adapters/self-hosted/memory` | S |
+| 1 | ~~AI and LLM observability~~ done in v1.2 as `llm` | `use-cases/ai-sdk/*` | done |
+| 2 | ~~Error catalogs~~ done in v1.2 as `catalog` | `learn/catalogs` | done |
+| 3 | ~~Audit extras~~ done in v1.2, except the compliance guide | `use-cases/audit/*` | mostly done |
+| 4 | ~~File reader~~ done in v1.2 as `file.Read` and `file.Tail` | `extend/fs-reader` | done |
+| 5 | ~~Memory queries~~ done in v1.2 as `Named`, `Query`, and `Clear` | `integrate/adapters/self-hosted/memory` | done |
 | 6 | `wlog init`: scaffold wlog into a Go project and write the config | `cli/init` | M |
 | 7 | `wlog doctor`: check that the module, middleware, drains, and env vars are wired | `cli/doctor` | S |
 | 8 | `wlog agents`: ship logging, audit, and log-analysis skills plus an `AGENTS.md` block | `cli/agents`, `reference/agent-skills` | S |
 | 9 | Map rules for structured errors and swallowed errors, plus catalog and audit-coverage suggestions | `cli/rules` | M |
 | 10 | Map report extras: `--all`, single-entry-point view, `--json`, classes, grades, and per-entry weighting | `cli/map`, `cli/scoring` | M |
 | 11 | Three more drains: PostHog, Better Stack, HyperDX | `integrate/adapters/*` | M each |
-| 12 | Structured error helpers: `data` and `internal` split, `throwError`, `parseError` | `learn/structured-errors` | S |
-| 13 | Cost and best-practice docs | `reference/cost`, `reference/best-practices` | S |
+| 12 | ~~Structured error helpers~~ done in v1.2 as `Data`/`Internal`, `Errorf`, and `DefaultExtractor` | `learn/structured-errors` | done |
+| 13 | Cost docs done in v1.2 as `docs/cost.md`. The best-practice guide stays open | `reference/cost`, `reference/best-practices` | partial |
 | 14 | AWS Lambda example | `integrate/frameworks/aws-lambda` | XS |
-| 15 | Global enable, silent, and raw-object modes | `reference/configuration` | XS |
+| 15 | ~~Global enable, silent, and raw modes~~ done in v1.2 | `reference/configuration` | done |
 
 ## Not adopted, and why
 

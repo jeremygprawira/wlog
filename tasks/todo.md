@@ -124,7 +124,7 @@
 - [x] MQ1 Memory named stores and queries
 - [x] FR1 File reader and tailer
 - [x] RF1 Redaction replacement function
-- [ ] **Checkpoint 7**: v1.2 (ask first: tag v0.3.0)
+- [x] **Checkpoint 7**: v1.2 (tag v0.3.0 still needs approval)
 
 ## Phase 8 — v1.3, CLI (evlog gaps 6, 7, 8, 9, 10)
 - [ ] MR1 Rule: error guidance

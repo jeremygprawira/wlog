@@ -49,13 +49,12 @@ func (j *journal) Send(_ context.Context, event map[string]any) {
 	// two do not chain the same event twice. With no Chain, Journal chains here, and
 	// resumes its own chain from the file's last line.
 	hash, _ := event["audit.hash"].(string)
-	prev, _ := event["audit.prev_hash"].(string)
 	if hash == "" {
 		canon, err := canonicalJSON(event)
 		if err != nil {
 			return
 		}
-		prev = j.prev
+		prev := j.prev
 		sum := sha256.Sum256(append([]byte(prev), canon...))
 		hash = hex.EncodeToString(sum[:])
 		event["audit.prev_hash"] = prev
