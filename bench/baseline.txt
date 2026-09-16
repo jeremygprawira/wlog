@@ -1,0 +1,66 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/jeremygprawira/wlog
+cpu: Apple M4 Pro
+BenchmarkCore_StartSetEmit-12    	  114493	     10883 ns/op	    7424 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  112849	     10398 ns/op	    7408 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  112941	     10350 ns/op	    7414 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  117948	     10471 ns/op	    7410 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  115555	     10437 ns/op	    7417 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  114254	     10464 ns/op	    7413 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  113498	     10402 ns/op	    7411 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  115617	     10429 ns/op	    7416 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  114138	     10362 ns/op	    7415 B/op	      92 allocs/op
+BenchmarkCore_StartSetEmit-12    	  115046	     10349 ns/op	    7414 B/op	      92 allocs/op
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/jeremygprawira/wlog/middleware/nethttp
+cpu: Apple M4 Pro
+BenchmarkMiddleware_JSONBody-12    	   43022	     27528 ns/op	   36787 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43171	     27754 ns/op	   36800 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   44943	     42856 ns/op	   36852 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43165	     27789 ns/op	   36770 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   42367	     27904 ns/op	   36784 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43179	     27703 ns/op	   36760 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43021	     27880 ns/op	   36764 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43794	     27365 ns/op	   36747 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43408	     27419 ns/op	   36762 B/op	     215 allocs/op
+BenchmarkMiddleware_JSONBody-12    	   43594	     27402 ns/op	   36789 B/op	     215 allocs/op
+PASS
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/jeremygprawira/wlog/redact
+cpu: Apple M4 Pro
+BenchmarkRedact_Apply-12    	   68295	     16564 ns/op	    3674 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   71706	     16539 ns/op	    3671 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   73312	     16501 ns/op	    3671 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   72350	     16351 ns/op	    3671 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   72109	     16506 ns/op	    3671 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   72616	     16594 ns/op	    3670 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   72200	     16463 ns/op	    3671 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   73164	     16518 ns/op	    3672 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   72427	     16441 ns/op	    3677 B/op	      23 allocs/op
+BenchmarkRedact_Apply-12    	   72678	     16553 ns/op	    3668 B/op	      23 allocs/op
+PASS
+PASS
+PASS

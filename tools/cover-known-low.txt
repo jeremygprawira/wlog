@@ -1,0 +1,19 @@
+# Packages that may sit under the coverage minimum today.
+#
+# Every line holds one import path. The list is a ratchet: it holds the packages
+# that were under 85% on the day the check landed, so a package may stay where it
+# is while a later task raises it, and a package that falls below the minimum
+# without a line here fails the run. The audit close-out in phase 15 empties it.
+github.com/jeremygprawira/wlog/audit
+github.com/jeremygprawira/wlog/drain/axiom
+github.com/jeremygprawira/wlog/drain/betterstack
+github.com/jeremygprawira/wlog/drain/clickhouse
+github.com/jeremygprawira/wlog/drain/datadog
+github.com/jeremygprawira/wlog/drain/file
+github.com/jeremygprawira/wlog/drain/hyperdx
+github.com/jeremygprawira/wlog/drain/posthog
+github.com/jeremygprawira/wlog/drain/sentry
+github.com/jeremygprawira/wlog/internal/httpdrain
+github.com/jeremygprawira/wlog/llm
+github.com/jeremygprawira/wlog/middleware/nethttp
+github.com/jeremygprawira/wlog/wlogtest

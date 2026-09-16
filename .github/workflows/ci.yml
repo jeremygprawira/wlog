@@ -109,6 +109,30 @@ jobs:
       - run: make requires
       - run: make tidy-check
 
+  # cover fails a root package that falls under the coverage minimum without a
+  # line in tools/cover-known-low.txt.
+  cover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make cover
+
+  # bench compares the benchmarks with bench/baseline.txt, and fails a benchmark
+  # that is more than 20% slower. It runs on a pull request, where a regression
+  # can still block the merge.
+  bench:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make bench
+
   # snippets compiles every fenced Go block in the documentation, so a reader who
   # copies a sample gets a working program.
   snippets:

@@ -6,7 +6,7 @@
 MODULES := $(shell go work edit -json | grep '"DiskPath"' | sed -E 's/.*"DiskPath": "(.*)"/\1/')
 FUZZTIME ?= 30s
 
-.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor compat cover map integration
+.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor compat cover vuln map integration
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
@@ -14,11 +14,24 @@ test:
 race:
 	@for m in $(MODULES); do (cd $$m && go test -race ./...) || exit 1; done
 
+# fuzz runs every Fuzz target of every module, and finds them itself.
 fuzz:
-	go test -run=xxx -fuzz=FuzzRedact_NeverLeaks -fuzztime=$(FUZZTIME) ./redact
+	go run ./tools/cmd/fuzz -time $(FUZZTIME)
 
+# bench compares the benchmarks with bench/baseline.txt. A benchmark that is
+# slower by more than 20% fails.
 bench:
-	@for m in $(MODULES); do (cd $$m && go test -run=xxx -bench=. -benchmem ./...) || exit 1; done
+	go run ./tools/cmd/bench -max-slowdown 20
+
+# vuln scans an upgraded copy of each module's build list, which is what a user
+# gets from a newer library.
+vuln:
+	go run ./tools/cmd/vuln
+
+# cover fails a root package that falls under 85% without a line in
+# tools/cover-known-low.txt.
+cover:
+	go run ./tools/cmd/cover -min 85
 
 lint:
 	@for m in $(MODULES); do (cd $$m && go vet ./... && golangci-lint run ./...) || exit 1; done
@@ -57,11 +70,6 @@ floor:
 # compat runs the root module on an older toolchain than the one that builds it.
 compat:
 	GOWORK=off GOTOOLCHAIN=go1.23.0 go test ./...
-
-cover:
-	mkdir -p coverage
-	go test -coverprofile=coverage/coverage.out ./...
-	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 
 # map scores the example tree against the wlog map rules.
 map:

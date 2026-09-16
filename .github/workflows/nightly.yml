@@ -47,6 +47,17 @@ jobs:
               labels: ["fuzz"],
             });
 
+  # vuln scans an upgraded copy of each module's build list, which is what a user
+  # gets from a newer library rather than from the floor this repository pins.
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: make vuln
+
   # integration boots the Docker Compose stack and runs the integration tests
   # against it. A service that is not ready fails the job.
   integration:
