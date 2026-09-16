@@ -1,0 +1,349 @@
+// Package shape turns SQL text into a statement shape with the standard library only.
+//
+// The scanner makes one pass over bytes. It copies only identifiers, keywords,
+// operators, and punctuation. It writes "?" for every string, number, and
+// positional placeholder. It drops comments. Some constructs mean different
+// things under different server settings, such as a backslash inside '...'.
+// When the scanner meets one, it stops and drops the rest of the input. So a
+// lexing doubt removes text. It never copies a literal.
+package shape
+
+import (
+	"strings"
+	"unicode/utf8"
+)
+
+// Dialect selects the lexing rules that differ between databases.
+type Dialect uint8
+
+const (
+	// Unknown applies the union of the rules below and stops on any conflict.
+	Unknown Dialect = iota
+	Postgres
+	MySQL
+	SQLite
+	SQLServer
+)
+
+const (
+	// MaxScan bounds CPU. Input past it is dropped.
+	MaxScan = 64 << 10
+	// Ellipsis marks a shape that lost input.
+	Ellipsis = "…"
+)
+
+func isIdent(c byte) bool {
+	return c == '_' || c == '$' || c >= 0x80 || c|0x20 >= 'a' && c|0x20 <= 'z' || c >= '0' && c <= '9'
+}
+
+func isIdentStart(c byte) bool {
+	return c == '_' || c >= 0x80 || c|0x20 >= 'a' && c|0x20 <= 'z'
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+func isSpace(c byte) bool { return c <= ' ' }
+
+type shaper struct {
+	b     strings.Builder
+	space bool
+}
+
+func (s *shaper) emit(tok string) {
+	if s.space && s.b.Len() > 0 && tok != ")" && tok != "," && s.b.String()[s.b.Len()-1] != '(' {
+		s.b.WriteByte(' ')
+	}
+	s.b.WriteString(tok)
+	s.space = tok == ","
+}
+
+// Shape returns the statement shape of q, capped at max bytes plus Ellipsis.
+func Shape(q string, d Dialect, max int) string {
+	s := &shaper{}
+	cut := len(q) > MaxScan
+	if cut {
+		q = q[:MaxScan]
+	}
+	if !s.scan(q, d) {
+		cut = true
+	}
+	return finish(s.b.String(), max, cut)
+}
+
+// scan returns false when it stopped early.
+func (s *shaper) scan(q string, d Dialect) bool {
+	for i := 0; i < len(q); {
+		c := q[i]
+		switch {
+		case isSpace(c):
+			s.space, i = true, i+1
+
+		case c == '\'':
+			// A backslash means an escape under MySQL default mode or Postgres
+			// standard_conforming_strings=off, and a plain byte otherwise.
+			end, ok := endQuote(q, i+1, '\'', mode(d == SQLite || d == SQLServer))
+			s.emit("?")
+			if !ok {
+				return false
+			}
+			i = end
+
+		case c == '"' && d == Postgres, c == '`', c == '[' && (d == SQLServer || d == SQLite):
+			closer := c
+			if c == '[' {
+				closer = ']'
+			}
+			end, ok := endQuote(q, i+1, closer, bsPlain)
+			if !ok {
+				return false
+			}
+			s.emit(q[i:end])
+			i = end
+
+		case c == '"':
+			// MySQL string unless ANSI_QUOTES. SQLite and SQL Server may also read it as a string.
+			end, ok := endQuote(q, i+1, '"', mode(d == SQLite || d == SQLServer))
+			s.emit("?")
+			if !ok {
+				return false
+			}
+			i = end
+
+		case c == '-' && i+1 < len(q) && q[i+1] == '-':
+			if d == MySQL && i+2 < len(q) && !isSpace(q[i+2]) {
+				s.emit("-") // MySQL needs whitespace after -- for a comment
+				i++
+				break
+			}
+			end := lineEnd(q, i)
+			if d == Unknown && strings.ContainsAny(q[i:end], `'"`) {
+				return false
+			}
+			s.space, i = true, end
+
+		case c == '#' && (d == MySQL || d == Unknown):
+			end := lineEnd(q, i)
+			if d == Unknown && strings.ContainsAny(q[i:end], `'"`) {
+				return false // # is an operator in Postgres
+			}
+			s.space, i = true, end
+
+		case c == '/' && i+1 < len(q) && q[i+1] == '*':
+			nest := d == Postgres || d == SQLServer || d == Unknown
+			depth, j := 1, i+2
+			for j < len(q) && depth > 0 {
+				switch {
+				case q[j] == '*' && j+1 < len(q) && q[j+1] == '/':
+					depth, j = depth-1, j+2
+				case q[j] == '/' && j+1 < len(q) && q[j+1] == '*' && nest:
+					if d == Unknown {
+						return false // nesting differs between databases
+					}
+					depth, j = depth+1, j+2
+				default:
+					j++
+				}
+			}
+			if depth > 0 {
+				return false
+			}
+			s.space, i = true, j
+
+		case c == '$' && (d == Postgres || d == Unknown) && (i == 0 || !isIdent(q[i-1])):
+			j := i + 1
+			if j < len(q) && isDigit(q[j]) { // $1 placeholder
+				for j < len(q) && isDigit(q[j]) {
+					j++
+				}
+				s.emit("?")
+				i = j
+				break
+			}
+			for j < len(q) && q[j] != '$' && isIdent(q[j]) {
+				j++
+			}
+			if j >= len(q) || q[j] != '$' {
+				s.emit("$")
+				i++
+				break
+			}
+			tag := q[i : j+1] // $tag$ ... $tag$
+			k := strings.Index(q[j+1:], tag)
+			s.emit("?")
+			if k < 0 || d == Unknown && strings.ContainsAny(q[j+1:j+1+k], `'"`) {
+				return false
+			}
+			i = j + 1 + k + len(tag)
+
+		case c == '?':
+			j := i + 1
+			for j < len(q) && isDigit(q[j]) { // SQLite ?NNN
+				j++
+			}
+			s.emit("?")
+			i = j
+
+		case isDigit(c) || c == '.' && i+1 < len(q) && isDigit(q[i+1]) && (i == 0 || !isIdent(q[i-1])):
+			j := scanNumber(q, i)
+			if j < len(q) && isIdentStart(q[j]) { // identifiers like 2fa_codes
+				for j < len(q) && isIdent(q[j]) {
+					j++
+				}
+				s.emit(q[i:j])
+			} else {
+				s.emit("?")
+			}
+			i = j
+
+		case isIdentStart(c):
+			j := i + 1
+			for j < len(q) && isIdent(q[j]) {
+				j++
+			}
+			word := q[i:j]
+			if j < len(q) && q[j] == '\'' {
+				// E'..' N'..' X'..' B'..' _utf8mb4'..' drop the prefix. DATE'..' keeps it.
+				bs := mode(d == SQLite || d == SQLServer)
+				if d == Postgres && (word == "E" || word == "e") {
+					bs = bsEscape
+				}
+				end, ok := endQuote(q, j+1, '\'', bs)
+				if len(word) > 1 && word[0] != '_' {
+					s.emit(word)
+					s.space = true
+				}
+				s.emit("?")
+				if !ok {
+					return false
+				}
+				i = end
+				break
+			}
+			s.emit(word)
+			i = j
+
+		default:
+			_, w := utf8.DecodeRuneInString(q[i:])
+			s.emit(q[i : i+w])
+			i += w
+		}
+	}
+	return true
+}
+
+// Backslash modes for endQuote.
+const (
+	bsPlain  = iota // a backslash is a plain byte: SQLite, SQL Server, identifiers
+	bsEscape        // a backslash escapes the next byte: Postgres E'...'
+	bsStop          // meaning depends on server settings, so stop
+)
+
+// endQuote returns the index just past the closing quote. A doubled quote is an
+// escaped quote. It reports false when the quote is unterminated or ambiguous.
+func endQuote(q string, i int, quote byte, bs int) (int, bool) {
+	for ; i < len(q); i++ {
+		switch q[i] {
+		case '\\':
+			switch bs {
+			case bsStop:
+				return len(q), false
+			case bsEscape:
+				i++
+			}
+		case quote:
+			if i+1 < len(q) && q[i+1] == quote {
+				i++
+				continue
+			}
+			return i + 1, true
+		}
+	}
+	return len(q), false
+}
+
+func mode(plain bool) int {
+	if plain {
+		return bsPlain
+	}
+	return bsStop
+}
+
+func lineEnd(q string, i int) int {
+	if n := strings.IndexByte(q[i:], '\n'); n >= 0 {
+		return i + n
+	}
+	return len(q)
+}
+
+func scanNumber(q string, i int) int {
+	if q[i] == '0' && i+1 < len(q) && strings.IndexByte("xXbBoO", q[i+1]) >= 0 {
+		j := i + 2
+		for j < len(q) && (isDigit(q[j]) || q[j] == '_' || q[j]|0x20 >= 'a' && q[j]|0x20 <= 'f') {
+			j++
+		}
+		return j
+	}
+	j := i
+	for j < len(q) && (isDigit(q[j]) || q[j] == '_' || q[j] == '.') {
+		j++
+	}
+	if j < len(q) && q[j]|0x20 == 'e' {
+		k := j + 1
+		if k < len(q) && (q[k] == '+' || q[k] == '-') {
+			k++
+		}
+		if k < len(q) && isDigit(q[k]) {
+			for k < len(q) && isDigit(q[k]) {
+				k++
+			}
+			j = k
+		}
+	}
+	return j
+}
+
+// finish collapses literal lists, fixes UTF-8, and applies the output cap.
+func finish(s string, max int, cut bool) string {
+	s = collapse(s, "(?", ", ?", ")")
+	s = collapse(s, "(?)", ", (?)", "")
+	s = strings.ToValidUTF8(s, "�")
+	if len(s) > max {
+		n := max
+		for n > 0 && !utf8.RuneStart(s[n]) {
+			n--
+		}
+		s, cut = s[:n], true
+	}
+	if cut {
+		s += Ellipsis
+	}
+	return s
+}
+
+// collapse rewrites open rep rep ... close into open close, so "(?, ?, ?)" becomes "(?)".
+func collapse(s, open, rep, close string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(s, open+rep)
+		if i < 0 {
+			if b.Len() == 0 {
+				return s
+			}
+			b.WriteString(s)
+			return b.String()
+		}
+		j := i + len(open)
+		for strings.HasPrefix(s[j:], rep) {
+			j += len(rep)
+		}
+		if !strings.HasPrefix(s[j:], close) {
+			b.WriteString(s[:i+len(open)])
+			s = s[i+len(open):]
+			continue
+		}
+		b.WriteString(s[:i])
+		b.WriteString(open)
+		b.WriteString(close)
+		s = s[j+len(close):]
+	}
+}

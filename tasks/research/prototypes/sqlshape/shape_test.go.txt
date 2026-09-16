@@ -1,0 +1,107 @@
+package shape
+
+import (
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
+
+func TestShape(t *testing.T) {
+	cases := []struct {
+		d        Dialect
+		in, want string
+	}{
+		{Postgres, "SELECT * FROM users WHERE id = 42", "SELECT * FROM users WHERE id = ?"},
+		{Postgres, "select a from t where b in (1, 2, 3) and c = 'x'", "select a from t where b in (?) and c = ?"},
+		{Postgres, "SELECT $1, $22 FROM t WHERE x IN ($3,$4,$5)", "SELECT ?, ? FROM t WHERE x IN (?)"},
+		{MySQL, "INSERT INTO t (a,b) VALUES (1,'x'),(2,'y')", "INSERT INTO t (a, b) VALUES (?)"},
+		{Postgres, `SELECT "User"."Name" FROM "User"`, `SELECT "User"."Name" FROM "User"`},
+		{MySQL, "SELECT `order` FROM `t` WHERE `a`=1.5e-3", "SELECT `order` FROM `t` WHERE `a`=?"},
+		{SQLServer, "SELECT [col 1] FROM [dbo].[t] WHERE n = N'x'", "SELECT [col 1] FROM [dbo].[t] WHERE n = ?"},
+		{Postgres, "SELECT '2020-01-01'::date, interval '1 day', DATE'2020'", "SELECT ?::date, interval ?, DATE ?"},
+		{Postgres, "SELECT 0x1F, 1_000_000, .5, 5., X'FF', B'1010'", "SELECT ?, ?, ?, ?, ?, ?"},
+		{MySQL, "SELECT * FROM 2fa_codes WHERE t1.c2 = 3", "SELECT * FROM 2fa_codes WHERE t1.c2 = ?"},
+		{Postgres, "SELECT a$b$ FROM t", "SELECT a$b$ FROM t"},
+		{Postgres, "SELECT data ? 'k', data @> '{}'", "SELECT data ? ?, data @> ?"},
+		{Postgres, "SELECT 1 -- trailing\nFROM t /* a /* nested */ b */ WHERE x = :name", "SELECT ? FROM t WHERE x = :name"},
+		{MySQL, "SELECT 1--1 FROM t /* a /* b */ WHERE c = ?1", "SELECT ?--? FROM t WHERE c = ?"},
+		{Postgres, `SELECT 'C:\' , name FROM t`, "SELECT ?…"},
+		{SQLite, `SELECT 'C:\' , name FROM t`, "SELECT ?, name FROM t"},
+		{MySQL, `SELECT "a", 'b' FROM t`, "SELECT ?, ? FROM t"},
+		{Unknown, "SELECT a FROM t /* x /* y */ z */", "SELECT a FROM t…"},
+		{Postgres, "SELECT a # b FROM t", "SELECT a # b FROM t"},
+		{MySQL, "SELECT 1 # comment 'x'\nFROM t", "SELECT ? FROM t"},
+	}
+	for _, c := range cases {
+		if got := Shape(c.in, c.d, 1024); got != c.want {
+			t.Errorf("Shape(%q, %d)\n got %q\nwant %q", c.in, c.d, got, c.want)
+		}
+	}
+}
+
+// TestNoLeak lists literal forms and the pitfalls around them. SECRET must never survive.
+func TestNoLeak(t *testing.T) {
+	cases := []struct {
+		d  Dialect
+		in string
+	}{
+		{Postgres, "SELECT $$SECRET$$"},
+		{Postgres, "SELECT $fn$ it's SECRET $x$ $fn$"},
+		{Postgres, "SELECT $tag$SECRET"}, // unterminated
+		{Postgres, `SELECT E'\'SECRET'`},
+		{Postgres, `SELECT E'\\', 'SECRET'`},
+		{Postgres, `SELECT e'a\'b SECRET'`},
+		{Postgres, "SELECT U&'d\\0061 SECRET'"},
+		{Postgres, `SELECT 'C:\' , 'SECRET'`},
+		{Postgres, "SELECT 'it''s SECRET'"},
+		{Postgres, "SELECT 'SECRET"}, // unterminated
+		{Postgres, "SELECT 1 /* SECRET"},
+		{Postgres, "SELECT 1 /* a /* b */ SECRET */"},
+		{Postgres, "/*traceparent='00-SECRET'*/ SELECT 1"},
+		{MySQL, `SELECT "SECRET"`},
+		{MySQL, `SELECT 'a\'SECRET'`},
+		{MySQL, "SELECT 1 # SECRET"},
+		{MySQL, "SELECT /*!50000 SECRET */ 1"},
+		{MySQL, "SELECT _utf8mb4'SECRET'"},
+		{SQLServer, "SELECT N'SECRET'"},
+		{Unknown, `SELECT "SECRET" , 'a\'SECRET'`},
+		{Unknown, "SELECT $q$SECRET$q$"},
+		{Unknown, `SELECT 'a\''SECRET'`},
+		{Unknown, "SELECT 1 # it's\n, SECRET, '"},
+		{Unknown, "SELECT 1 --x'\n, SECRET, '"},
+		{Unknown, "SELECT /* /* */ ' */ , SECRET, '"},
+		{Unknown, "SELECT $a$ 'x $a$ SECRET'"},
+		{MySQL, "SELECT 1--'\n, SECRET, '"},
+		{SQLite, `SELECT "SECRET"`},
+		{SQLServer, `SELECT "SECRET"`},
+		{Postgres, "SELECT 12345678901234567890 AS SECRET_is_an_alias"},
+	}
+	for _, c := range cases {
+		got := Shape(c.in, c.d, 1024)
+		if strings.Contains(got, "SECRET") && !strings.Contains(c.in, "AS SECRET") {
+			t.Errorf("leak: Shape(%q, %d) = %q", c.in, c.d, got)
+		}
+	}
+}
+
+func TestCaps(t *testing.T) {
+	long := "SELECT " + strings.Repeat("é", 100) + " FROM t"
+	got := Shape(long, Postgres, 20)
+	if !strings.HasSuffix(got, Ellipsis) || !utf8.ValidString(got) || len(got) > 20+len(Ellipsis) {
+		t.Fatalf("cap broken: %q", got)
+	}
+	huge := "SELECT '" + strings.Repeat("x", MaxScan) + "'"
+	if got := Shape(huge, Postgres, 1024); got != "SELECT ?"+Ellipsis {
+		t.Fatalf("scan cap: %q", got)
+	}
+}
+
+func FuzzShape(f *testing.F) {
+	f.Add("SELECT $a$ x $a$, 'y', \"z\", `w`, [v], 1e5 -- c\n/* d */", uint8(0))
+	f.Fuzz(func(t *testing.T, q string, d uint8) {
+		got := Shape(q, Dialect(d%5), 256)
+		if len(got) > 256+len(Ellipsis) || !utf8.ValidString(got) {
+			t.Fatalf("bad output %q", got)
+		}
+	})
+}

@@ -1,146 +1,190 @@
-# wlog — Task Checklist
+# Todo: wlog v0.5 to v1.0
 
-> Details, acceptance criteria and verification for every id: [plan.md](plan.md).
-> Rule: no implementation task starts before its module spec is approved.
+Task list for [plan.md](plan.md). Tick a task only after its `Verify` command passes and its tests failed first.
 
-## Phase 0 — Foundation
-- [x] T0.1 Repository scaffold
-- [x] T0.2 Agent guidance + README stub
-- [x] T0.3 CI workflow
-- [x] T0.4 Write SPEC-core.md (drafted, awaiting approval)
-- [x] **Checkpoint 0**: scaffold green, SPEC/SPEC-redact/SPEC-core approved, first commit
 
-## Phase 1A — redact
-- [x] R1 Key-token matching, end to end
-- [x] R2 Paths, globs, arrays
-- [x] R3 Add / remove / replace keys, With, introspection
-- [x] R4 Built-in patterns A: credit_card, email, jwt, bearer
-- [x] R5 Built-in patterns B: ipv4, phone, iban, nik
-- [x] R6 Pattern options + custom patterns
-- [x] R7 Transforms, limits, Default/Disabled
-- [x] R8 Gates G1/G2, benchmark, examples (15.7us/op, meets the 30us target, see redact/BENCH.md)
-- [x] **Checkpoint 1A**: SPEC-redact criteria met, stdlib-only, benchmark meets target, approved
+## Phase 10, v0.5: honest build and safety fixes
 
-## Phase 1B — core
-- [x] C1 Thin wide event: Start → Set → emit JSON
-- [x] C2 SetGroup, Append, normalization, caps
-- [x] C3 Levels, SetLevel, outcome
-- [x] C4 Errors: extractor, error + errors[]
-- [x] C5 Detach + sealed events
-- [x] C6 Drains, OnError, Close
-- [x] C7 Stage order
-- [x] C8 Atomic redactor swap
-- [x] C9 Field-name presets + renaming
-- [x] C10 Plugins
-- [x] C11 Typed keys + StrictKeys
-- [x] C12 Plain one-off log lines
-- [x] C13 Pretty console sink
-- [x] C14 Env configuration
-- [x] C15 Core gates, benchmark, examples (10.25us/op, coverage 89.7%, examples cover the main entry points, not every exported symbol, see commit)
-- [x] **Checkpoint 1B**: event shape reviewed and approved
+- [ ] 10-CI-1 tools module with `modules` and `affected`
+- [ ] 10-CI-2 `requires` and `tidy -check`, then fix every sub-module go.mod
+- [ ] 10-CI-3 Go floor per module
+- [ ] 10-CI-4 CI workflow rewrite
+- [ ] 10-CI-5 `snippets`, `ste`, and `verifyplan`
+- [ ] 10-CI-6 `cover`, `bench`, `vuln`, all fuzz targets
+- [ ] 10-CI-7 Release hygiene
+- [ ] Review point 10-CI: every required CI job is green, then human review
+- [ ] 10-CORE-1 Value copy tree
+- [ ] 10-CORE-2 Event-shape fuzz test
+- [ ] 10-CORE-3 Plain lines, enricher values, drain contract
+- [ ] 10-CORE-4 Hook isolation
+- [ ] 10-CORE-5 Audit level bypass, Detach context
+- [ ] 10-CORE-6 Option validation and keepers
+- [ ] 10-CORE-7 Flush and Close
+- [ ] 10-CORE-8 Default extractor
+- [ ] 10-CORE-9 Size counting, group merge, drain docs
+- [ ] 10-RED-1 Linear key matching and a bounded cache
+- [ ] 10-RED-2 `With` keeps the full configuration
+- [ ] 10-RED-3 Joined tokens and the default list
+- [ ] 10-RED-4 Pattern names and new patterns
+- [ ] 10-RED-5 Fewer false positives
+- [ ] 10-RED-6 Fail closed and a full fingerprint
+- [ ] 10-RED-7 Paths, globs, and docs
+- [ ] 10-PIPE-1 Recover and unlock
+- [ ] 10-PIPE-2 Flush, Close, and sends after close
+- [ ] 10-PIPE-3 Retry timing
+- [ ] 10-PIPE-4 Batches, clamps, timer, counters
+- [ ] 10-PIPE-5 FanOut rewrite
+- [ ] 10-PIPE-6 HTTP drain helper
+- [ ] 10-AUD-1 Journal owns the chain
+- [ ] 10-AUD-2 Marker lines and verification rules
+- [ ] 10-AUD-3 File lock and crash recovery
+- [ ] 10-AUD-4 Several records and no silent loss
+- [ ] 10-AUD-5 Diff, Wrap, Mock, tests, and docs
+- [ ] 10-PIPE-7 MinLevel, a public HTTP drain helper, and identity headers
+- [ ] 10-AUD-6 Actor types, outcomes, and correlation ids
+- [ ] 10-AUD-7 JSON Patch and audit-only routing
+- [ ] 10-DRN-1 drain-sentry
+- [ ] 10-DRN-2 drain-clickhouse and the integration stack
+- [ ] 10-DRN-3 drain-file
+- [ ] 10-DRN-4 drain-loki and drain-otlp
+- [ ] 10-DRN-5 drain-datadog, drain-axiom, and drain-webhook
+- [ ] 10-DRN-6 drain-betterstack, drain-hyperdx, and drain-posthog
+- [ ] 10-CAT-1 Code matching and registries
+- [ ] 10-CAT-2 Copies, templates, domain, and entry defaults
+- [ ] 10-CAT-3 Audit catalog fields
+- [ ] 10-LLM-1 Caps and cost fields
+- [ ] 10-LLM-2 Token semantics and the price table
+- [ ] 10-SMP-1 Sampling rules
+- [ ] 10-ENR-1 Enrichers
+- [ ] 10-MEM-1 drain-memory and wlogtest
+- [ ] 10-MAP-1 Handler discovery
+- [ ] 10-MAP-2 Routes and middleware coverage
+- [ ] 10-MAP-3 Rule accuracy
+- [ ] 10-MAP-4 Gates, configuration, and streams
+- [ ] 10-MAP-5 Map JSON v2 and the text report
+- [ ] 10-MAP-6 Analyzer, loading cost, and golangci-lint plugin
+- [ ] 10-MAP-7 Ignore comments, git baselines, and SARIF
+- [ ] 10-MAP-8 The `keys.strict` rule
+- [ ] 10-INIT-1 `wlog init` correctness
+- [ ] 10-INIT-2 `wlog doctor` and `wlog agents`
+- [ ] 10-DOCS-1 Statuses, README, and CHANGELOG
+- [ ] 10-DOCS-2 Parity page and guides
+- [ ] Review point 10, v0.5.0: human review, then ask before tagging
 
-## Phase 2 — pipeline, HTTP, herr, test tooling, audit
-- [x] S2.1 Specs: pipeline, sample, drain-memory, wlogtest
-- [x] S2.2 Specs: http-std, enrich, errors-herr, audit
-- [x] H1 net/http middleware, thin slice
-- [x] H2 Header, query, cookie capture + skip rules (path params: none yet, ServeMux's r.PathValue is available to handlers directly)
-- [x] H3 Body capture
-- [x] H4 Panics, traceparent, user id, plugin request hooks
-- [x] H5 Conformance suite passing for wlogstd and for gorilla/mux (examples/mux, go get approved)
-- [x] **Checkpoint 2A**: end-to-end request works (24.8us/op, under the 50us budget)
-- [x] P1 Batching + flush
-- [x] P2 Retry + backoff
-- [x] P3 Bounded buffer, drop-oldest, fan-out isolation
-- [x] P4 Shared HTTP drain helper + identity headers
-- [x] SA1 Head + tail sampling rules
-- [x] SA2 Presets + defaults
-- [x] M1 Memory drain: ring buffer + subscribe
-- [x] M2 SSE handler
-- [x] W1 wlogtest recorder
-- [x] E1 Host + deployment enrichers
-- [x] E2 User agent enricher
-- [x] E3 Geo + user-id enrichers
-- [x] EH1 herr error extractor
-- [x] A1 Audit records
-- [x] A2 Hash chain
-- [x] A3 Journal drain + `audit.Verify`
-- [x] **Checkpoint 2B**: G1 through G5 green, refund scenario passes as an integration test, human review complete
+## Phase 11, v0.6: event shape v2 and the five foundations
 
-## Phase 3 — adapters, trace, examples
-- [x] S3 Specs: HTTP adapters, logger adapters, trace-otel
-- [x] HE4 Echo v4 adapter
-- [x] HE5 Echo v5 adapter
-- [x] HG Gin adapter
-- [x] LS1 slog output
-- [x] LS2 slog input
-- [x] LZ zap output
-- [x] LZR zerolog output
-- [x] LL logrus output
-- [x] TO OpenTelemetry span link
-- [x] EX1 Example apps (HTTP)
-- [x] EX2 Example apps (extension points)
-- [x] **Checkpoint 3**: 5 HTTP stacks identical, logger swap = one option
+- [ ] 11-SHAPE-1 Time semantics and ErrorInfo v2
+- [ ] 11-SHAPE-2 Reserved keys and the ordered JSON writer
+- [ ] 11-SHAPE-3 Summary
+- [ ] 11-SHAPE-4 Stage order v2 and the size cap
+- [ ] 11-SHAPE-5 Plugin hooks v2
+- [ ] 11-PROB-1 Problem codes
+- [ ] 11-PROB-2 Debug reasons and Stats
+- [ ] 11-SHAPE-6 Writers
+- [ ] 11-SHAPE-7 Pretty console v2
+- [ ] 11-LLM-1 Rename llm event keys
+- [ ] 11-DEF-1 SetDefault and a Logger-scoped switch
+- [ ] 11-DEF-2 Writes with no event
+- [ ] 11-CALL-1 StartCall and call records
+- [ ] 11-PROP-1 propagate
+- [ ] 11-WORK-1 Units, kinds, and levels
+- [ ] 11-WORK-2 Lag, batches, and flush
+- [ ] 11-SCH-1 JSON Schemas
+- [ ] 11-PRE-1 Preset contract and flat
+- [ ] 11-PRE-2 OTel preset
+- [ ] 11-PRE-3 ECS and Datadog presets
+- [ ] 11-PRE-4 GCP and EMF presets
+- [ ] 11-HTTP-1 Views, Exchange, and route rules
+- [ ] 11-HTTP-2 Capture policy
+- [ ] 11-HTTP-3 Bodies
+- [ ] 11-HTTP-4 Panics and the writer wrapper
+- [ ] 11-HTTP-5 Problem responses, edge cases, benchmark, and docs
+- [ ] 11-CONF-1 Shared test helpers and the http suite
+- [ ] 11-CONF-2 work, calls, and log suites
+- [ ] 11-CONF-3 drain suite and drain migration
+- [ ] 11-SET-1 setup.FromEnv
+- [ ] 11-ADP-1 http-std rebuilt
+- [ ] 11-ADP-2 http-echo and http-echo5 rebuilt
+- [ ] 11-ADP-3 http-gin rebuilt
+- [ ] 11-MIG-1 Migrate log outputs, trace-otel, examples, and the CLI to v2 names
+- [ ] Review point 11, v0.6.0: human review, then ask before tagging
 
-## Phase 4 — v1 drains
-- [x] S4 Specs: axiom, loki, file, webhook, otlp
-- [x] DA Axiom drain
-- [x] DL Loki drain
-- [x] DF File drain
-- [x] DW Webhook drain
-- [x] DO OTLP drain
-- [x] DI Optional docker integration tests
-- [x] **Checkpoint 4**: drains work from env alone, G1 covered per drain
+## Phase 12, v0.7: everyday stack, search, and agents
 
-## Phase 5 — cli-map + v1
-- [x] S5 Spec: cli-map
-- [x] MP1 CLI skeleton + net/http/mux entry points
-- [x] MP2 Echo v4/v5 + Gin entry points
-- [x] MP3 Rules: coverage, context, errors
-- [x] MP4 Rules: sensitive-route audit, print logging, denylisted keys
-- [x] MP5 Score, report, CI gates
-- [x] MP6 go vet analyzer + dogfooding
-- [x] REL1 v1 documentation + parity audit
-- [x] **Checkpoint 5**: v1 release gate. Tagged and released as v0.1.0 on GitHub.
+- [ ] 12-A-1 http-chi
+- [ ] 12-A-2 http-fasthttp
+- [ ] 12-A-3 http-fiber and http-fiber3
+- [ ] 12-A-4 rpc-grpc
+- [ ] 12-A-5 http-httprouter and http-gozero
+- [ ] 12-A-6 rpc-connect
+- [ ] 12-A-7 rpc-gqlgen
+- [ ] 12-A-8 http-hertz and http-kratos
+- [ ] 12-A-9 http-huma and rpc-twirp
+- [ ] 12-A-10 Recipes: rest-api and grpc-service
+- [ ] 12-B-1 sqlshape
+- [ ] 12-B-2 client-http
+- [ ] 12-B-3 store-sql
+- [ ] 12-B-4 store-pgx and store-gorm
+- [ ] 12-B-5 store-redis
+- [ ] 12-B-6 store-mongo and client-aws
+- [ ] 12-B-7 store-bun
+- [ ] 12-C-1 log-slog
+- [ ] 12-C-2 log-logr and log-zap
+- [ ] 12-C-3 log-zerolog, log-logrus, and log-hclog
+- [ ] 12-C-4 log-std
+- [ ] 12-C-5 errors-validator and errors-oops
+- [ ] 12-C-6 errors-cockroach and flag-openfeature
+- [ ] 12-F-1 `wlog query` filters and output
+- [ ] 12-F-2 Group, stats, size, and tail
+- [ ] 12-F-3 drain-memory query endpoint and SSE v2
+- [ ] 12-F-4 `wlog explain`, `rules`, `schema`, and `version`
+- [ ] 12-F-5 Agent docs
+- [ ] 12-F-6 Search recipes
+- [ ] 12-F-7 `wlog mcp`
+- [ ] 12-F-8 Recipe: cli-tool
+- [ ] 12-F-9 `wlog doctor` additions
+- [ ] Review point 12, v0.7.0: human review, then ask before tagging
 
-## Phase 6 — v1.1 drains
-- [x] S6 Specs: sentry, clickhouse, datadog
-- [x] DS Sentry drain
-- [x] DC ClickHouse drain
-- [x] DD Datadog drain
-- [x] **Checkpoint 6**: v1.1 (tag v0.2.0 still needs approval)
+## Phase 13, v0.8: messages, jobs, functions, and commands ([SPEC-track-d.md](../docs/SPEC-track-d.md))
 
-## Phase 7 — v1.2, public API (evlog gaps 1, 2, 3, 4, 5, 12, 15)
-- [x] D1 Plain-English pass over the older specs
-- [x] CE1 `ErrorInfo` data and internal split
-- [x] CE2 Global modes: enabled, silent, raw values
-- [x] CT1 Catalog registry
-- [x] CT2 Catalog extractor, agnostic proof
-- [x] CT3 herr catalog bridge
-- [x] LM1 LLM record and event fields
-- [x] LM2 Pricing, cost, enricher
-- [x] AX1 Audit record extras
-- [x] AX2 `audit.Diff` and the test mock
-- [x] AX3 HMAC signing and catalog-driven audit
-- [x] MQ1 Memory named stores and queries
-- [x] FR1 File reader and tailer
-- [x] RF1 Redaction replacement function
-- [x] **Checkpoint 7**: v1.2 (tag v0.3.0 still needs approval)
+- [ ] 13-D-1 queue-kafkago
+- [ ] 13-D-2 queue-sarama and queue-franz
+- [ ] 13-D-3 queue-confluent
+- [ ] 13-D-4 queue-watermill
+- [ ] 13-D-5 queue-sqs
+- [ ] 13-D-6 queue-nats and queue-amqp
+- [ ] 13-D-7 queue-pubsub and queue-cloudevents
+- [ ] 13-D-8 job-asynq and job-river
+- [ ] 13-D-9 job-temporal and job-cron
+- [ ] 13-D-10 faas-lambda
+- [ ] 13-D-11 faas-gcf
+- [ ] 13-D-12 command-cobra, command-urfave, and command-kong
+- [ ] 13-D-13 Recipes: kafka-consumer, cron-job, and lambda
+- [ ] Review point 13, v0.8.0: human review, then ask before tagging
 
-## Phase 8 — v1.3, CLI (evlog gaps 6, 7, 8, 9, 10)
-- [x] MR1 Rule: error guidance
-- [x] MR2 Rule: swallowed error
-- [x] MR3 Suggestions: catalog use and audit coverage
-- [x] MS1 Entry classes, grades, per-entry weighting
-- [x] MS2 Report forms and strict baseline
-- [x] CI1 `wlog init`
-- [x] CI2 `wlog doctor`
-- [x] CI3 `wlog agents`
-- [x] **Checkpoint 8**: v1.3 (tag v0.4.0 still needs approval)
+## Phase 14, v0.9: destinations, OpenTelemetry, and AI
 
-## Phase 9 — v1.4, drains, example, docs (evlog gaps 11, 13, 14)
-- [x] DP PostHog drain
-- [x] DB Better Stack drain
-- [x] DH HyperDX drain
-- [x] EXL AWS Lambda example
-- [x] REL2 Best-practice guide and parity close-out
-- [x] **Checkpoint 9**: v1.4 (tag v1.0.0 still needs approval)
+- [ ] 14-E-1 pipeline.PartialError
+- [ ] 14-E-2 trace-otel spans and metrics
+- [ ] 14-E-3 trace-otellog
+- [ ] 14-E-4 metrics-prometheus
+- [ ] 14-E-5 drain-honeycomb and drain-newrelic
+- [ ] 14-E-6 drain-elastic
+- [ ] 14-E-7 drain-splunk and drain-victorialogs
+- [ ] 14-E-8 drain-syslog
+- [ ] 14-E-9 drain-cloudwatch
+- [ ] 14-G-1 llm additions
+- [ ] 14-G-2 ai-anthropic and ai-openai
+- [ ] 14-G-3 ai-genai and ai-goopenai
+- [ ] 14-G-4 ai-langchaingo and ai-eino
+- [ ] 14-G-5 ai-mcpsdk and ai-mcpgo
+- [ ] 14-G-6 Recipes: llm-agent and mcp-server
+- [ ] 14-G-7 `wlog init` v2
+- [ ] Review point 14, v0.9.0: human review, then ask before tagging
+
+## Phase 15, v1.0.0: API freeze
+
+- [ ] 15-1 API freeze
+- [ ] 15-2 Parity and comparison pages
+- [ ] 15-3 Audit close-out
+- [ ] Review point 15, v1.0.0: human review, then ask before tagging
