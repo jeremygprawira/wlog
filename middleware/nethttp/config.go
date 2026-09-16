@@ -75,11 +75,12 @@ func (c *config) route(r *http.Request) string {
 	return c.routeFunc(r)
 }
 
-// defaultRoute uses r.Pattern (set by net/http.ServeMux since Go 1.22) when a request
-// was matched against a registered pattern, else falls back to the raw path.
+// defaultRoute uses the pattern of the request when the router set one, else it
+// falls back to the raw path. requestPattern holds the version split, because
+// the Pattern field exists only in Go 1.22 and later.
 func defaultRoute(r *http.Request) string {
-	if r.Pattern != "" {
-		return r.Pattern
+	if pattern := requestPattern(r); pattern != "" {
+		return pattern
 	}
 	return r.URL.Path
 }

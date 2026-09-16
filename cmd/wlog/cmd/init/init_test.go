@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
@@ -42,6 +43,22 @@ func repoRoot(t *testing.T) string {
 	return root
 }
 
+// moduleFloor reads the go line of a go.mod file.
+func moduleFloor(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "go ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "go "))
+		}
+	}
+	t.Fatalf("%s has no go line", path)
+	return ""
+}
+
 // treeFor copies a fixture into a temp directory and writes its go.mod.
 func treeFor(t *testing.T, tc caseDef, root string) string {
 	t.Helper()
@@ -54,7 +71,10 @@ func treeFor(t *testing.T, tc caseDef, root string) string {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	goMod := "module example.com/app\n\ngo 1.26.1\n\nrequire (\n\tgithub.com/jeremygprawira/wlog v0.0.0\n"
+	// The generated tree needs one floor: the floor of this module, because it
+	// depends on the modules this module depends on.
+	goMod := "module example.com/app\n\ngo " + moduleFloor(t, filepath.Join("..", "..", "go.mod")) +
+		"\n\nrequire (\n\tgithub.com/jeremygprawira/wlog v0.0.0\n"
 	for _, require := range tc.requires {
 		goMod += "\t" + require + "\n"
 	}

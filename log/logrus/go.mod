@@ -1,6 +1,6 @@
 module github.com/jeremygprawira/wlog/log/logrus
 
-go 1.26.1
+go 1.23
 
 require github.com/sirupsen/logrus v1.10.2
 

@@ -1,6 +1,6 @@
 module github.com/jeremygprawira/wlog/middleware/echo
 
-go 1.26.1
+go 1.25.0
 
 require (
 	github.com/jeremygprawira/wlog v0.1.0

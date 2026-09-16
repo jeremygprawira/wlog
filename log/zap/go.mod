@@ -1,6 +1,6 @@
 module github.com/jeremygprawira/wlog/log/zap
 
-go 1.26.1
+go 1.21
 
 require go.uber.org/zap v1.28.0
 

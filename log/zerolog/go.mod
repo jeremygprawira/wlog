@@ -1,6 +1,6 @@
 module github.com/jeremygprawira/wlog/log/zerolog
 
-go 1.26.1
+go 1.23
 
 require github.com/rs/zerolog v1.35.1
 
