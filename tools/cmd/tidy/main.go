@@ -68,7 +68,13 @@ func runTidyDiff(dir string) ([]byte, error) {
 func runTidy(dir string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(context.Background(), "go", append([]string{"mod", "tidy"}, args...)...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=auto")
+	env := append(os.Environ(), "GOWORK=off")
+	if os.Getenv("GOTOOLCHAIN") == "" {
+		// auto lets a module whose floor is older than one of its dependencies
+		// still tidy, and a caller may name the toolchain CI uses.
+		env = append(env, "GOTOOLCHAIN=auto")
+	}
+	cmd.Env = env
 	return cmd.CombinedOutput()
 }
 
@@ -87,10 +93,13 @@ func check(root string, diff func(dir string) ([]byte, error), out io.Writer) er
 	for _, m := range mods {
 		dir := filepath.Join(root, m.Dir)
 		text, err := diff(dir)
-		if err != nil && len(bytes.TrimSpace(text)) == 0 {
-			return fmt.Errorf("%s: %w", m.Dir, err)
-		}
-		if len(bytes.TrimSpace(text)) == 0 {
+		// A real diff starts with a file header or a hunk. Anything else (a
+		// download line, a network error) means the check could not run, which is
+		// an error rather than a module that needs a repair.
+		if !isDiff(text) {
+			if err != nil {
+				return fmt.Errorf("%s: %w\n%s", m.Dir, err, text)
+			}
 			continue
 		}
 		bad++
@@ -102,6 +111,21 @@ func check(root string, diff func(dir string) ([]byte, error), out io.Writer) er
 		return fmt.Errorf("%d module(s) are not tidy", bad)
 	}
 	return nil
+}
+
+// isDiff reports whether the output of `go mod tidy -diff` holds a diff.
+//
+// The go command prints its download lines to the same stream, so a check that
+// treats any output as a diff reports a network problem as a module that needs a
+// repair.
+func isDiff(text []byte) bool {
+	for _, line := range bytes.Split(text, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if bytes.HasPrefix(line, []byte("--- ")) || bytes.HasPrefix(line, []byte("+++ ")) || bytes.HasPrefix(line, []byte("@@")) {
+			return true
+		}
+	}
+	return false
 }
 
 // fix runs `go mod tidy` in every module and stops at the first failure.
