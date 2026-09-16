@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "score": 88,
+  "min_score": 0,
+  "pass": true,
+  "handlers": [
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/nethttp_app",
+      "function": "handleOrders",
+      "file": "main.go",
+      "line": 12,
+      "framework": "net/http",
+      "method": "GET",
+      "route": "/orders/{id}",
+      "sensitive": false,
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/nethttp_app",
+      "function": "main",
+      "file": "main.go",
+      "line": 21,
+      "framework": "net/http",
+      "method": "",
+      "route": "/health",
+      "sensitive": false,
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": false,
+          "detail": "handler sets no business context"
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "top_fixes": [
+    "context.set: 20 points lost across 1 handler"
+  ]
+}

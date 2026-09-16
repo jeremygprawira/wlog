@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "score": 78,
+  "min_score": 0,
+  "pass": true,
+  "handlers": [
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
+      "function": "handleOK",
+      "file": "main.go",
+      "line": 14,
+      "framework": "github.com/labstack/echo/v4",
+      "method": "GET",
+      "route": "/ok",
+      "sensitive": false,
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
+      "function": "handleFail",
+      "file": "main.go",
+      "line": 22,
+      "framework": "github.com/labstack/echo/v4",
+      "method": "GET",
+      "route": "/fail",
+      "sensitive": false,
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": false,
+          "detail": "handler sets no business context"
+        },
+        {
+          "id": "errors.reach_wlog",
+          "weight": 15,
+          "pass": false,
+          "detail": "handler returns a non-nil error without calling wlog.Error"
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.no_denylisted",
+          "weight": 5,
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "top_fixes": [
+    "context.set: 20 points lost across 1 handler",
+    "errors.reach_wlog: 15 points lost across 1 handler"
+  ]
+}
