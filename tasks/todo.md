@@ -132,7 +132,7 @@
 - [x] MR3 Suggestions: catalog use and audit coverage
 - [x] MS1 Entry classes, grades, per-entry weighting
 - [x] MS2 Report forms and strict baseline
-- [ ] CI1 `wlog init`
+- [x] CI1 `wlog init`
 - [ ] CI2 `wlog doctor`
 - [ ] CI3 `wlog agents`
 - [ ] **Checkpoint 8**: v1.3 (ask first: tag v0.4.0)
