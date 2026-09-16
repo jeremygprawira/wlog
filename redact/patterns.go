@@ -198,12 +198,6 @@ func maskIPv4KeepLead(match string) string {
 	return match[:start] + maskIPv4(match[start:])
 }
 
-// isLoopback reports whether an address is the local host, which every service
-// logs and no one needs masked.
-func isLoopback(address string) bool {
-	return strings.HasPrefix(address, "127.") || address == "0.0.0.0"
-}
-
 // maskURLPassword keeps the scheme, the user, and the host, and masks only the
 // password of a URL, so a reader still learns which backend answered.
 func maskURLPassword(match string) string {
