@@ -111,7 +111,7 @@
 
 ## Phase 7 — v1.2, public API (evlog gaps 1, 2, 3, 4, 5, 12, 15)
 - [x] D1 Plain-English pass over the older specs
-- [ ] CE1 `ErrorInfo` data and internal split
+- [x] CE1 `ErrorInfo` data and internal split
 - [ ] CE2 Global modes: enabled, silent, raw values
 - [ ] CT1 Catalog registry
 - [ ] CT2 Catalog extractor, agnostic proof

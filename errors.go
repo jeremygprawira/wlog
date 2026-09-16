@@ -3,6 +3,7 @@ package wlog
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
 )
 
 // maxErrorList caps how many earlier errors one event keeps in errors[] (gate G4).
@@ -22,6 +23,10 @@ type ErrorInfo struct {
 	Fix     string         `json:"fix,omitempty"`
 	Link    string         `json:"link,omitempty"`
 	Attrs   map[string]any `json:"attrs,omitempty"`
+	// Data is safe to send back to a client, such as a rejected field name.
+	Data map[string]any `json:"data,omitempty"`
+	// Internal is log-only detail, such as a row id or a query.
+	Internal map[string]any `json:"internal,omitempty"`
 }
 
 // ErrorExtractor adapts an error library's error type into an ErrorInfo. Plug in an
@@ -86,4 +91,29 @@ func Error(ctx context.Context, err error) {
 	if !e.levelSet {
 		e.level = LevelError
 	}
+}
+
+// ErrorData returns the current event error's Data map, or nil when the current event
+// has no error. A transport uses it to decide what part of an error is safe to send
+// back to a client.
+func ErrorData(ctx context.Context) map[string]any {
+	e := eventFrom(ctx)
+	if e == nil {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.errInfo == nil {
+		return nil
+	}
+	return e.errInfo.Data
+}
+
+// Errorf builds an error from a format string and its arguments, records it through
+// Error, and returns that same error value. It replaces the build-then-record pair
+// that a handler writes today.
+func Errorf(ctx context.Context, format string, a ...any) error {
+	err := fmt.Errorf(format, a...)
+	Error(ctx, err)
+	return err
 }
