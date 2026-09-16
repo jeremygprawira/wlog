@@ -42,6 +42,14 @@ type defaultExtractor struct{}
 // its Error() text as the message, and its unwrapped cause if it has one.
 func (defaultExtractor) Extract(err error) ErrorInfo {
 	info := ErrorInfo{Code: "INTERNAL", Message: err.Error()}
+	// An error library can expose a stable code through a Code() string method. core
+	// reads the method and never the type, so it stays library-agnostic. A plain error
+	// keeps INTERNAL.
+	if coded, ok := err.(interface{ Code() string }); ok {
+		if code := coded.Code(); code != "" {
+			info.Code = code
+		}
+	}
 	if cause := stderrors.Unwrap(err); cause != nil {
 		info.Cause = cause.Error()
 	}
@@ -52,6 +60,10 @@ func (defaultExtractor) Extract(err error) ErrorInfo {
 	}
 	return info
 }
+
+// DefaultExtractor returns the extractor New uses when WithErrorExtractor is not set.
+// A decorator, such as catalog.Extractor, wraps it.
+func DefaultExtractor() ErrorExtractor { return defaultExtractor{} }
 
 // WithErrorExtractor sets how Error turns an error into an ErrorInfo. Default
 // defaultExtractor{}.

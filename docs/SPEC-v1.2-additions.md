@@ -38,6 +38,11 @@ func Errorf(ctx context.Context, format string, a ...any) error
 `Errorf` builds an error, records it through `wlog.Error`, and returns it. This replaces
 the build-then-record pair that every handler writes today.
 
+The package's default extractor also reads an error's `Code() string` method, when the error
+has one. An error from a catalog, or from a library such as herr, then keeps its own code with
+no extra extractor. A plain error still gets `INTERNAL`. `DefaultExtractor()` returns that
+same extractor, so a decorator such as `catalog.Extractor` can wrap it.
+
 ## core: global modes (gap 15)
 
 ```go
