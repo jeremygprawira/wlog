@@ -26,11 +26,6 @@ type Sender interface {
 	SendBatch(ctx context.Context, events []map[string]any) error
 }
 
-// pollInterval is how often the background goroutine checks whether the current
-// buffer is ready to flush. Small relative to any realistic BatchInterval, so it adds
-// negligible latency without polling wastefully.
-const pollInterval = 5 * time.Millisecond
-
 type wrapped struct {
 	next Sender
 	cfg  config
@@ -41,8 +36,14 @@ type wrapped struct {
 
 	closed    atomic.Bool
 	closeOnce sync.Once
-	closeSig  chan struct{}
-	done      chan struct{}
+	// Counters for Stats. They are atomic because the worker goroutine writes
+	// them and a caller reads them.
+	sent     atomic.Int64
+	dropped  atomic.Int64
+	retries  atomic.Int64
+	batches  atomic.Int64
+	closeSig chan struct{}
+	done     chan struct{}
 }
 
 // Wrap returns a wlog.Drain backed by next, batching and buffering per opts. The
@@ -69,6 +70,7 @@ func (w *wrapped) Send(ctx context.Context, event map[string]any) {
 	if w.closed.Load() {
 		// A closed worker never sends again, so the event is reported rather than
 		// buffered where nothing will read it.
+		w.dropped.Add(1)
 		w.reportDrop([]map[string]any{event}, errClosed)
 		return
 	}
@@ -76,24 +78,30 @@ func (w *wrapped) Send(ctx context.Context, event map[string]any) {
 	if len(w.buf) == 0 {
 		w.oldestTime = time.Now()
 	}
+	var dropped map[string]any
 	if len(w.buf) >= w.cfg.maxBuffer {
-		dropped := w.buf[0]
+		dropped = w.buf[0]
 		w.buf = w.buf[1:]
-		if w.cfg.onDropped != nil {
-			w.cfg.onDropped([]map[string]any{dropped}, nil)
-		}
 	}
 	w.buf = append(w.buf, event)
 	w.mu.Unlock()
+
+	if dropped != nil {
+		// The report runs after the unlock, so a callback may call Send again
+		// without deadlocking on this lock, and the counter says an event was lost.
+		w.dropped.Add(1)
+		w.reportDrop([]map[string]any{dropped}, nil)
+	}
 }
 
 func (w *wrapped) run() {
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
+	timer := time.NewTimer(w.nextWake())
+	defer timer.Stop()
 	for {
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			w.flushIfReady()
+			timer.Reset(w.nextWake())
 		case <-w.closeSig:
 			w.flushAll(context.Background())
 			close(w.done)
@@ -101,6 +109,44 @@ func (w *wrapped) run() {
 		}
 	}
 }
+
+// nextWake returns how long the worker may sleep before it must look at the
+// buffer again.
+//
+// An empty buffer sleeps for the batch interval, and a buffered event sleeps only
+// until the oldest one is due. The worker therefore wakes when there is work, rather
+// than on a fixed poll that either lags behind a short interval or spins on a long
+// one.
+func (w *wrapped) nextWake() time.Duration {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.buf) == 0 {
+		return w.cfg.batchInterval
+	}
+	if len(w.buf) >= w.cfg.batchSize {
+		// A full batch leaves at once, so the wait is the shortest one.
+		return time.Millisecond
+	}
+	due := w.cfg.batchInterval - time.Since(w.oldestTime)
+	return max(due, time.Millisecond)
+}
+
+// Stats returns the counters of this pipeline.
+func (w *wrapped) Stats() Stats {
+	w.mu.Lock()
+	buffered := len(w.buf)
+	w.mu.Unlock()
+	return Stats{
+		Sent:     w.sent.Load(),
+		Dropped:  w.dropped.Load(),
+		Retries:  w.retries.Load(),
+		Buffered: buffered,
+		Batches:  w.batches.Load(),
+	}
+}
+
+// Dropped returns how many events the pipeline lost.
+func (w *wrapped) Dropped() int { return int(w.dropped.Load()) }
 
 // flushIfReady sends the current buffer as one batch once it has reached BatchSize or
 // BatchInterval has passed since its oldest event, whichever comes first.
@@ -121,6 +167,13 @@ func (w *wrapped) takeBatchIfReady() []map[string]any {
 	ready := len(w.buf) >= w.cfg.batchSize || time.Since(w.oldestTime) >= w.cfg.batchInterval
 	if !ready {
 		return nil
+	}
+	// A batch holds at most BatchSize, so a burst of events arrives in several
+	// batches rather than one that a backend refuses for its size.
+	if len(w.buf) > w.cfg.batchSize {
+		batch := w.buf[:w.cfg.batchSize]
+		w.buf = w.buf[w.cfg.batchSize:]
+		return batch
 	}
 	batch := w.buf
 	w.buf = nil
@@ -147,8 +200,13 @@ type RetryError interface {
 // and OnDropped(batch, lastErr) is called.
 func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 	var err error
+	w.batches.Add(1)
 	for attempt := 1; attempt <= w.cfg.maxAttempts; attempt++ {
+		if attempt > 1 {
+			w.retries.Add(1)
+		}
 		if err = w.trySendBatch(ctx, batch); err == nil {
+			w.sent.Add(int64(len(batch)))
 			return
 		}
 		var re RetryError
@@ -167,11 +225,13 @@ func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 			if !w.wait(ctx, delay) {
 				// The worker is closing, so this batch stops here rather than
 				// holding the shutdown open for the whole wait.
+				w.dropped.Add(int64(len(batch)))
 				w.reportDrop(batch, err)
 				return
 			}
 		}
 	}
+	w.dropped.Add(int64(len(batch)))
 	w.reportDrop(batch, err)
 }
 

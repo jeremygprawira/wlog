@@ -38,13 +38,15 @@ func defaultConfig() config {
 type Option func(*config)
 
 // BatchSize sets how many events trigger an immediate flush. Default 50.
-func BatchSize(n int) Option { return func(c *config) { c.batchSize = n } }
+func BatchSize(n int) Option { return func(c *config) { c.batchSize = max(n, 1) } }
 
 // BatchInterval sets the longest a partial batch waits before flushing. Default 5s.
-func BatchInterval(d time.Duration) Option { return func(c *config) { c.batchInterval = d } }
+func BatchInterval(d time.Duration) Option {
+	return func(c *config) { c.batchInterval = max(d, time.Millisecond) }
+}
 
 // MaxAttempts sets total tries per batch, including the first. Default 3.
-func MaxAttempts(n int) Option { return func(c *config) { c.maxAttempts = n } }
+func MaxAttempts(n int) Option { return func(c *config) { c.maxAttempts = max(n, 1) } }
 
 // Backoff selects the retry delay curve. Default Exponential.
 func Backoff(kind BackoffKind) Option { return func(c *config) { c.backoff = kind } }
@@ -53,11 +55,13 @@ func Backoff(kind BackoffKind) Option { return func(c *config) { c.backoff = kin
 func InitialDelay(d time.Duration) Option { return func(c *config) { c.initialDelay = d } }
 
 // MaxDelay caps how long any single retry waits. Default 30s.
-func MaxDelay(d time.Duration) Option { return func(c *config) { c.maxDelay = d } }
+func MaxDelay(d time.Duration) Option {
+	return func(c *config) { c.maxDelay = max(d, time.Millisecond) }
+}
 
 // MaxBuffer caps how many events are queued at once, across all not-yet-flushed
 // batches. Default 1000.
-func MaxBuffer(n int) Option { return func(c *config) { c.maxBuffer = n } }
+func MaxBuffer(n int) Option { return func(c *config) { c.maxBuffer = max(n, 1) } }
 
 // OnDropped is called when an event or a batch is dropped: an event dropped for being
 // the oldest once MaxBuffer is exceeded, or a whole batch dropped after MaxAttempts is
