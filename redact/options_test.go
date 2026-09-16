@@ -13,10 +13,11 @@ func TestRedact_RemoveKeys_LeavesLongerKeyUnmasked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	event := map[string]any{"session_id": "abc123"}
+	// session_id has an entry of its own, so removing session must not touch it.
+	event := map[string]any{"session_store": "abc123"}
 	r.Apply(event)
-	if event["session_id"] != "abc123" {
-		t.Errorf("session_id got masked after RemoveKeys(session): %v", event["session_id"])
+	if event["session_store"] != "abc123" {
+		t.Errorf("session_store got masked after RemoveKeys(session): %v", event["session_store"])
 	}
 }
 
