@@ -121,7 +121,7 @@
 - [x] AX1 Audit record extras
 - [x] AX2 `audit.Diff` and the test mock
 - [x] AX3 HMAC signing and catalog-driven audit
-- [ ] MQ1 Memory named stores and queries
+- [x] MQ1 Memory named stores and queries
 - [ ] FR1 File reader and tailer
 - [ ] RF1 Redaction replacement function
 - [ ] **Checkpoint 7**: v1.2 (ask first: tag v0.3.0)
