@@ -70,3 +70,24 @@ func TestRedact_Slices(t *testing.T) {
 		}
 	}
 }
+
+// TestRedact_RED3_OneWordKeysMasked proves that a key entry also matches its
+// tokens joined with no separator, and that the default list names every key that
+// RED-3 adds.
+func TestRedact_RED3_OneWordKeysMasked(t *testing.T) {
+	r := redact.MustNew()
+
+	for _, key := range []string{
+		"apikey", "api_key", "apiKey",
+		"sessionid", "session_id", "sessionId",
+		"sid", "jsessionid", "phpsessid", "connect.sid", "csrf", "xsrf",
+		"passphrase", "access_key", "signing_key", "client_secret", "signature",
+		"x_amz_signature", "dsn", "database_url",
+	} {
+		event := map[string]any{key: "SECRET-VALUE"}
+		r.Apply(event)
+		if event[key] == "SECRET-VALUE" {
+			t.Errorf("key %q was not masked", key)
+		}
+	}
+}

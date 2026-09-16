@@ -10,4 +10,12 @@ var defaultKeys = []string{
 	"credit_card", "card_number", "cvv", "cvc", "ssn", "social_security",
 	"aws_secret_access_key", "aws_access_key_id", "aws_session_token",
 	"connection_string", "db_password", "x_api_key", "pin", "otp",
+	// Sessions (RED-3): the cookie names of the common frameworks, plus the two
+	// request-forgery tokens.
+	"sid", "session_id", "jsessionid", "phpsessid", "connect.sid", "csrf", "xsrf",
+	// Keys (RED-3): the words a signing key hides behind.
+	"passphrase", "access_key", "signing_key", "client_secret", "signature",
+	"x_amz_signature",
+	// Connection data (RED-3): a DSN carries a password in its userinfo.
+	"dsn", "database_url",
 }

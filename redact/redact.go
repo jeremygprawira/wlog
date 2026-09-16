@@ -287,6 +287,13 @@ func build(c *config, opts []Option) (*Redactor, error) {
 		default:
 			tokens := tokenize(cutKey(k))
 			r.leafTokens[joinTokens(tokens)] = true
+			// A key entry also matches its tokens joined with no separator, so
+			// "api_key" matches a field named "apikey" and "session_id" matches
+			// "sessionid". Naming one thing two ways is common, and a denylist
+			// that misses the second name is a denylist with a hole.
+			if joined := strings.Join(tokens, ""); joined != joinTokens(tokens) {
+				r.leafTokens[joined] = true
+			}
 			if len(tokens) > r.maxLeafTokens {
 				r.maxLeafTokens = len(tokens)
 			}
