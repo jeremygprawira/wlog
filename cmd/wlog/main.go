@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
 	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
 	"github.com/jeremygprawira/wlog/cmd/wlog/report"
@@ -27,6 +28,9 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "init" {
 		return wloginit.Run(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "doctor" {
+		return wlogdoctor.Run(args[1:], stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "map" {
 		_, _ = fmt.Fprintln(stderr, "usage: wlog map [flags] <package patterns...>")

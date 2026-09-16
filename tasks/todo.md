@@ -133,7 +133,7 @@
 - [x] MS1 Entry classes, grades, per-entry weighting
 - [x] MS2 Report forms and strict baseline
 - [x] CI1 `wlog init`
-- [ ] CI2 `wlog doctor`
+- [x] CI2 `wlog doctor`
 - [ ] CI3 `wlog agents`
 - [ ] **Checkpoint 8**: v1.3 (ask first: tag v0.4.0)
 
