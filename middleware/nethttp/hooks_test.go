@@ -27,7 +27,7 @@ func TestMiddleware_Panic_Recovers500AndLogs(t *testing.T) {
 	}
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["level"] != "error" {
 		t.Errorf("level = %v, want error", got["level"])
 	}
@@ -61,7 +61,7 @@ func TestMiddleware_Traceparent(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	trace := got["trace"].(map[string]any)
 	if trace["trace_id"] != "4bf92f3577b34da6a3ce929d0e0e4736" {
 		t.Errorf("trace.trace_id = %v", trace["trace_id"])
@@ -81,7 +81,7 @@ func TestMiddleware_Traceparent_InvalidIsIgnored(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	trace, _ := got["trace"].(map[string]any)
 	if trace != nil {
 		if _, ok := trace["trace_id"]; ok {
@@ -102,7 +102,7 @@ func TestMiddleware_WithUserFunc(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	user := got["user"].(map[string]any)
 	if user["id"] != "u_42" {
 		t.Errorf("user.id = %v, want u_42", user["id"])

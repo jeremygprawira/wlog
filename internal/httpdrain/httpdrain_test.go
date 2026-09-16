@@ -46,7 +46,7 @@ func TestHTTPDrain_CustomHeaders(t *testing.T) {
 	defer srv.Close()
 
 	c := httpdrain.New(srv.URL, httpdrain.WithHeader("Authorization", "Bearer tok"))
-	c.Post(context.Background(), []byte("x"), "text/plain")
+	_ = c.Post(context.Background(), []byte("x"), "text/plain")
 
 	if srv.Last().Headers.Get("Authorization") != "Bearer tok" {
 		t.Errorf("Authorization header missing/wrong: %v", srv.Last().Headers)
@@ -73,7 +73,7 @@ func TestHTTPDrain_IdentityHeaders_Disable(t *testing.T) {
 	defer srv.Close()
 
 	c := httpdrain.New(srv.URL, httpdrain.WithUserAgent(""), httpdrain.WithSource(""))
-	c.Post(context.Background(), []byte("x"), "text/plain")
+	_ = c.Post(context.Background(), []byte("x"), "text/plain")
 
 	req := srv.Last()
 	if req.Headers.Get("User-Agent") != "" && req.Headers.Get("User-Agent") != "Go-http-client/1.1" {

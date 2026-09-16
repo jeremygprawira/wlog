@@ -20,7 +20,7 @@ func TestMiddleware_CapturesBodies(t *testing.T) {
 		b, _ := io.ReadAll(r.Body)
 		handlerSawBody = string(b)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/orders", bytes.NewBufferString(`{"item":"shoes"}`))
@@ -33,7 +33,7 @@ func TestMiddleware_CapturesBodies(t *testing.T) {
 	}
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	reqBody := httpField["request_body"].(map[string]any)
 	if reqBody["item"] != "shoes" {
@@ -48,9 +48,9 @@ func TestMiddleware_CapturesBodies(t *testing.T) {
 func TestMiddleware_Body_ContentTypeFilter(t *testing.T) {
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON))
 	handler := wlogstd.Middleware(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.ReadAll(r.Body)
+		_, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "image/png")
-		w.Write([]byte{0xFF, 0xD8, 0xFF})
+		_, _ = w.Write([]byte{0xFF, 0xD8, 0xFF})
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/upload", bytes.NewBufferString("binary-ish"))
@@ -59,7 +59,7 @@ func TestMiddleware_Body_ContentTypeFilter(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	if _, ok := httpField["request_body"]; ok {
 		t.Error("request_body captured for a non-allowed content type")
@@ -79,7 +79,7 @@ func TestMiddleware_Body_Cap(t *testing.T) {
 				t.Errorf("handler saw a truncated body: got %d bytes, want %d", len(b), len(big))
 			}
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte(big))
+			_, _ = w.Write([]byte(big))
 		}),
 	)
 
@@ -89,7 +89,7 @@ func TestMiddleware_Body_Cap(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	reqBody := httpField["request_body"].(map[string]any)
 	if raw, ok := reqBody["raw"].(string); !ok || len(raw) != 10 {
@@ -101,9 +101,9 @@ func TestMiddleware_CaptureBodyOff(t *testing.T) {
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON))
 	handler := wlogstd.Middleware(log, wlogstd.CaptureBody(false))(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			io.ReadAll(r.Body)
+			_, _ = io.ReadAll(r.Body)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		}),
 	)
 
@@ -113,7 +113,7 @@ func TestMiddleware_CaptureBodyOff(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	if _, ok := httpField["request_body"]; ok {
 		t.Error("request_body captured despite CaptureBody(false)")

@@ -79,7 +79,7 @@ func writePretty(w io.Writer, event map[string]any, color bool) {
 	if outcome, ok := event["outcome"].(string); ok && outcome != "success" {
 		header += " [" + outcome + "]"
 	}
-	fmt.Fprintln(w, header)
+	_, _ = fmt.Fprintln(w, header)
 
 	keys := make([]string, 0, len(event))
 	for k := range event {
@@ -89,19 +89,19 @@ func writePretty(w io.Writer, event map[string]any, color bool) {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(w, "  %s: %v\n", k, event[k])
+		_, _ = fmt.Fprintf(w, "  %s: %v\n", k, event[k])
 	}
 
 	if errInfo, ok := event["error"].(map[string]any); ok {
-		fmt.Fprintf(w, "  error: %v\n", errInfo["message"])
+		_, _ = fmt.Fprintf(w, "  error: %v\n", errInfo["message"])
 		if why, _ := errInfo["why"].(string); why != "" {
-			fmt.Fprintf(w, "    Why: %s\n", why)
+			_, _ = fmt.Fprintf(w, "    Why: %s\n", why)
 		}
 		if fix, _ := errInfo["fix"].(string); fix != "" {
-			fmt.Fprintf(w, "    Fix: %s\n", fix)
+			_, _ = fmt.Fprintf(w, "    Fix: %s\n", fix)
 		}
 		if link, _ := errInfo["link"].(string); link != "" {
-			fmt.Fprintf(w, "    More: %s\n", link)
+			_, _ = fmt.Fprintf(w, "    More: %s\n", link)
 		}
 	}
 }

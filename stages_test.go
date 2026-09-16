@@ -47,7 +47,7 @@ func TestCore_StageOrder_EnricherOutputIsRedacted(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 
@@ -84,7 +84,7 @@ func TestCore_StageOrder_KeeperPanicIsIsolated(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 

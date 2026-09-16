@@ -18,12 +18,12 @@ func TestCore_Env_ServiceFromEnvVars(t *testing.T) {
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	svc := got["service"].(map[string]any)
 	if svc["name"] != "go-customer" || svc["version"] != "2.0.0" || svc["env"] != "staging" {
 		t.Errorf("service = %v", svc)
@@ -35,12 +35,12 @@ func TestCore_Env_ExplicitOptionWinsOverEnv(t *testing.T) {
 	log := wlog.New(wlog.WithService("from-option", "1.0.0", "prod"), wlog.WithFormat(wlog.FormatJSON))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	svc := got["service"].(map[string]any)
 	if svc["name"] != "from-option" {
 		t.Errorf("service.name = %v, want from-option (explicit option must win)", svc["name"])
@@ -52,7 +52,7 @@ func TestCore_Env_Level(t *testing.T) {
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op") // default level info, below WLOG_LEVEL=warn
+		_, end := wlog.Start(ctx, "op") // default level info, below WLOG_LEVEL=warn
 		end()
 	})
 	if out != "" {
@@ -65,7 +65,7 @@ func TestCore_Env_Format(t *testing.T) {
 	log := wlog.New()
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if strings.HasPrefix(strings.TrimSpace(out), "{") {
@@ -83,7 +83,7 @@ func TestCore_Env_InvalidLevel_ReportsAndUsesDefault(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if out == "" {
@@ -103,7 +103,7 @@ func TestCore_Env_InvalidFormat_ReportsAndUsesDefault(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") {

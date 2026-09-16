@@ -22,7 +22,7 @@ func TestMiddleware_ClientIPUserAgentBytesIn(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 
 	if httpField["user_agent"] != "curl/8.0" {
@@ -47,7 +47,7 @@ func TestMiddleware_ClientIP_PrefersForwardedHeader(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	if httpField["client_ip"] != "203.0.113.9" {
 		t.Errorf("client_ip = %v, want 203.0.113.9 (first X-Forwarded-For entry)", httpField["client_ip"])

@@ -35,7 +35,7 @@ func TestEcho5_HandlerError_ReachesWlogErrorAndEchoErrorHandler(t *testing.T) {
 	e := echo.New()
 	wantErr := errors.New("boom")
 	e.HTTPErrorHandler = func(c *echo.Context, err error) {
-		c.String(http.StatusTeapot, "handled: "+err.Error())
+		_ = c.String(http.StatusTeapot, "handled: "+err.Error())
 	}
 	e.Use(wlogecho5.Middleware(log))
 	e.GET("/fail", func(c *echo.Context) error { return wantErr })

@@ -27,7 +27,7 @@ func BenchmarkCore_StartSetEmit(b *testing.B) {
 	os.Stdout = w
 	drained := make(chan struct{})
 	go func() {
-		io.Copy(io.Discard, r)
+		_, _ = io.Copy(io.Discard, r)
 		close(drained)
 	}()
 
@@ -44,6 +44,6 @@ func BenchmarkCore_StartSetEmit(b *testing.B) {
 	b.StopTimer()
 
 	os.Stdout = orig
-	w.Close()
+	_ = w.Close()
 	<-drained
 }

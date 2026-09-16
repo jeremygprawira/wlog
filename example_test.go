@@ -72,7 +72,7 @@ func ExampleWithDrains() {
 
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON), wlog.WithDrains(countingDrain))
 	ctx := log.WithContext(context.Background())
-	ctx, end := wlog.Start(ctx, "op")
+	_, end := wlog.Start(ctx, "op")
 	end()
 
 	_ = seen // every drain, alongside the default stdout sink, receives the event

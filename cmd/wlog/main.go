@@ -25,7 +25,7 @@ func main() {
 // code: 0 pass, 1 gate failure, 2 load or config error.
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "map" {
-		fmt.Fprintln(stderr, "usage: wlog map [flags] <package patterns...>")
+		_, _ = fmt.Fprintln(stderr, "usage: wlog map [flags] <package patterns...>")
 		return 2
 	}
 
@@ -40,7 +40,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	patterns := flags.Args()
 	if len(patterns) == 0 {
-		fmt.Fprintln(stderr, "wlog map: at least one package pattern is required")
+		_, _ = fmt.Fprintln(stderr, "wlog map: at least one package pattern is required")
 		return 2
 	}
 
@@ -55,7 +55,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	pkgs, err := entry.Load(patterns...)
 	if err != nil {
-		fmt.Fprintln(stderr, "wlog map:", err)
+		_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 		return 2
 	}
 	if !reportLoadErrors(pkgs, stderr) {
@@ -85,7 +85,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if *baselinePath != "" {
 		baseline, err := readBaseline(*baselinePath)
 		if err != nil {
-			fmt.Fprintln(stderr, "wlog map:", err)
+			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 			return 2
 		}
 		if total < baseline.Score {
@@ -96,22 +96,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 	document := report.Build(points, checksByPoint, minScore, gatePass)
 	data, err := report.Encode(document)
 	if err != nil {
-		fmt.Fprintln(stderr, "wlog map:", err)
+		_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 		return 2
 	}
 	if *outPath != "" {
 		if err := os.WriteFile(*outPath, data, 0o644); err != nil {
-			fmt.Fprintln(stderr, "wlog map:", err)
+			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 			return 2
 		}
 	}
 
-	fmt.Fprintf(stdout, "wlog map: score %d\n", document.Score)
+	_, _ = fmt.Fprintf(stdout, "wlog map: score %d\n", document.Score)
 	for _, fix := range document.TopFixes {
-		fmt.Fprintln(stdout, "  fix:", fix)
+		_, _ = fmt.Fprintln(stdout, "  fix:", fix)
 	}
 	if !gatePass {
-		fmt.Fprintln(stdout, "wlog map: gate failed")
+		_, _ = fmt.Fprintln(stdout, "wlog map: gate failed")
 		return 1
 	}
 	return 0
@@ -129,7 +129,7 @@ func loadConfig(explicit string, stderr io.Writer) (rules.Config, int) {
 	}
 	cfg, err := rules.LoadConfig(path)
 	if err != nil {
-		fmt.Fprintln(stderr, "wlog map:", err)
+		_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 		return rules.Config{}, 2
 	}
 	return cfg, 0
@@ -140,7 +140,7 @@ func reportLoadErrors(pkgs []*packages.Package, stderr io.Writer) bool {
 	clean := true
 	for _, pkg := range pkgs {
 		for _, err := range pkg.Errors {
-			fmt.Fprintln(stderr, "wlog map:", err)
+			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 			clean = false
 		}
 	}

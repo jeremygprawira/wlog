@@ -80,9 +80,8 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 func TestPipeline_FlushesOnBatchSize(t *testing.T) {
 	sender := &fakeSender{}
 	drain := pipeline.Wrap(sender, pipeline.BatchSize(5), pipeline.BatchInterval(time.Hour))
-	defer drain.(interface {
-		Close(context.Context) error
-	}).Close(context.Background())
+	closer := drain.(interface{ Close(context.Context) error })
+	defer func() { _ = closer.Close(context.Background()) }()
 
 	for i := 0; i < 5; i++ {
 		drain.Send(context.Background(), mkEvent(i))
@@ -94,9 +93,8 @@ func TestPipeline_FlushesOnBatchSize(t *testing.T) {
 func TestPipeline_FlushesOnInterval(t *testing.T) {
 	sender := &fakeSender{}
 	drain := pipeline.Wrap(sender, pipeline.BatchSize(50), pipeline.BatchInterval(30*time.Millisecond))
-	defer drain.(interface {
-		Close(context.Context) error
-	}).Close(context.Background())
+	closer := drain.(interface{ Close(context.Context) error })
+	defer func() { _ = closer.Close(context.Background()) }()
 
 	drain.Send(context.Background(), mkEvent(1))
 	drain.Send(context.Background(), mkEvent(2))

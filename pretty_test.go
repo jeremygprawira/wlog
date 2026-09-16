@@ -12,7 +12,7 @@ func TestCore_Format_DefaultEnv_IsJSON(t *testing.T) {
 	log := wlog.New()
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
@@ -24,7 +24,7 @@ func TestCore_Format_DevEnv_IsPretty(t *testing.T) {
 	log := wlog.New(wlog.WithService("svc", "1.0.0", "dev"))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "order.create")
+		_, end := wlog.Start(ctx, "order.create")
 		end()
 	})
 	if strings.HasPrefix(strings.TrimSpace(out), "{") {
@@ -42,7 +42,7 @@ func TestCore_Format_ExplicitOverridesEnv(t *testing.T) {
 	log := wlog.New(wlog.WithService("svc", "1.0.0", "dev"), wlog.WithFormat(wlog.FormatJSON))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
@@ -52,7 +52,7 @@ func TestCore_Format_ExplicitOverridesEnv(t *testing.T) {
 	log2 := wlog.New(wlog.WithFormat(wlog.FormatPretty))
 	out2 := captureStdout(t, func() {
 		ctx := log2.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if strings.HasPrefix(strings.TrimSpace(out2), "{") {
@@ -99,7 +99,7 @@ func TestCore_Pretty_NoColorRespected(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if strings.Contains(out, "\033[") {
@@ -109,7 +109,7 @@ func TestCore_Pretty_NoColorRespected(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	out2 := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if !strings.Contains(out2, "\033[") {

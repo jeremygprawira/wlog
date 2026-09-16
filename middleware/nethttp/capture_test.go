@@ -23,7 +23,7 @@ func TestMiddleware_CapturesHeadersQueryCookies(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 
 	headers := httpField["request_headers"].(map[string]any)
@@ -61,7 +61,7 @@ func TestMiddleware_CaptureTogglesOff(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	if _, ok := httpField["request_headers"]; ok {
 		t.Error("request_headers present despite CaptureHeaders(false)")

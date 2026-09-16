@@ -84,7 +84,7 @@ func panicHandler(http.ResponseWriter, *http.Request) { panic("conformance panic
 func echoHandler(w http.ResponseWriter, r *http.Request) {
 	b, _ := io.ReadAll(r.Body)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
+	_, _ = w.Write(b)
 }
 
 func routes() Routes {

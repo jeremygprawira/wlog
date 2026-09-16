@@ -22,7 +22,7 @@ func TestCore_WithRedactor_Custom(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["nik"] != "[REDACTED]" {
 		t.Errorf("nik = %v, want [REDACTED]", got["nik"])
 	}
@@ -40,7 +40,7 @@ func TestCore_SetRedactor_SwapsAtRuntime(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["password"] != "hunter2" {
 		t.Errorf("password = %v, want hunter2 (redaction disabled)", got["password"])
 	}
@@ -59,7 +59,7 @@ func TestCore_SetRedactor_NilResetsToDefault(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["password"] != "[REDACTED]" {
 		t.Errorf("password = %v, want [REDACTED] (nil resets to Default())", got["password"])
 	}
@@ -69,12 +69,12 @@ func TestCore_RedactFingerprint_PresentByDefault(t *testing.T) {
 	log := wlog.New()
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["redact.fingerprint"] == nil || got["redact.fingerprint"] == "" {
 		t.Errorf("redact.fingerprint missing: %v", got)
 	}
@@ -84,12 +84,12 @@ func TestCore_RedactFingerprint_Disabled(t *testing.T) {
 	log := wlog.New(wlog.WithRedactFingerprint(false))
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if _, ok := got["redact.fingerprint"]; ok {
 		t.Errorf("redact.fingerprint present despite WithRedactFingerprint(false): %v", got)
 	}
@@ -122,7 +122,7 @@ func TestCore_SetRedactor_ConcurrentSwapsAndEmits(t *testing.T) {
 	os.Stdout = w
 	drained := make(chan struct{})
 	go func() {
-		io.Copy(io.Discard, r)
+		_, _ = io.Copy(io.Discard, r)
 		close(drained)
 	}()
 
@@ -150,7 +150,7 @@ func TestCore_SetRedactor_ConcurrentSwapsAndEmits(t *testing.T) {
 	}
 	wg.Wait()
 	os.Stdout = orig
-	w.Close()
+	_ = w.Close()
 	<-drained
 
 	mu.Lock()

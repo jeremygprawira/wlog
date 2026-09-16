@@ -92,7 +92,7 @@ func TestAudit_Verify_DetectsEditedByte(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 	lines[1] = strings.Replace(lines[1], "success", "denied", 1)
 	tampered := filepath.Join(t.TempDir(), "edited.ndjson")
-	os.WriteFile(tampered, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	_ = os.WriteFile(tampered, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 
 	err := audit.Verify(tampered)
 	if err == nil {
@@ -111,7 +111,7 @@ func TestAudit_Verify_DetectsDeletedLine(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 	lines = append(lines[:1], lines[2:]...) // delete line 2 (index 1)
 	tampered := filepath.Join(t.TempDir(), "deleted.ndjson")
-	os.WriteFile(tampered, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	_ = os.WriteFile(tampered, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 
 	err := audit.Verify(tampered)
 	if err == nil {
@@ -130,7 +130,7 @@ func TestAudit_Verify_DetectsReorderedLines(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 	lines[0], lines[1] = lines[1], lines[0]
 	tampered := filepath.Join(t.TempDir(), "reordered.ndjson")
-	os.WriteFile(tampered, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	_ = os.WriteFile(tampered, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 
 	err := audit.Verify(tampered)
 	if err == nil {

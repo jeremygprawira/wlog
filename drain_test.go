@@ -53,7 +53,7 @@ func TestCore_Drain_PanicIsolated(t *testing.T) {
 
 	captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 

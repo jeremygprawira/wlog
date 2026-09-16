@@ -15,7 +15,7 @@ func TestPipeline_Retry_SucceedsAfterFailures(t *testing.T) {
 		pipeline.BatchSize(3), pipeline.BatchInterval(time.Hour),
 		pipeline.MaxAttempts(3), pipeline.InitialDelay(2*time.Millisecond), pipeline.MaxDelay(5*time.Millisecond),
 	)
-	defer drain.(interface{ Close(context.Context) error }).Close(context.Background())
+	defer func() { _ = drain.(interface{ Close(context.Context) error }).Close(context.Background()) }()
 
 	for i := 0; i < 3; i++ {
 		drain.Send(context.Background(), mkEvent(i))
@@ -73,7 +73,7 @@ func TestPipeline_Retry_ExhaustedCallsOnDropped(t *testing.T) {
 		pipeline.MaxAttempts(2), pipeline.InitialDelay(2*time.Millisecond), pipeline.MaxDelay(5*time.Millisecond),
 		pipeline.OnDropped(drop.record),
 	)
-	defer drain.(interface{ Close(context.Context) error }).Close(context.Background())
+	defer func() { _ = drain.(interface{ Close(context.Context) error }).Close(context.Background()) }()
 
 	drain.Send(context.Background(), mkEvent(1))
 	drain.Send(context.Background(), mkEvent(2))

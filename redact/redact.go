@@ -245,7 +245,7 @@ func (r *Redactor) runTransforms(event map[string]any) {
 }
 
 func runTransformSafe(t func(map[string]any), event map[string]any) {
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	t(event)
 }
 

@@ -38,7 +38,7 @@ func TestGin_HandlerError_ReachesWlogError(t *testing.T) {
 	wantErr := errors.New("boom")
 	r.Use(wloggin.Middleware(log))
 	r.GET("/fail", func(c *gin.Context) {
-		c.Error(wantErr)
+		_ = c.Error(wantErr)
 		c.String(http.StatusTeapot, "handled")
 	})
 

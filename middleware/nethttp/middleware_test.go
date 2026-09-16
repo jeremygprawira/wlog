@@ -25,9 +25,9 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = w
 	fn()
 	os.Stdout = orig
-	w.Close()
+	_ = w.Close()
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	return buf.String()
 }
 
@@ -37,7 +37,7 @@ func TestMiddleware_BasicFields(t *testing.T) {
 	mux.HandleFunc("GET /orders/{id}", func(w http.ResponseWriter, r *http.Request) {
 		wlog.Set(r.Context(), "order_id", r.PathValue("id"))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	handler := wlogstd.Middleware(log)(mux)
 
@@ -93,7 +93,7 @@ func TestMiddleware_ReusesIncomingRequestID(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	trace := got["trace"].(map[string]any)
 	if trace["request_id"] != "existing-id" {
 		t.Errorf("trace.request_id = %v, want existing-id (reused)", trace["request_id"])
@@ -114,7 +114,7 @@ func TestMiddleware_WithRouteFunc(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	if httpField["route"] != "custom:/anything" {
 		t.Errorf("route = %v, want custom:/anything", httpField["route"])
@@ -131,7 +131,7 @@ func TestMiddleware_NoPattern_FallsBackToPath(t *testing.T) {
 	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	httpField := got["http"].(map[string]any)
 	if httpField["route"] != "/no-mux" {
 		t.Errorf("route fallback = %v, want /no-mux", httpField["route"])

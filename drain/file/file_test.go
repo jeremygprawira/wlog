@@ -46,7 +46,7 @@ func TestFile_AppendNDJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	events := []map[string]any{{"level": "info", "operation": "a"}, {"level": "info", "operation": "b"}}
 	if err := d.SendBatch(context.Background(), events); err != nil {
@@ -85,7 +85,7 @@ func TestFile_RotateBySize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	if err := d.SendBatch(context.Background(), []map[string]any{fillEvent("first")}); err != nil {
 		t.Fatalf("SendBatch first: %v", err)
@@ -109,7 +109,7 @@ func TestFile_RotateByAge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	if err := d.SendBatch(context.Background(), []map[string]any{{"operation": "first"}}); err != nil {
 		t.Fatalf("SendBatch first: %v", err)
@@ -131,7 +131,7 @@ func TestFile_MaxBackups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	for i := 0; i < 3; i++ {
 		if err := d.SendBatch(context.Background(), []map[string]any{fillEvent("batch")}); err != nil {
@@ -153,7 +153,7 @@ func TestFile_ConcurrentBatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	const writers, perWriter = 8, 20
 	var wg sync.WaitGroup
@@ -188,7 +188,7 @@ func TestFile_EnvAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	if err := d.SendBatch(context.Background(), []map[string]any{{"operation": "env"}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestFile_NeverLeaksRedactedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(1))))
 	ctx := log.WithContext(context.Background())

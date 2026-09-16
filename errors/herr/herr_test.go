@@ -91,5 +91,5 @@ func TestExtractor_PlainError_Fallback(t *testing.T) {
 }
 
 func TestExtractor_ImplementsWlogErrorExtractor(t *testing.T) {
-	var _ wlog.ErrorExtractor = Extractor()
+	var _ = wlog.ErrorExtractor(Extractor())
 }

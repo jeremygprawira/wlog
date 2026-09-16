@@ -45,7 +45,7 @@ func TestWlogtest_LastAndEvents(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	for _, op := range []string{"a", "b"} {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, op)
+		_, end := wlog.Start(ctx, op)
 		end()
 	}
 

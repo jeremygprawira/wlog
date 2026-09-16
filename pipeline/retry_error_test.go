@@ -30,7 +30,7 @@ func TestPipeline_RetryError_PermanentStopsImmediately(t *testing.T) {
 		pipeline.MaxAttempts(5), pipeline.InitialDelay(2*time.Millisecond),
 		pipeline.OnDropped(drop.record),
 	)
-	defer drain.(interface{ Close(context.Context) error }).Close(context.Background())
+	defer func() { _ = drain.(interface{ Close(context.Context) error }).Close(context.Background()) }()
 
 	drain.Send(context.Background(), mkEvent(1))
 

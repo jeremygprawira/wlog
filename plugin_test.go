@@ -37,7 +37,7 @@ func TestCore_Plugin_AllHooksWired(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 
@@ -67,7 +67,7 @@ func TestCore_Plugin_PanicIsolatedAndReported(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
-		ctx, end := wlog.Start(ctx, "op")
+		_, end := wlog.Start(ctx, "op")
 		end()
 	})
 	if out == "" {

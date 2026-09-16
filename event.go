@@ -325,5 +325,5 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 		l.reportError(err, "stdout")
 		return
 	}
-	fmt.Fprintln(os.Stdout, string(b))
+	_, _ = fmt.Fprintln(os.Stdout, string(b))
 }

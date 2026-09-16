@@ -29,7 +29,7 @@ func TestSSE_ReplayThenLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	scanner := bufio.NewScanner(resp.Body)
 	var lines []string
@@ -82,11 +82,11 @@ func TestSSE_NoGoroutineLeakAfterDisconnect(t *testing.T) {
 		t.Fatalf("GET: %v", err)
 	}
 	buf := make([]byte, 1)
-	go resp.Body.Read(buf) // start reading so the server side actually begins streaming
+	go func() { _, _ = resp.Body.Read(buf) }() // start reading so the server side actually begins streaming
 
 	time.Sleep(50 * time.Millisecond)
 	cancel()
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	time.Sleep(100 * time.Millisecond)
 	runtime.GC()
 

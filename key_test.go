@@ -19,7 +19,7 @@ func TestCore_Key_SetStoresUnderItsName(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["order_id"] != "4821" {
 		t.Errorf("order_id = %v, want 4821", got["order_id"])
 	}
@@ -42,7 +42,7 @@ func TestCore_StrictKeys_FlagsUnregisteredKey_InDev(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	unknown, ok := got["wlog.unknown_keys"].([]any)
 	if !ok || len(unknown) != 1 || unknown[0] != "typo_field" {
 		t.Errorf("wlog.unknown_keys = %v, want [typo_field]", got["wlog.unknown_keys"])
@@ -64,7 +64,7 @@ func TestCore_StrictKeys_NoOp_OutsideLocalDev(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if _, ok := got["wlog.unknown_keys"]; ok {
 		t.Errorf("wlog.unknown_keys present in prod: %v", got["wlog.unknown_keys"])
 	}
@@ -80,7 +80,7 @@ func TestCore_NoStrictKeys_NeverFlags(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if _, ok := got["wlog.unknown_keys"]; ok {
 		t.Errorf("wlog.unknown_keys present without StrictKeys configured: %v", got["wlog.unknown_keys"])
 	}

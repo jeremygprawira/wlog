@@ -41,7 +41,7 @@ func TestCore_PlainLog_WarnAndDebug(t *testing.T) {
 			tc.fn(ctx, "msg")
 		})
 		var got map[string]any
-		json.Unmarshal([]byte(out), &got)
+		_ = json.Unmarshal([]byte(out), &got)
 		if got["level"] != tc.level {
 			t.Errorf("level = %v, want %v", got["level"], tc.level)
 		}
@@ -56,7 +56,7 @@ func TestCore_PlainLog_RedactsSensitiveKV(t *testing.T) {
 	})
 
 	var got map[string]any
-	json.Unmarshal([]byte(out), &got)
+	_ = json.Unmarshal([]byte(out), &got)
 	if got["password"] != "[REDACTED]" {
 		t.Errorf("password = %v, want [REDACTED]", got["password"])
 	}

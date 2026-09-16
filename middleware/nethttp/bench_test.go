@@ -18,10 +18,10 @@ import (
 func BenchmarkMiddleware_JSONBody(b *testing.B) {
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON))
 	handler := wlogstd.Middleware(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.ReadAll(r.Body)
+		_, _ = io.ReadAll(r.Body)
 		wlog.Set(r.Context(), "order_id", "4821")
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 
 	body := bytes.Repeat([]byte("x"), 1024-2)
@@ -35,7 +35,7 @@ func BenchmarkMiddleware_JSONBody(b *testing.B) {
 	os.Stdout = w
 	drained := make(chan struct{})
 	go func() {
-		io.Copy(io.Discard, r)
+		_, _ = io.Copy(io.Discard, r)
 		close(drained)
 	}()
 
@@ -50,6 +50,6 @@ func BenchmarkMiddleware_JSONBody(b *testing.B) {
 	b.StopTimer()
 
 	os.Stdout = orig
-	w.Close()
+	_ = w.Close()
 	<-drained
 }
