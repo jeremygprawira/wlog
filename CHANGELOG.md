@@ -21,6 +21,22 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   changed byte fails `Verify`. The `audit.Chain` drain is gone, and signing is now
   `audit.Journal(path, audit.WithKey(key))` instead of the `audit.Sign` drain. Migration:
   register `audit.Journal(path)` alone, and pass the key through `WithKey`.
+- `audit.Journal` takes one writer per file, moves a half-written last line to
+  `<path>.partial`, writes a marker line every 100 records and on `Close`, and accepts
+  `audit.WithOnError`. `audit.VerifyHead` catches a journal cut at the end, and
+  `audit.VerifySigned` requires a signature on every line.
+- `audit.Diff` returns a nested tree and an error, instead of a flat dotted map.
+- `audit.Journal` is now at the same place, and `audit.Wrap` records the code the Logger's
+  own extractor produced, so `audit.error_code` agrees with `error.code`. A 401 or 403
+  records the outcome `denied`.
+- `pipeline.MinLevel` filters an event by level before the buffer, while an event with
+  audit records always passes.
+- The shared HTTP drain helper moved from `internal/httpdrain` to the public package
+  `pipeline/httpdrain`, and it takes `WithHTTPClient`, `WithIdentityHeaders`, and
+  `WithUserAgent`.
+- The Sentry drain's constructors are `New` (an async drain), `NewSender` (the raw
+  sender), `MustNew`, and `WithPipeline`, matching the v1 drains. A batch now sends one
+  envelope per error event, as Sentry requires.
 
 ## [0.4.0] - 2026-09-16
 
