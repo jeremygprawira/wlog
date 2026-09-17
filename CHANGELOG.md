@@ -10,8 +10,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 ### Fixed
 
 - The nightly integration stack runs to the end. It had never done so. The collector
-  pin named a tag the registry had deleted. The collector ran as a user that could not
-  write the output mount. The ClickHouse image refused its default user from outside
+  pin named a tag the registry had deleted. The collector ran as a user with no permission
+  to write the output mount. The ClickHouse image refused its default user from outside
   localhost. The collector also holds its output file open, so the otlp test removed
   the file that the collector was still writing to.
 - `tools release` reads every require line back before it tags, and it reads the change
