@@ -96,6 +96,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	points = kept
 
+	// The handler count goes to stderr with the rest of the status lines, and it is the
+	// first thing a reader needs when a run reports nothing: zero handlers means the patterns
+	// missed the app, not that the app is clean.
+	_, _ = fmt.Fprintf(stderr, "%d handlers found\n", len(points))
+	if len(points) == 0 {
+		_, _ = fmt.Fprintln(stderr, "wlog map: no handlers found; check the patterns")
+		return 2
+	}
+
 	total := score.Total(points, checksByPoint)
 	gatePass := minScore == 0 || total >= minScore
 	if *baselinePath != "" {

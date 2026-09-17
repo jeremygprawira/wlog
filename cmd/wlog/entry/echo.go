@@ -15,6 +15,12 @@ func echoRegistrations() []registration {
 	all = append(all,
 		registration{pkgPath: Echo4Path, name: "Handle", handle: true},
 		registration{pkgPath: Echo5Path, name: "Handle", handle: true},
+		// Add takes the method first, like Handle. Match takes a list of methods, so the
+		// method is left unset and the path is read from the second argument.
+		registration{pkgPath: Echo4Path, name: "Add", handle: true},
+		registration{pkgPath: Echo5Path, name: "Add", handle: true},
+		registration{pkgPath: Echo4Path, name: "Match", pathArg: 1},
+		registration{pkgPath: Echo5Path, name: "Match", pathArg: 1},
 	)
 	return all
 }

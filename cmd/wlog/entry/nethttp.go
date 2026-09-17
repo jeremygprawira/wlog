@@ -41,5 +41,8 @@ func netHTTPRegistrations() []registration {
 		{pkgPath: NetHTTPPath, name: "Handle", pathArg: 0},
 		{pkgPath: MuxPath, name: "HandleFunc", pathArg: 0},
 		{pkgPath: MuxPath, name: "Handle", pathArg: 0},
+		// A mux route built as r.Methods("GET").Path("/orders").HandlerFunc(h) registers the
+		// handler here, and the chain carries the method and the path.
+		{pkgPath: MuxPath, name: "HandlerFunc", pathArg: 0},
 	}
 }

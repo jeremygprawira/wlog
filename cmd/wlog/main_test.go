@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -177,5 +178,31 @@ func TestGates_Strict(t *testing.T) {
 	}
 	if code, _, _ := runMap("--out", out, "--strict", "--baseline", baseline, "./testdata/rules_app"); code != 1 {
 		t.Errorf("--strict: exit %d, want 1 on a per-rule regression", code)
+	}
+}
+
+// TestMap_CLI1_ZeroHandlersExit2 proves a run that finds no handler fails instead of reporting a
+// perfect score: an app whose routes the analyzer cannot see is not a clean app.
+func TestMap_CLI1_ZeroHandlersExit2(t *testing.T) {
+	code, stdout, stderr := runMap("./testdata/nohandlers")
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2\nstderr: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "0 handlers found") {
+		t.Errorf("stderr = %q, want the handler count", stderr)
+	}
+	if strings.TrimSpace(stdout) != "" {
+		t.Errorf("stdout = %q, want nothing on a failed run", stdout)
+	}
+}
+
+// TestMap_CLI1_HandlerCount proves a successful run reports how many handlers it scored.
+func TestMap_CLI1_HandlerCount(t *testing.T) {
+	code, _, stderr := runMap("./testdata/nethttp_app")
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "2 handlers found") {
+		t.Errorf("stderr = %q, want the handler count", stderr)
 	}
 }

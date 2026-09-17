@@ -31,6 +31,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog map` resolves a handler to the code that runs, across packages: a named handler in
+  another package, an `http.HandlerFunc(fn)` conversion, an `echo.WrapHandler` or `gin.WrapH`
+  adapter, a closure factory, and a type with `ServeHTTP`. It reads the chained mux route, the
+  Echo `Add` and `Match` shapes, and the Gin `Match` shape, and a route written as a constant
+  such as `http.MethodPost`. A run prints `N handlers found`, and zero handlers exits 2 instead
+  of reporting a perfect score.
 - `drain/memory` deep-copies an event for every subscriber and every snapshot entry, counts a
   subscriber's drops in `Dropped()`, returns the newest N matches for `Query` with `Limit`, and
   subscribes before it writes the SSE replay so an event cannot fall between the two.
