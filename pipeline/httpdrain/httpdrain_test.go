@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -253,8 +254,13 @@ func TestHTTPDrain_PIPE24_TimeoutApplies(t *testing.T) {
 	if err == nil {
 		t.Fatal("Post ignored the configured timeout")
 	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("err = %v, want context.DeadlineExceeded", err)
+	// net/http reports its own Timeout as a plain net.Error, not a wrapped
+	// context.DeadlineExceeded. Go 1.26's version of that type also satisfies
+	// errors.Is(err, context.DeadlineExceeded), but Go 1.21's does not, so this
+	// test checks the one thing both floors guarantee: Timeout() is true.
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Errorf("err = %v, want a net.Error with Timeout() true", err)
 	}
 }
 
