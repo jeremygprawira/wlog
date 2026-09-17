@@ -7,6 +7,17 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+### Fixed
+
+- The nightly integration stack runs to the end. It had never done so: the collector
+  pin named a tag the registry had deleted, the collector could not write the output
+  mount, and the ClickHouse image refused the default user from outside localhost. The
+  collector's output file also stayed open, so the otlp test removed the file that the
+  collector was still writing to.
+- `tools release` reads every require line back before it tags, and it reads the change
+  line the plan writes. It used to skip that line, edit nothing, and tag the release
+  anyway.
+
 ## [0.5.0] - 2026-09-17
 
 v0.5.0 lands the phase 10 fixes: an honest build and the safety findings the later rewrites do not

@@ -13,6 +13,11 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CI-6 `cover`, `bench`, `vuln`, all fuzz targets
 - [x] 10-CI-7 Release hygiene
 - [x] Review point 10-CI: every required CI job is green, then human review
+  - The nightly jobs are green on 2026-09-17: `vuln`, `integration`, and `fuzz-long`. The
+    integration job had never run to the end, which the collector pin hid, so this review
+    point also closed three faults in that stack: a registry tag that the collector project
+    had deleted, a non-root collector user that could not write the output mount, and a
+    ClickHouse default user that the image refuses from outside localhost.
   - Fixed 2026-09-17: `make lint`, `tools floor`, `tools cover -min 85`, `tools tidy -check`,
     `tools requires`, `tools ste`, `tools snippets`, and `make map` all pass clean. `make race`
     passes in every module, and `make fuzz FUZZTIME=20s` finds nothing across all four targets.
