@@ -82,7 +82,7 @@ wlog.WithEnrichers(
     enrich.Host(),        // host.name, host.pid, host.pod
     enrich.Deployment(),  // deploy.region, deploy.commit, deploy.version
     enrich.UserAgent(),   // client.browser, client.os, client.device
-    enrich.Geo(),         // geo.country, geo.city from CDN headers
+    enrich.Geo("cloudfront"), // geo.country, geo.city from ONE named CDN's headers
     enrich.User(func(ctx context.Context) string { return userIDFrom(ctx) }),
 )
 ```

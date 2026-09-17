@@ -31,6 +31,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `enrich.Geo` names one provider (`enrich.Geo("cloudfront")`) instead of trying several, so a
+  header a client could have sent itself is no longer trusted; its doc states the spoofing
+  risk. An enricher never replaces a non-map value at its group key, `UserAgent` and `User`
+  take `Overwrite`, geo latitude and longitude are floats, a percent-encoded city is decoded,
+  and the user-agent table holds real clients with bots and tools classed apart.
 - `sample.New` returns an error and `sample.MustNew` joins it. `sample.Rate` takes a float
   percentage, a `**` segment crosses path segments, a head decision follows
   `trace.trace_id`, a kept event records `wlog.sample_rate`, and `KeepErrorsAndSlow` keeps

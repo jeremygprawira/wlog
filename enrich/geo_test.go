@@ -19,11 +19,11 @@ func TestGeo_CloudFront_FullDetail(t *testing.T) {
 		"CloudFront-Viewer-Latitude":       "-6.2",
 		"CloudFront-Viewer-Longitude":      "106.8",
 	})
-	enrich.Geo().Enrich(context.Background(), event)
+	enrich.Geo("cloudfront").Enrich(context.Background(), event)
 
 	geo := event["geo"].(map[string]any)
 	if geo["country"] != "ID" || geo["region"] != "JK" || geo["city"] != "Jakarta" ||
-		geo["lat"] != "-6.2" || geo["lon"] != "106.8" {
+		geo["lat"] != -6.2 || geo["lon"] != 106.8 {
 		t.Errorf("geo = %v", geo)
 	}
 }
@@ -34,7 +34,7 @@ func TestGeo_Vercel_FullDetail(t *testing.T) {
 		"X-Vercel-IP-Country-Region": "01",
 		"X-Vercel-IP-City":           "Singapore",
 	})
-	enrich.Geo().Enrich(context.Background(), event)
+	enrich.Geo("vercel").Enrich(context.Background(), event)
 
 	geo := event["geo"].(map[string]any)
 	if geo["country"] != "SG" || geo["city"] != "Singapore" {
@@ -44,7 +44,7 @@ func TestGeo_Vercel_FullDetail(t *testing.T) {
 
 func TestGeo_Cloudflare_CountryOnly(t *testing.T) {
 	event := headersEvent(map[string]any{"CF-IPCountry": "US"})
-	enrich.Geo().Enrich(context.Background(), event)
+	enrich.Geo("cloudflare").Enrich(context.Background(), event)
 
 	geo := event["geo"].(map[string]any)
 	if geo["country"] != "US" {
@@ -57,7 +57,7 @@ func TestGeo_Cloudflare_CountryOnly(t *testing.T) {
 
 func TestGeo_CustomHeaders(t *testing.T) {
 	event := headersEvent(map[string]any{"X-My-Country": "MY"})
-	enrich.Geo(enrich.GeoHeaders(map[string]string{"country": "X-My-Country"})).
+	enrich.Geo("custom", enrich.GeoHeaders(map[string]string{"country": "X-My-Country"})).
 		Enrich(context.Background(), event)
 
 	geo := event["geo"].(map[string]any)
@@ -68,7 +68,7 @@ func TestGeo_CustomHeaders(t *testing.T) {
 
 func TestGeo_NoHeaders_IsNoop(t *testing.T) {
 	event := headersEvent(map[string]any{})
-	enrich.Geo().Enrich(context.Background(), event)
+	enrich.Geo("cloudfront").Enrich(context.Background(), event)
 	if _, ok := event["geo"]; ok {
 		t.Error("geo field created with no matching headers")
 	}

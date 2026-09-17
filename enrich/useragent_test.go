@@ -19,10 +19,10 @@ func TestUserAgent_Classification(t *testing.T) {
 		{"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", "Safari", "macOS", "desktop"},
 		{"Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0", "Firefox", "Linux", "desktop"},
 		{"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", "Safari", "iOS", "mobile"},
-		{"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", "Safari", "iOS", "mobile"},
+		{"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", "Safari", "iOS", "tablet"},
 		{"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36", "Chrome", "Android", "mobile"},
-		{"curl/8.4.0", "curl", "", "bot"},
-		{"Go-http-client/1.1", "Go-http-client", "", "bot"},
+		{"curl/8.4.0", "curl", "", "tool"},
+		{"Go-http-client/1.1", "Go-http-client", "", "tool"},
 		{"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "Googlebot", "", "bot"},
 		{"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)", "bingbot", "", "bot"},
 	}
@@ -51,8 +51,12 @@ func TestUserAgent_UnknownSetsRawOnly(t *testing.T) {
 	if parsed["raw"] != "SomeExoticClient/1.0" {
 		t.Errorf("raw = %v", parsed["raw"])
 	}
-	if parsed["browser"] != "" {
-		t.Errorf("browser = %v, want empty for an unrecognized UA", parsed["browser"])
+	// The parse holds only raw: an unrecognized client is not guessed at.
+	if _, ok := parsed["browser"]; ok {
+		t.Errorf("browser = %v, want no browser for an unrecognized UA", parsed["browser"])
+	}
+	if len(parsed) != 1 {
+		t.Errorf("parsed = %v, want raw alone", parsed)
 	}
 }
 

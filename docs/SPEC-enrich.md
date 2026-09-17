@@ -14,7 +14,8 @@ parsed user agent, geo from CDN headers, and a user-id lookup — evlog's enrich
 func Host(opts ...HostOption) wlog.Enricher       // sets host.name host.pid host.pod host.namespace host.node
 func Deployment(opts ...DeployOption) wlog.Enricher // sets deploy.region deploy.commit deploy.version
 func UserAgent() wlog.Enricher                     // sets http.user_agent_parsed.{browser,os,device}
-func Geo(opts ...GeoOption) wlog.Enricher          // sets geo.country geo.region geo.city geo.lat geo.lon
+func Geo(provider string, opts ...Option) wlog.Enricher // one named provider
+func GeoOld(opts ...GeoOption) wlog.Enricher          // sets geo.country geo.region geo.city geo.lat geo.lon
 func GeoHeaders(headers map[string]string) GeoOption // custom CDN header names
 func User(fn func(ctx context.Context) string) wlog.Enricher // sets user.id
 

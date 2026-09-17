@@ -55,7 +55,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-LLM-1 Caps and cost fields
 - [x] 10-LLM-2 Token semantics and the price table
 - [x] 10-SMP-1 Sampling rules
-- [ ] 10-ENR-1 Enrichers
+- [x] 10-ENR-1 Enrichers
 - [ ] 10-MEM-1 drain-memory and wlogtest
 - [ ] 10-MAP-1 Handler discovery
 - [ ] 10-MAP-2 Routes and middleware coverage

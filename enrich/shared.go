@@ -26,9 +26,17 @@ func Overwrite(on bool) Option {
 	return func(c *config) { c.overwrite = on }
 }
 
-// mergeGroup adds fields into event[group] (creating it if absent), skipping any key
-// that already exists there unless overwrite is set.
+// mergeGroup adds fields into event[group] (creating it if absent), skipping any key that
+// already exists there unless overwrite is set.
+//
+// A group key the event already holds as something other than a map is left exactly as it is:
+// an enricher adds context, and it never changes what the app itself recorded (gate G3).
 func mergeGroup(event map[string]any, group string, fields map[string]any, overwrite bool) {
+	if existing, ok := event[group]; ok && existing != nil {
+		if _, isMap := existing.(map[string]any); !isMap {
+			return
+		}
+	}
 	g, ok := event[group].(map[string]any)
 	if !ok {
 		g = map[string]any{}
