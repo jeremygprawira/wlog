@@ -86,6 +86,22 @@ func TestRelease_PlansTheRequireUpdates(t *testing.T) {
 	}
 }
 
+// TestRelease_ReadsARequireChangeLine proves that apply can read the line the
+// plan writes. A line with five fields used to look unreadable, so apply edited
+// nothing and still tagged the release.
+func TestRelease_ReadsARequireChangeLine(t *testing.T) {
+	path, ok := requireEdit("require example.com/lib v0.1.0 -> v0.2.0")
+	if !ok || path != "example.com/lib" {
+		t.Fatalf("requireEdit = %q, %v, want example.com/lib, true", path, ok)
+	}
+	if _, ok := requireEdit("the plan changed"); ok {
+		t.Error("requireEdit read a line that is not a require update")
+	}
+	if _, ok := requireEdit("require example.com/lib"); ok {
+		t.Error("requireEdit read a line with no new version")
+	}
+}
+
 // TestRelease_ReadsTheLastTagOfAModule proves that a sub-module tag puts its
 // directory in front, which is the rule that the Go module proxy follows.
 func TestRelease_ReadsTheLastTagOfAModule(t *testing.T) {

@@ -313,6 +313,18 @@ func goCommand(dir string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// requireEdit reads a change line of the plan, such as
+// "require example.com/lib v0.1.0 -> v0.2.0", and returns the module path. It
+// reports false for any other line, so a later change to the plan cannot make
+// apply edit the wrong module.
+func requireEdit(change string) (string, bool) {
+	fields := strings.Fields(change)
+	if len(fields) != 5 || fields[0] != "require" || fields[3] != "->" {
+		return "", false
+	}
+	return fields[1], true
+}
+
 // apply rewrites the require lines, commits them, and tags every module in order.
 //
 // The command updates tools/version.txt first, so the next release reads the
@@ -320,11 +332,11 @@ func goCommand(dir string, args ...string) ([]byte, error) {
 func apply(root, version string, steps []step, out io.Writer) error {
 	for _, s := range steps {
 		for _, change := range s.changes {
-			fields := strings.Fields(change)
-			if len(fields) != 4 {
+			req, ok := requireEdit(change)
+			if !ok {
 				continue
 			}
-			args := []string{"mod", "edit", "-require=" + fields[1] + "@" + version}
+			args := []string{"mod", "edit", "-require=" + req + "@" + version}
 			cmd := exec.CommandContext(context.Background(), "go", args...)
 			cmd.Dir = filepath.Join(root, s.module.Dir)
 			cmd.Env = append(os.Environ(), "GOWORK=off")
