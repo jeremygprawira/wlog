@@ -13,11 +13,11 @@ parsed user agent, geo from CDN headers, and a user-id lookup — evlog's enrich
 ```go
 func Host(opts ...HostOption) wlog.Enricher       // sets host.name host.pid host.pod host.namespace host.node
 func Deployment(opts ...DeployOption) wlog.Enricher // sets deploy.region deploy.commit deploy.version
-func UserAgent() wlog.Enricher                     // sets http.user_agent_parsed.{browser,os,device}
+func UserAgent(opts ...Option) wlog.Enricher       // sets http.user_agent_parsed.{browser,os,device}
 func Geo(provider string, opts ...Option) wlog.Enricher // one named provider: cloudflare,
                                                       // cloudfront, vercel, or custom
 func GeoHeaders(headers map[string]string) Option      // the custom provider's header names
-func User(fn func(ctx context.Context) string) wlog.Enricher // sets user.id
+func User(fn func(ctx context.Context) string, opts ...Option) wlog.Enricher // sets user.id
 
 func Overwrite(on bool) HostOption // and the equivalent on every other enricher's Option type
 // default false: an enricher never overwrites a field the request/handler already set
