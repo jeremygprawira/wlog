@@ -41,20 +41,23 @@ value before any sink sees it.
 The root module holds every stdlib-only package. A package with a third-party import
 has its own module.
 
-| Package | Import path | Module |
+| Package | Install | Tag |
 |---|---|---|
-| core, redact, pipeline, sample, enrich, drain/memory, drain/axiom, drain/loki, drain/file, drain/webhook, drain/otlp, drain/sentry, drain/clickhouse, drain/datadog, audit, wlogtest, http-std, log/slog | `github.com/jeremygprawira/wlog/...` | root |
-| herr extractor | `github.com/jeremygprawira/wlog/errors/herr` | own |
-| Echo v4, Echo v5, Gin | `github.com/jeremygprawira/wlog/middleware/echo`, `.../echo5`, `.../gin` | own each |
-| slog in and out | `github.com/jeremygprawira/wlog/log/slog` | root |
-| zap, zerolog, logrus | `github.com/jeremygprawira/wlog/log/zap`, `.../zerolog`, `.../logrus` | own each |
-| OpenTelemetry trace link | `github.com/jeremygprawira/wlog/trace/otel` | own |
-| `wlog map` CLI and analyzer | `github.com/jeremygprawira/wlog/cmd/wlog` | own |
+| core, redact, pipeline, sample, enrich, drain/memory, drain/axiom, drain/loki, drain/file, drain/webhook, drain/otlp, drain/sentry, drain/clickhouse, drain/datadog, audit, catalog, llm, wlogtest, http-std, log/slog | `go get github.com/jeremygprawira/wlog@v0.1.0` | `v0.1.0` |
+| herr extractor | `go get github.com/jeremygprawira/wlog/errors/herr@v0.1.0` | `errors/herr/v0.1.0` |
+| Echo v4 | `go get github.com/jeremygprawira/wlog/middleware/echo@v0.1.0` | `middleware/echo/v0.1.0` |
+| Echo v5 | `go get github.com/jeremygprawira/wlog/middleware/echo5@v0.1.0` | `middleware/echo5/v0.1.0` |
+| Gin | `go get github.com/jeremygprawira/wlog/middleware/gin@v0.1.0` | `middleware/gin/v0.1.0` |
+| slog, in and out | `go get github.com/jeremygprawira/wlog/log/slog@v0.1.0` | `v0.1.0` |
+| zap | `go get github.com/jeremygprawira/wlog/log/zap@v0.1.0` | `log/zap/v0.1.0` |
+| zerolog | `go get github.com/jeremygprawira/wlog/log/zerolog@v0.1.0` | `log/zerolog/v0.1.0` |
+| logrus | `go get github.com/jeremygprawira/wlog/log/logrus@v0.1.0` | `log/logrus/v0.1.0` |
+| OpenTelemetry trace link | `go get github.com/jeremygprawira/wlog/trace/otel@v0.1.0` | `trace/otel/v0.1.0` |
+| `wlog map` CLI and analyzer | `go get github.com/jeremygprawira/wlog/cmd/wlog@v0.1.0` | `cmd/wlog/v0.1.0` |
 
-Install the root module with `go get github.com/jeremygprawira/wlog`. Install an
-adapter with its own path, for example
-`go get github.com/jeremygprawira/wlog/middleware/echo`. Before the first tag, ask for a
-commit hash or use a `replace` directive on a local checkout.
+The sub-modules carry the tag in the table above. The root module is `v0.1.0` today, and v0.5.0
+sets the next one for every module in the same dependency order. The examples module is never
+tagged.
 
 ## Guides
 
@@ -70,12 +73,12 @@ commit hash or use a `replace` directive on a local checkout.
 
 | Gate | Rule | Evidence |
 |---|---|---|
-| G1 no leak | A denied value never reaches a sink or drain | `FuzzRedact_NeverLeaks`, `TestAxiom_NeverLeaksRedactedValue`, and one leak test per drain |
-| G2 race-free | `go test -race` passes on every module | `make race` |
-| G3 never blocks | A slow or panicking drain, enricher, or extractor changes nothing | `TestCore_Drain_PanicIsolated`, `TestCore_StageOrder_DroppedEventSkipsEnrichAndSinks` |
-| G4 bounded memory | Keys, errors, logs, bodies, buffers, and channels are capped | `TestCore_Set_KeyCap`, `TestCore_Error_ListCappedAtTen`, `TestAppendLog_FoldsAndCaps` |
-| G5 audit integrity | The hash chain covers the redacted bytes | `TestAudit_Verify_DetectsEditedByte`, `TestAudit_Verify_DetectsReorderedLines` |
-| G6 map determinism | Two `wlog map` runs give the same bytes | `TestGolden` in `cmd/wlog` |
+| G1 no leak | A denied value never reaches a sink or drain | [`FuzzRedact_NeverLeaks`](redact/fuzz_test.go), [`TestAxiom_NeverLeaksRedactedValue`](drain/axiom/axiom_test.go), and one leak test per drain |
+| G2 race-free | `go test -race` passes on every module | [`make race`](Makefile) |
+| G3 never blocks | A slow or panicking drain, enricher, or extractor changes nothing | [`TestCore_Drain_PanicIsolated`](drain_test.go), [`TestCore_StageOrder_DroppedEventSkipsEnrichAndSinks`](stages_test.go) |
+| G4 bounded memory | Keys, errors, logs, bodies, buffers, and channels are capped | [`TestCore_Set_KeyCap`](event_test.go), [`TestCore_Error_ListCappedAtTen`](errors_test.go), [`TestAppendLog_FoldsAndCaps`](logs_test.go) |
+| G5 audit integrity | The hash chain covers the redacted bytes | [`TestAudit_Verify_DetectsEditedByte`](audit/journal_test.go), [`TestAudit_Verify_DetectsReorderedLines`](audit/journal_test.go) |
+| G6 map determinism | Two `wlog map` runs give the same bytes | [`TestGolden`](cmd/wlog/main_test.go) |
 
 ## Success criteria
 

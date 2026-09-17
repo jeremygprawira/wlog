@@ -120,6 +120,12 @@ A herr user gets a bridge in `errors/herr`. A user of standard `errors` gets the
 registry with no bridge at all.
 
 
+### Spec approval gap
+
+The v1.2, v1.3, and v1.4 spec tables below still say "awaiting approval". Their code shipped in
+v0.2.0 to v0.4.0 before the review happened. Phase 10 fixed the findings against that code, and
+v0.5.0 records the gap in the changelog. A review pass over those specs is still open.
+
 ## v0.5 to v1.0 modules (approved 2026-09-16)
 
 This initiative fixes every finding in [the gap audit](../tasks/audit-2026-09-16.md) and connects wlog to the rest of the Go ecosystem. It ends with the v1.0.0 tag. The "Closes" column names audit ids (CORE-1, SPEC-G3, PAR-12, BET-2, and so on).
@@ -375,23 +381,25 @@ None block this map. Each one is answered in its module spec, then reviewed ther
 | (project-wide) | [SPEC.md](SPEC.md) | v3 approved 2026-09-15. v4 drafted 2026-09-16, awaiting approval |
 | `redact` | [SPEC-redact.md](SPEC-redact.md) | approved 2026-09-15 (v2) |
 | (plan) | [tasks/plan.md](../tasks/plan.md) | v2 drafted 2026-09-16, awaiting approval. v1, approved 2026-09-15, is in [tasks/archive/plan-v1.md](../tasks/archive/plan-v1.md) |
+| `repo-ci` | [SPEC-repo-ci.md](SPEC-repo-ci.md) | implemented in v0.5.0 |
+| Phase 10 fixes to existing modules | [SPEC-hardening.md](SPEC-hardening.md) | implemented in v0.5.0 |
 | `core` | [SPEC-core.md](SPEC-core.md) | approved 2026-09-15. SPEC-core-v2.md replaces its event shape, sink, field name, and configuration sections |
-| `pipeline` | [SPEC-pipeline.md](SPEC-pipeline.md) | approved 2026-09-15 |
+| `pipeline` | [SPEC-pipeline.md](SPEC-pipeline.md) | approved 2026-09-15, extended by the v0.5.0 fixes |
 | `sample` | [SPEC-sample.md](SPEC-sample.md) | approved 2026-09-15 |
 | `drain-memory` | [SPEC-drain-memory.md](SPEC-drain-memory.md) | approved 2026-09-15 |
 | `wlogtest` | [SPEC-wlogtest.md](SPEC-wlogtest.md) | approved 2026-09-15 |
 | `http-std` | [SPEC-http-std.md](SPEC-http-std.md) | approved 2026-09-15. Replaced by SPEC-http-core.md in phase 11 |
 | `enrich` | [SPEC-enrich.md](SPEC-enrich.md) | approved 2026-09-15 |
 | `errors-herr` | [SPEC-errors-herr.md](SPEC-errors-herr.md) | approved 2026-09-15 |
-| `audit` | [SPEC-audit.md](SPEC-audit.md) | approved 2026-09-15 |
+| `audit` | [SPEC-audit.md](SPEC-audit.md) | approved 2026-09-15, extended by the v0.5.0 fixes |
 | `http-echo`, `http-echo5`, `http-gin` | [SPEC-http-adapters.md](SPEC-http-adapters.md) | approved 2026-09-16. Replaced by SPEC-http-core.md in phase 11 |
 | `log-slog`, `log-zap`, `log-zerolog`, `log-logrus` | [SPEC-log-adapters.md](SPEC-log-adapters.md) | approved 2026-09-16. SPEC-track-c.md replaces its rules in phase 12 |
 | `trace-otel` | [SPEC-trace-otel.md](SPEC-trace-otel.md) | approved 2026-09-16. SPEC-track-e.md extends it in phase 14 |
 | `drain-axiom` · `drain-loki` · `drain-file` · `drain-webhook` · `drain-otlp` | [SPEC-drains-v1.md](SPEC-drains-v1.md) | approved 2026-09-16 |
-| `cli-map` | [SPEC-cli-map.md](SPEC-cli-map.md) | approved 2026-09-16 |
+| `cli-map` | [SPEC-cli-map.md](SPEC-cli-map.md) | approved 2026-09-16, extended by the v0.5.0 fixes |
 | `drain-sentry` · `drain-clickhouse` · `drain-datadog` | [SPEC-drains-v1.1.md](SPEC-drains-v1.1.md) | approved 2026-09-16 |
-| `catalog` | [SPEC-catalog.md](SPEC-catalog.md) | drafted 2026-09-16, awaiting approval |
-| `llm` | [SPEC-llm.md](SPEC-llm.md) | drafted 2026-09-16, awaiting approval |
+| `catalog` | [SPEC-catalog.md](SPEC-catalog.md) | drafted 2026-09-16, awaiting approval. The code shipped, and v0.5.0 fixes its findings |
+| `llm` | [SPEC-llm.md](SPEC-llm.md) | drafted 2026-09-16, awaiting approval. The code shipped, and v0.5.0 fixes its findings |
 | v1.2 additions to core, audit, drain-memory, drain-file, redact, errors-herr | [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md) | drafted 2026-09-16, awaiting approval |
 | `cli-init` · `cli-doctor` · `cli-agents` · cli-map additions | [SPEC-cli-v1.3.md](SPEC-cli-v1.3.md) | drafted 2026-09-16, awaiting approval |
 | `drain-posthog` · `drain-betterstack` · `drain-hyperdx` | [SPEC-drains-v1.4.md](SPEC-drains-v1.4.md) | drafted 2026-09-16, awaiting approval |
