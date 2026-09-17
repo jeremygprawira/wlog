@@ -13,7 +13,10 @@ services:
       retries: 30
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.115.0
+    # The collector project deletes old tags from the registry, so this pin needs a
+    # refresh when the registry stops serving it. 0.115.1 is the patch of the release
+    # the drain tests were written against, so the config schema stays the same.
+    image: otel/opentelemetry-collector-contrib:0.115.1
     command: ["--config=env:OTEL_CONFIG"]
     environment:
       # The collector reads its config from this env var, so the stack stays in one file.
