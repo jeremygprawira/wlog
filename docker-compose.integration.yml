@@ -50,6 +50,13 @@ services:
     image: clickhouse/clickhouse-server:25.3
     ports:
       - "8123:8123"
+    # The image restricts its default user to localhost, so a connection from the
+    # test process is refused. These variables make the image create this user with
+    # these credentials and full access instead, and make test reads the same values.
+    environment:
+      CLICKHOUSE_USER: wlog
+      CLICKHOUSE_PASSWORD: wlog
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ulimits:
       nofile:
         soft: 262144

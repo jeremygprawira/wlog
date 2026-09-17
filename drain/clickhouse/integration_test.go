@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,20 @@ const (
 	clickhouseURL   = "http://localhost:8123"
 	clickhouseTable = "wlog_integration"
 )
+
+// clickhouseAuth returns the credentials the stack creates. The image refuses its
+// default user from outside localhost, so the compose file makes this one instead.
+func clickhouseAuth() (string, string) {
+	user := os.Getenv("CLICKHOUSE_USER")
+	if user == "" {
+		user = "wlog"
+	}
+	password := os.Getenv("CLICKHOUSE_PASSWORD")
+	if password == "" {
+		password = "wlog"
+	}
+	return user, password
+}
 
 // clickhouseReady reports whether a real ClickHouse answers on localhost:8123, so the
 // test skips instead of failing when docker is not running.
@@ -43,7 +58,7 @@ func chExec(t *testing.T, query string) string {
 	if err != nil {
 		t.Fatalf("build query: %v", err)
 	}
-	req.SetBasicAuth("default", "")
+	req.SetBasicAuth(clickhouseAuth())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("clickhouse: %v", err)
@@ -69,9 +84,10 @@ func TestIntegration_ClickHouseReceivesEvent(t *testing.T) {
 	t.Cleanup(func() { chExec(t, "DROP TABLE IF EXISTS "+clickhouseTable) })
 
 	marker := fmt.Sprintf("integration-%d", time.Now().UnixNano())
+	user, password := clickhouseAuth()
 	d, err := clickhouse.NewSender(
 		clickhouse.WithURL(clickhouseURL),
-		clickhouse.WithBasicAuth("default", ""),
+		clickhouse.WithBasicAuth(user, password),
 		clickhouse.WithDatabase("default"),
 		clickhouse.WithTable(clickhouseTable),
 	)

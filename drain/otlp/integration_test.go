@@ -38,7 +38,11 @@ func TestIntegration_CollectorReceivesEvent(t *testing.T) {
 	}
 
 	output := filepath.Join("..", "..", ".integration-out", "logs.json")
-	os.Remove(output)
+	// The collector opens this file once at startup, so removing it would leave the
+	// collector writing to an unlinked file. Truncating keeps that file in place.
+	if f, err := os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+		f.Close()
+	}
 	marker := fmt.Sprintf("wlog-marker-%d", time.Now().UnixNano())
 
 	d, err := otlp.NewSender(otlp.WithEndpoint("http://localhost:4318"))

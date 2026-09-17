@@ -84,5 +84,7 @@ map:
 integration:
 	@mkdir -p .integration-out
 	docker compose -f docker-compose.integration.yml up -d --wait
-	@go test -tags=integration -timeout 180s ./drain/loki ./drain/otlp ./drain/clickhouse; status=$$?; \
+	@CLICKHOUSE_USER=wlog CLICKHOUSE_PASSWORD=wlog go test -tags=integration -timeout 180s ./drain/loki ./drain/otlp ./drain/clickhouse; status=$$?; \
+		if [ $$status -ne 0 ]; then docker compose -f docker-compose.integration.yml ps -a; \
+			docker compose -f docker-compose.integration.yml logs --no-color --tail 50; fi; \
 		docker compose -f docker-compose.integration.yml down; exit $$status
