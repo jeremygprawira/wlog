@@ -57,7 +57,21 @@ func (p Point) expand() []Point {
 // because the app's routers pull in whole frameworks. The app's own sibling packages are loaded
 // for real by loadLocal, so a handler declared next to the one that registers it still resolves.
 func Load(patterns ...string) ([]*packages.Package, error) {
-	cfg := loadConfig()
+	return load("", patterns...)
+}
+
+// LoadDir loads packages the same way Load does, but resolves patterns inside dir's own
+// module rather than the caller's. It sets Config.Dir, so a target outside the caller's
+// module, outside go.work, or under GOWORK=off still loads by its own go.mod. wlog doctor
+// uses this to inspect a directory the wlog module itself never requires.
+func LoadDir(dir string, patterns ...string) ([]*packages.Package, error) {
+	return load(dir, patterns...)
+}
+
+// load runs one packages.Load, with Config.Dir set only when dir is non-empty, and then
+// walks the local import graph with loadLocal.
+func load(dir string, patterns ...string) ([]*packages.Package, error) {
+	cfg := loadConfig(dir)
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, err
@@ -65,9 +79,11 @@ func Load(patterns ...string) ([]*packages.Package, error) {
 	return loadLocal(cfg, pkgs)
 }
 
-// loadConfig is the mode every load shares.
-func loadConfig() *packages.Config {
+// loadConfig is the mode every load shares. dir becomes Config.Dir, or the process's own
+// working directory when dir is empty.
+func loadConfig(dir string) *packages.Config {
 	return &packages.Config{
+		Dir: dir,
 		// NeedImports gives every package its direct imports; NeedDeps is what would add their
 		// syntax, and it is the setting the memory budget cannot afford.
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |

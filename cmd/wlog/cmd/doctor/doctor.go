@@ -97,7 +97,7 @@ func Inspect(dir string) []Check {
 // loadPoints loads the module's entry points from dir. A load error is returned, not swallowed:
 // a report about a package nobody read is worse than no report.
 func loadPoints(dir string) ([]entry.Point, []*packages.Package, error) {
-	pkgs, err := entry.Load(dir + "/...")
+	pkgs, err := entry.LoadDir(dir, "./...")
 	if err != nil {
 		return nil, nil, fmt.Errorf("load %s/...: %w", dir, err)
 	}

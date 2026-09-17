@@ -79,3 +79,22 @@ func TestFind_Mux(t *testing.T) {
 		t.Errorf("Function = %q, want main for the literal", point.Function)
 	}
 }
+
+// TestLoadDir_ResolvesTargetsOwnModule proves LoadDir loads a target by its own go.mod, not
+// by the caller's. otherapp declares module example.com/otherapp, which the entry module
+// never requires, so Load alone cannot reach it. LoadDir must, because it sets Config.Dir.
+func TestLoadDir_ResolvesTargetsOwnModule(t *testing.T) {
+	pkgs, err := entry.LoadDir("../testdata/otherapp", "./...")
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	for _, pkg := range pkgs {
+		for _, pkgErr := range pkg.Errors {
+			t.Errorf("load error in %s: %v", pkg.PkgPath, pkgErr)
+		}
+	}
+	points := entry.Find(pkgs)
+	if len(points) != 1 || points[0].Route != "/" {
+		t.Fatalf("points = %+v, want one point for /", points)
+	}
+}
