@@ -13,6 +13,15 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CI-6 `cover`, `bench`, `vuln`, all fuzz targets
 - [x] 10-CI-7 Release hygiene
 - [ ] Review point 10-CI: every required CI job is green, then human review
+  - Fixed 2026-09-17: `tools floor`, `tools cover -min 85`, and `tools tidy -check` all pass
+    clean. The `TestHTTPDrain_PIPE24_TimeoutApplies` failure was not flaky, it was a Go 1.21
+    stdlib difference, fixed by testing `net.Error.Timeout()` instead of `errors.Is(err,
+    context.DeadlineExceeded)`.
+  - Confirmed, not fixed in the repo: `GOTOOLCHAIN=go1.26.6 tools vuln` exits 0. The default
+    Go on this machine is 1.26.1, and GO-2026-6090, GO-2026-5972, and GO-2026-5856 are
+    standard-library CVEs fixed in 1.26.4 through .6. No wlog code or dependency is at fault.
+    Upgrading the machine's Go is one option. Adding a `toolchain` line so `go` auto-fetches a
+    patched release is another. Either is a decision for the project, not made here.
 - [x] 10-CORE-1 Value copy tree
 - [x] 10-CORE-2 Event-shape fuzz test
 - [x] 10-CORE-3 Plain lines, enricher values, drain contract
