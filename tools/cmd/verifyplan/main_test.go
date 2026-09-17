@@ -66,15 +66,31 @@ func TestVerifyPlan_SkipsProse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tasks) != 2 {
-		t.Fatalf("parsed %d tasks, want 2", len(tasks))
+	if len(tasks) != 3 {
+		t.Fatalf("parsed %d tasks, want 3", len(tasks))
 	}
 	for _, task := range tasks {
 		if task.id == "1-PROSE-1" {
 			t.Errorf("parse kept the prose task: %+v", task)
 		}
 	}
-	if tasks[0].id != "1-OK-1" || tasks[1].id != "1-BAD-1" || tasks[0].line >= tasks[1].line {
-		t.Errorf("tasks = %+v, want 1-OK-1 then 1-BAD-1", tasks)
+	wantIDs := []string{"1-OK-1", "1-BAD-1", "1-MULTI-1"}
+	for i, want := range wantIDs {
+		if tasks[i].id != want {
+			t.Errorf("tasks[%d].id = %q, want %q", i, tasks[i].id, want)
+		}
+	}
+	if tasks[0].line >= tasks[1].line || tasks[1].line >= tasks[2].line {
+		t.Errorf("tasks = %+v, want ascending line numbers", tasks)
+	}
+}
+
+// TestVerifyPlan_MultiPackagePassIsNotAFalsePositive proves that a Verify command
+// running ./... over several packages passes when its pattern matches a real test
+// in one of them, even though every sibling package prints "no tests to run".
+func TestVerifyPlan_MultiPackagePassIsNotAFalsePositive(t *testing.T) {
+	var out bytes.Buffer
+	if err := run(toolsRoot(t), fixture(t), "1-MULTI-1", &out); err != nil {
+		t.Fatalf("run returned %v, want nil:\n%s", err, out.String())
 	}
 }

@@ -11,3 +11,7 @@
 #### 1-PROSE-1 a task that describes a push instead of a command
 **Acceptance:** the checker skips this one.
 **Verify:** a branch push shows every required job green in `gh run view`.
+
+#### 1-MULTI-1 a task whose Verify command spans several packages
+**Acceptance:** a sibling package's own "no tests to run" does not fail this task.
+**Verify:** `go test -race -run 'TestVerifyPlan_SkipsProse' ./...`.

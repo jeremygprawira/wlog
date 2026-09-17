@@ -166,10 +166,22 @@ func verify(root, command string) ([]byte, error) {
 	if err != nil {
 		return out, fmt.Errorf("command failed: %w", err)
 	}
-	if strings.Contains(string(out), "no tests to run") {
+	// A "go test ./..." Verify command prints "no tests to run" for every sibling
+	// package the -run pattern misses, which is normal, not a failure. Only "=== RUN"
+	// says a test in some package actually matched and ran, from the -v flag
+	// addVerbose adds. A command with no "go test" in it, such as "go run" or
+	// "make", never prints that marker either way, so it is judged on its exit
+	// code alone.
+	if isGoTest(command) && !strings.Contains(string(out), "=== RUN") {
 		return out, fmt.Errorf("the -run pattern matches no test")
 	}
 	return out, nil
+}
+
+// isGoTest reports whether command is a go test invocation, the only kind addVerbose
+// makes print "=== RUN" for a matched test.
+func isGoTest(command string) bool {
+	return strings.Contains(command, "go test ")
 }
 
 // addVerbose asks the go command for the verbose form, so a test that never ran
