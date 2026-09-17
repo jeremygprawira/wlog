@@ -302,9 +302,9 @@ var requiredDrains = []drainVars{
 	{"webhook.MustNew", []string{"WLOG_WEBHOOK_URL"}},
 	{"file.MustNew", []string{"WLOG_FILE_PATH"}},
 	{"datadog.MustNew", []string{"DD_API_KEY"}},
-	{"posthog.Must", []string{"POSTHOG_API_KEY"}},
-	{"betterstack.Must", []string{"BETTERSTACK_SOURCE_TOKEN"}},
-	{"hyperdx.Must", []string{"HYPERDX_API_KEY"}},
+	{"posthog.MustNew", []string{"POSTHOG_API_KEY"}},
+	{"betterstack.MustNew", []string{"BETTERSTACK_SOURCE_TOKEN"}},
+	{"hyperdx.MustNew", []string{"HYPERDX_API_KEY"}},
 }
 
 // readSources concatenates every Go file in dir.

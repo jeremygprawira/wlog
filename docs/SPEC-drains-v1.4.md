@@ -18,8 +18,10 @@ variables alone. Plus the one framework example still missing, and the best-prac
 Every drain follows the shape [SPEC-drains-v1.md](SPEC-drains-v1.md) already set.
 
 ```go
-func New(opts ...Option) (wlog.Drain, error)     // reads env, then applies opts
-func Must(opts ...Option) wlog.Drain             // panics on a bad setup, for main()
+func New(opts ...Option) (wlog.Drain, error)     // reads env, then applies opts, and wraps
+func NewSender(opts ...Option) (*Sender, error)  // the raw pipeline.Sender
+func MustNew(opts ...Option) wlog.Drain          // panics on a bad setup, for main()
+func WithPipeline(...pipeline.Option) Option     // changes the pipeline New uses
 ```
 
 ### drain-posthog
@@ -30,19 +32,23 @@ func Must(opts ...Option) wlog.Drain             // panics on a bad setup, for m
 | Host | `POSTHOG_HOST` | `https://us.i.posthog.com` |
 | Event name | `WLOG_POSTHOG_EVENT` | `wlog_event` |
 
+The Better Stack host takes a scheme and a host, and adds `https://` to a bare host. A
+value with no host at all is refused at construction.
+
 PostHog takes a batch at `/batch/`, as an object with an `api_key` and a `batch` array.
 Each entry is `{event, distinct_id, properties, timestamp}`. The whole wlog event becomes
 `properties`, flattened to dotted keys, since PostHog charts a flat property well and a
 nested object poorly. `distinct_id` comes from `user.id`, and falls back to
 `trace.request_id`. A flattened key never collides, because core's own keys already read
-as paths.
+as paths. An event with no `user.id` also sets `$process_person_profile` to false, so
+PostHog does not create one billed person profile per request.
 
 ### drain-betterstack
 
 | Setting | Env var | Default |
 |---|---|---|
 | Source token | `BETTERSTACK_SOURCE_TOKEN` | required |
-| Ingest host | `BETTERSTACK_HOST` | `https://in.logs.betterstack.com` |
+| Ingest host | `BETTERSTACK_INGESTING_HOST`, alias `BETTERSTACK_HOST` | `https://in.logs.betterstack.com` |
 
 Better Stack takes a JSON array of objects, with a `Bearer` token header. The event goes
 over as it is, nested. `dt` carries the timestamp, and `level` and `message` map from the

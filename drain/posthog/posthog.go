@@ -23,9 +23,10 @@ const defaultEvent = "wlog_event"
 
 // config holds the resolved configuration.
 type config struct {
-	apiKey string
-	host   string
-	event  string
+	apiKey       string
+	host         string
+	event        string
+	pipelineOpts []pipeline.Option
 }
 
 // Option sets one config value. An option always wins over the matching env var.
@@ -40,15 +41,35 @@ func WithHost(host string) Option { return func(c *config) { c.host = host } }
 // WithEvent sets the PostHog event name. Overrides WLOG_POSTHOG_EVENT.
 func WithEvent(name string) Option { return func(c *config) { c.event = name } }
 
-// Drain posts batches to PostHog. It implements pipeline.Sender.
-type Drain struct {
+// Sender posts batches to PostHog. It implements pipeline.Sender.
+type Sender struct {
 	client *httpdrain.Client
 	apiKey string
 	event  string
 }
 
-// New builds a Drain from opts and the environment, wrapped for batching and retry.
+// New returns the drain with the pipeline defaults, or with the options WithPipeline set.
 func New(opts ...Option) (wlog.Drain, error) {
+	s, popts, err := newSender(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return pipeline.Wrap(s, popts...), nil
+}
+
+// NewSender returns the raw sender, for a caller that builds its own pipeline.
+func NewSender(opts ...Option) (*Sender, error) {
+	s, _, err := newSender(opts...)
+	return s, err
+}
+
+// WithPipeline sets the pipeline options New wraps the sender with.
+func WithPipeline(opts ...pipeline.Option) Option {
+	return func(c *config) { c.pipelineOpts = append(c.pipelineOpts, opts...) }
+}
+
+// newSender resolves one configuration from opts and the environment.
+func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
 		apiKey: os.Getenv("POSTHOG_API_KEY"),
 		host:   os.Getenv("POSTHOG_HOST"),
@@ -58,7 +79,7 @@ func New(opts ...Option) (wlog.Drain, error) {
 		opt(&c)
 	}
 	if c.apiKey == "" {
-		return nil, fmt.Errorf("posthog: POSTHOG_API_KEY is required")
+		return nil, nil, fmt.Errorf("posthog: POSTHOG_API_KEY is required")
 	}
 	if c.host == "" {
 		c.host = defaultHost
@@ -66,36 +87,42 @@ func New(opts ...Option) (wlog.Drain, error) {
 	if c.event == "" {
 		c.event = defaultEvent
 	}
-	sender := &Drain{
+	sender := &Sender{
 		client: httpdrain.New(strings.TrimRight(c.host, "/")+"/batch/", httpdrain.WithSource("posthog")),
 		apiKey: c.apiKey,
 		event:  c.event,
 	}
-	return pipeline.Wrap(sender), nil
+	return sender, c.pipelineOpts, nil
 }
 
-// Must is New, but panics on a configuration error. Use it in main.
-func Must(opts ...Option) wlog.Drain {
-	drain, err := New(opts...)
+// MustNew is New, but panics on a configuration error. Use it in main.
+func MustNew(opts ...Option) wlog.Drain {
+	d, err := New(opts...)
 	if err != nil {
 		panic(err)
 	}
-	return drain
+	return d
 }
 
 // SendBatch posts one batch object with a flattened property map per event.
-func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
+func (d *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	batch := make([]map[string]any, 0, len(events))
 	for _, event := range events {
 		timestamp := event["timestamp"]
 		if timestamp == nil {
 			timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 		}
+		properties := flatten(event, "")
+		if !hasUserID(event) {
+			// A request with no user id is not a person, and saying otherwise makes
+			// PostHog bill one profile per request.
+			properties["$process_person_profile"] = false
+		}
 		batch = append(batch, map[string]any{
 			"event":       d.event,
 			"distinct_id": distinctID(event),
 			"timestamp":   timestamp,
-			"properties":  flatten(event, ""),
+			"properties":  properties,
 		})
 	}
 	body, err := json.Marshal(map[string]any{"api_key": d.apiKey, "batch": batch})
@@ -103,6 +130,17 @@ func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
 		return fmt.Errorf("posthog: marshal batch: %w", err)
 	}
 	return d.client.Post(ctx, body, "application/json")
+}
+
+// hasUserID reports whether the event names a user, which decides whether PostHog may
+// create a person profile for it.
+func hasUserID(event map[string]any) bool {
+	user, ok := event["user"].(map[string]any)
+	if !ok {
+		return false
+	}
+	id, _ := user["id"].(string)
+	return id != ""
 }
 
 // distinctID reads user.id first, then trace.request_id.

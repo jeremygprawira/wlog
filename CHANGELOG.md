@@ -34,6 +34,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - The shared HTTP drain helper moved from `internal/httpdrain` to the public package
   `pipeline/httpdrain`, and it takes `WithHTTPClient`, `WithIdentityHeaders`, and
   `WithUserAgent`.
+- Better Stack reads `BETTERSTACK_INGESTING_HOST`; `BETTERSTACK_HOST` stays an alias.
+- The PostHog, Better Stack, and HyperDX drains return a sender from `NewSender` and an
+  async drain from `New`, with `MustNew` in place of `Must`.
 - The Sentry drain's constructors are `New` (an async drain), `NewSender` (the raw
   sender), `MustNew`, and `WithPipeline`, matching the v1 drains. A batch now sends one
   envelope per error event, as Sentry requires.

@@ -6,6 +6,7 @@ package hyperdx
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -20,9 +21,10 @@ const defaultEndpoint = "https://in-otel.hyperdx.io/v1/logs"
 
 // config holds the resolved configuration.
 type config struct {
-	apiKey   string
-	endpoint string
-	service  string
+	apiKey       string
+	endpoint     string
+	service      string
+	pipelineOpts []pipeline.Option
 }
 
 // Option sets one config value. An option always wins over the matching env var.
@@ -37,14 +39,34 @@ func WithEndpoint(endpoint string) Option { return func(c *config) { c.endpoint 
 // WithService sets the service resource attribute. Overrides HYPERDX_SERVICE.
 func WithService(service string) Option { return func(c *config) { c.service = service } }
 
-// Drain posts OTLP batches to HyperDX. It implements pipeline.Sender.
-type Drain struct {
+// Sender posts OTLP batches to HyperDX. It implements pipeline.Sender.
+type Sender struct {
 	client  *httpdrain.Client
 	service string
 }
 
-// New builds a Drain from opts and the environment, wrapped for batching and retry.
+// New returns the drain with the pipeline defaults, or with the options WithPipeline set.
 func New(opts ...Option) (wlog.Drain, error) {
+	s, popts, err := newSender(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return pipeline.Wrap(s, popts...), nil
+}
+
+// NewSender returns the raw sender, for a caller that builds its own pipeline.
+func NewSender(opts ...Option) (*Sender, error) {
+	s, _, err := newSender(opts...)
+	return s, err
+}
+
+// WithPipeline sets the pipeline options New wraps the sender with.
+func WithPipeline(opts ...pipeline.Option) Option {
+	return func(c *config) { c.pipelineOpts = append(c.pipelineOpts, opts...) }
+}
+
+// newSender resolves one configuration from opts and the environment.
+func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
 		apiKey:   os.Getenv("HYPERDX_API_KEY"),
 		endpoint: os.Getenv("HYPERDX_ENDPOINT"),
@@ -54,32 +76,51 @@ func New(opts ...Option) (wlog.Drain, error) {
 		opt(&c)
 	}
 	if c.apiKey == "" {
-		return nil, fmt.Errorf("hyperdx: HYPERDX_API_KEY is required")
+		return nil, nil, fmt.Errorf("hyperdx: HYPERDX_API_KEY is required")
 	}
 	if c.endpoint == "" {
 		c.endpoint = defaultEndpoint
 	}
-	sender := &Drain{
-		client: httpdrain.New(strings.TrimRight(c.endpoint, "/"),
+	endpoint, err := normalizeEndpoint(c.endpoint)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &Sender{
+		client: httpdrain.New(endpoint,
 			httpdrain.WithSource("hyperdx"),
 			httpdrain.WithHeader("Authorization", c.apiKey),
 		),
 		service: c.service,
-	}
-	return pipeline.Wrap(sender), nil
+	}, c.pipelineOpts, nil
 }
 
-// Must is New, but panics on a configuration error. Use it in main.
-func Must(opts ...Option) wlog.Drain {
-	drain, err := New(opts...)
+// normalizeEndpoint adds the logs path to an endpoint that names only a host, so a
+// configured host still reaches the OTLP logs endpoint instead of the site root.
+func normalizeEndpoint(endpoint string) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("hyperdx: endpoint %q: %w", endpoint, err)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("hyperdx: endpoint %q has no host", endpoint)
+	}
+	if parsed.Path == "" || parsed.Path == "/" {
+		parsed.Path = "/v1/logs"
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+// MustNew is New, but panics on a configuration error. Use it in main.
+func MustNew(opts ...Option) wlog.Drain {
+	d, err := New(opts...)
 	if err != nil {
 		panic(err)
 	}
-	return drain
+	return d
 }
 
 // SendBatch encodes the batch with the shared OTLP encoder and posts it.
-func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
+func (d *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	body, err := otlp.Encode(d.withService(events))
 	if err != nil {
 		return err
@@ -88,7 +129,7 @@ func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
 }
 
 // withService overrides the service name on each event, when one was configured.
-func (d *Drain) withService(events []map[string]any) []map[string]any {
+func (d *Sender) withService(events []map[string]any) []map[string]any {
 	if d.service == "" {
 		return events
 	}

@@ -1,0 +1,17 @@
+[
+  {
+    "dt": "2026-09-16T12:00:00Z",
+    "level": "error",
+    "message": "payment.charge",
+    "operation": "payment.charge",
+    "timestamp": "2026-09-16T12:00:00Z",
+    "error": {
+      "code": "PAYMENT_DECLINED",
+      "message": "declined"
+    },
+    "service": {
+      "name": "orders",
+      "env": "prod"
+    }
+  }
+]
