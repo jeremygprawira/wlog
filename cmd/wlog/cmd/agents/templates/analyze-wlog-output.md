@@ -3,6 +3,8 @@ name: analyze-wlog-output
 description: Read an emitted event, and answer a question from a set of them.
 ---
 
+<!-- wlog:skill -->
+
 # Analyze wlog output
 
 One event answers one request. Read the core fields first:

@@ -31,6 +31,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog doctor` loads the package under `--dir` and fails when it cannot, gives every finding a
+  `WLOG_DOCTOR_*` code with why and a fix, and prints one JSON object with `--json`. `wlog agents`
+  refuses an unpaired fence with its line number, never overwrites a skill that lacks the wlog
+  marker, keeps the file's line endings, and every template snippet compiles and runs.
 - `wlog init` rewrites with `go/ast`, wraps a nil handler around the default mux and an
   `http.Server` literal's Handler field, merges `.env.example` instead of replacing it, prints a
   unified diff on `--dry-run`, writes every file through a temporary file and a rename, and

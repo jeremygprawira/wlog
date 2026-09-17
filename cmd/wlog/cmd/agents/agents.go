@@ -34,6 +34,10 @@ const (
 	blockEnd   = "<!-- wlog:end -->"
 )
 
+// skillMarker marks a file this command wrote. A skill file without it belongs to the caller, and
+// is never overwritten.
+const skillMarker = "<!-- wlog:skill -->"
+
 // Run parses args and writes the block and skills, returning the process exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("agents", flag.ContinueOnError)
@@ -85,38 +89,80 @@ func plan(dir, skillsDir, agentsMD string) ([]write, error) {
 	}
 	agentsPath := filepath.Join(dir, agentsMD)
 	existing, _ := os.ReadFile(agentsPath)
-	writes := []write{{
-		path:    agentsPath,
-		content: mergeBlock(string(existing), string(block)),
-	}}
+	merged, err := mergeBlock(string(existing), string(block))
+	if err != nil {
+		return nil, err
+	}
+	writes := []write{{path: agentsPath, content: merged}}
+
 	for _, skill := range skillFiles {
 		content, err := templateFiles.ReadFile(skill.template)
 		if err != nil {
 			return nil, err
 		}
-		writes = append(writes, write{
-			path:    filepath.Join(dir, skillsDir, skill.file),
-			content: string(content),
-		})
+		path := filepath.Join(dir, skillsDir, skill.file)
+		if edited := existingSkill(path); edited != "" {
+			// The caller edited this file, and their work outranks ours.
+			return nil, fmt.Errorf("%s carries no %s marker, so it was not written by wlog agents: move it aside or delete it", path, skillMarker)
+		}
+		writes = append(writes, write{path: path, content: string(content)})
 	}
 	return writes, nil
 }
 
-// mergeBlock replaces the fenced block in existing, or appends one. Content outside the
-// fences is kept exactly as it was.
-func mergeBlock(existing, block string) string {
-	fenced := blockStart + "\n" + strings.TrimRight(block, "\n") + "\n" + blockEnd + "\n"
+// existingSkill returns the content of a skill file a caller already has, or "" when the file is
+// absent or carries the marker.
+func existingSkill(path string) string {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	if strings.Contains(string(content), skillMarker) {
+		return ""
+	}
+	return string(content)
+}
+
+// mergeBlock replaces the fenced block in existing, or appends one. Content outside the fences is
+// kept exactly as it was, including its line endings.
+//
+// A fence on its own is refused with the line number of the fence that is there: the text between
+// a start fence and the end of the file belongs to the caller, and a tool that treated it as its
+// own would delete it on the next run.
+func mergeBlock(existing, block string) (string, error) {
+	lineEnding := "\n"
+	if strings.Contains(existing, "\r\n") {
+		lineEnding = "\r\n"
+	}
+	fenced := blockStart + lineEnding + strings.TrimRight(block, "\n") + lineEnding + blockEnd + lineEnding
+
 	start := strings.Index(existing, blockStart)
 	end := strings.Index(existing, blockEnd)
-	if start == -1 || end == -1 || end < start {
+	switch {
+	case start == -1 && end == -1:
 		if existing == "" {
-			return fenced
+			return fenced, nil
 		}
-		return strings.TrimRight(existing, "\n") + "\n\n" + fenced
+		return strings.TrimRight(existing, "\n") + lineEnding + lineEnding + fenced, nil
+	case start == -1:
+		return "", fmt.Errorf("%s at line %d has no %s before it", blockEnd, lineOf(existing, end), blockStart)
+	case end == -1 || end < start:
+		return "", fmt.Errorf("%s at line %d has no %s after it", blockStart, lineOf(existing, start), blockEnd)
 	}
 	end += len(blockEnd)
+	if end < len(existing) && existing[end] == '\r' {
+		end++
+	}
 	if end < len(existing) && existing[end] == '\n' {
 		end++
 	}
-	return existing[:start] + fenced + existing[end:]
+	return existing[:start] + fenced + existing[end:], nil
+}
+
+// lineOf returns the 1-based line number of an offset in text.
+func lineOf(text string, offset int) int {
+	if offset < 0 || offset > len(text) {
+		return 0
+	}
+	return strings.Count(text[:offset], "\n") + 1
 }

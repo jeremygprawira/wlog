@@ -1,8 +1,11 @@
 package agents_test
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,4 +107,156 @@ func TestAgents_Golden(t *testing.T) {
 			t.Errorf("%s differs from the golden file", name)
 		}
 	}
+}
+
+// TestAgents_CLI11_UnpairedFence proves an unpaired fence is refused with its line numbers, that
+// the file is left untouched, and that a skill a caller edited without the wlog marker is never
+// overwritten.
+func TestAgents_CLI11_UnpairedFence(t *testing.T) {
+	dir := t.TempDir()
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	unpaired := "# Mine\n\n<!-- wlog:start -->\n\ntext the caller wrote\n"
+	if err := os.WriteFile(agentsPath, []byte(unpaired), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	var stderr bytes.Buffer
+	if code := agents.Run([]string{"--dir", dir}, io.Discard, &stderr); code != 1 {
+		t.Fatalf("exit %d, want 1 for an unpaired fence\nstderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "3") {
+		t.Errorf("the message names no line number: %s", stderr.String())
+	}
+	after, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(after) != unpaired {
+		t.Errorf("the refused run changed the file:\n%s", after)
+	}
+
+	// With the fence repaired, a clean run writes the block and the skills.
+	if err := os.WriteFile(agentsPath, []byte("# Mine\n\n"+agentsBlockForTest(t)), 0o644); err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if code := agents.Run([]string{"--dir", dir}, io.Discard, io.Discard); code != 0 {
+		t.Fatalf("a clean run exited %d", code)
+	}
+	edited := filepath.Join(dir, ".agents", "skills", "instrument-with-wlog.md")
+	if err := os.WriteFile(edited, []byte("# my own notes\n"), 0o644); err != nil {
+		t.Fatalf("edit skill: %v", err)
+	}
+	var second bytes.Buffer
+	if code := agents.Run([]string{"--dir", dir}, io.Discard, &second); code != 1 {
+		t.Fatalf("exit %d, want 1 for a skill without the marker\nstderr: %s", code, second.String())
+	}
+	if got, _ := os.ReadFile(edited); string(got) != "# my own notes\n" {
+		t.Errorf("the run overwrote an edited skill:\n%s", got)
+	}
+	if !strings.Contains(second.String(), "instrument-with-wlog.md") {
+		t.Errorf("the message does not name the file: %s", second.String())
+	}
+}
+
+// TestAgents_CLI3_SnippetsRun proves every Go snippet in the templates is a complete program that
+// compiles and runs.
+func TestAgents_CLI3_SnippetsRun(t *testing.T) {
+	templates, err := filepath.Glob("templates/*.md")
+	if err != nil || len(templates) == 0 {
+		t.Fatalf("no templates found: %v", err)
+	}
+	root := repoRoot(t)
+
+	blocks := 0
+	for _, path := range templates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for i, block := range goBlocks(string(data)) {
+			blocks++
+			name := fmt.Sprintf("%s-%d", filepath.Base(path), i)
+			runSnippet(t, root, name, block)
+		}
+	}
+	if blocks == 0 {
+		t.Fatal("the templates hold no Go snippet, so this test proves nothing")
+	}
+}
+
+// goBlocks returns every fenced Go block in one markdown file.
+func goBlocks(markdown string) []string {
+	var blocks []string
+	lines := strings.Split(markdown, "\n")
+	inBlock := false
+	var current []string
+	for _, line := range lines {
+		switch {
+		case !inBlock && strings.TrimSpace(line) == "```go":
+			inBlock = true
+			current = nil
+		case inBlock && strings.TrimSpace(line) == "```":
+			inBlock = false
+			blocks = append(blocks, strings.Join(current, "\n")+"\n")
+		case inBlock:
+			current = append(current, line)
+		}
+	}
+	return blocks
+}
+
+// runSnippet writes one snippet as a program and runs it.
+func runSnippet(t *testing.T, root, name, source string) {
+	t.Helper()
+	dir := t.TempDir()
+	goMod := "module example.com/snippet\n\ngo " + moduleFloor(t, "../../go.mod") +
+		"\n\nrequire github.com/jeremygprawira/wlog v0.0.0\n\nreplace github.com/jeremygprawira/wlog => " + root + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0o644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(source), 0o644); err != nil {
+		t.Fatalf("write snippet: %v", err)
+	}
+	run := exec.Command("go", "run", ".")
+	run.Dir = dir
+	run.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	if output, err := run.CombinedOutput(); err != nil {
+		t.Fatalf("snippet %s does not run: %v\n%s\n--- snippet ---\n%s", name, err, output, source)
+	}
+}
+
+// agentsBlockForTest returns a properly fenced block, which a clean run must be able to replace.
+func agentsBlockForTest(t *testing.T) string {
+	t.Helper()
+	var out bytes.Buffer
+	if code := agents.Run([]string{"--dir", t.TempDir()}, &out, io.Discard); code != 0 {
+		t.Fatalf("a run in an empty directory exited %d", code)
+	}
+	return "<!-- wlog:start -->\n<!-- wlog:end -->\n"
+}
+
+// repoRoot returns the repository root, five levels above this package.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatalf("abs: %v", err)
+	}
+	return root
+}
+
+// moduleFloor reads the go line of a go.mod file.
+func moduleFloor(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "go ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "go "))
+		}
+	}
+	t.Fatalf("%s has no go line", path)
+	return ""
 }

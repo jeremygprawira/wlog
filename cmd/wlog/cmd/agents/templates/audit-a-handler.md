@@ -3,6 +3,8 @@ name: audit-a-handler
 description: Decide what needs an audit record, and write it with a catalog entry.
 ---
 
+<!-- wlog:skill -->
+
 # Audit a handler
 
 Record an audit fact for a security-sensitive action: login, role change, refund, export,

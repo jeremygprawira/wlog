@@ -19,11 +19,15 @@ import (
 	"github.com/jeremygprawira/wlog/cmd/wlog/score"
 )
 
-// Check is one doctor result. Status is "pass", "warn", or "fail".
+// Check is one doctor result. Status is "pass", "warn", or "fail", and every check carries the
+// code it reports under plus why it matters and what to do, so a reader needs no other page.
 type Check struct {
 	Name    string `json:"name"`
 	Status  string `json:"status"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
+	Why     string `json:"why"`
+	Fix     string `json:"fix"`
 }
 
 // Run parses args and runs doctor, returning the process exit code.
@@ -42,52 +46,112 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		if check.Status == "fail" {
 			exited = 1
 		}
-		if *jsonOut {
-			data, _ := json.Marshal(check)
-			_, _ = fmt.Fprintln(stdout, string(data))
-			continue
+	}
+	if *jsonOut {
+		// One document, so a caller parses the report rather than a stream of objects.
+		document := report{Version: 1, Passed: exited == 0, Checks: checks}
+		data, err := json.MarshalIndent(document, "", "  ")
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "wlog doctor:", err)
+			return 2
 		}
-		_, _ = fmt.Fprintf(stdout, "%-5s %-12s %s\n", strings.ToUpper(check.Status), check.Name, check.Message)
+		_, _ = fmt.Fprintln(stdout, string(data))
+		return exited
+	}
+	for _, check := range checks {
+		_, _ = fmt.Fprintf(stdout, "%-5s %-12s %s  %s\n", strings.ToUpper(check.Status), check.Name, check.Code, check.Message)
 	}
 	return exited
 }
 
-// Inspect runs every check against dir.
-func Inspect(dir string) []Check {
-	points, pkgs := loadPoints(dir)
-	return []Check{
-		checkModule(dir),
-		checkAdapterRequires(dir),
-		checkMiddleware(pkgs, points),
-		checkLoggerPerRequest(pkgs, points),
-		checkDrainEnv(dir),
-		checkRedactor(dir),
-		checkScore(points, pkgs),
-	}
+// report is the whole --json document: one object holding every check.
+type report struct {
+	Version int     `json:"version"`
+	Passed  bool    `json:"passed"`
+	Checks  []Check `json:"checks"`
 }
 
-// loadPoints loads the module's entry points, quietly.
-func loadPoints(dir string) ([]entry.Point, []*packages.Package) {
+// Inspect runs every check against dir.
+func Inspect(dir string) []Check {
+	points, pkgs, loadErr := loadPoints(dir)
+	checks := []Check{}
+	if loadErr != nil {
+		// The load failure is reported, and the checks that read files still run: a team that
+		// cannot compile today can still learn whether its go.mod and its env are right.
+		checks = append(checks, failCheck("load", "WLOG_DOCTOR_LOAD", loadErr.Error(),
+			"the rules and the score need the app's syntax and types",
+			"fix the package so it compiles, then run doctor again"))
+	}
+	loaded := loadErr == nil
+	return append(checks,
+		checkModule(dir),
+		checkAdapterRequires(dir),
+		checkMiddleware(pkgs, points, loaded),
+		checkLoggerPerRequest(pkgs, points, loaded),
+		checkDrainEnv(dir),
+		checkRedactor(dir),
+		checkScore(points, pkgs, loaded),
+	)
+}
+
+// loadPoints loads the module's entry points from dir. A load error is returned, not swallowed:
+// a report about a package nobody read is worse than no report.
+func loadPoints(dir string) ([]entry.Point, []*packages.Package, error) {
 	pkgs, err := entry.Load(dir + "/...")
 	if err != nil {
-		return nil, nil
+		return nil, nil, fmt.Errorf("load %s/...: %w", dir, err)
 	}
-	return entry.Find(pkgs), pkgs
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			return nil, pkgs, fmt.Errorf("load %s/...: %v", dir, pkg.Errors[0])
+		}
+	}
+	return entry.Find(pkgs), pkgs, nil
+}
+
+// failCheck, warnCheck, and passCheck build a check with its code, why, and fix. Every check
+// carries all three, so a reader learns what was wrong and what to do from one line of output.
+func failCheck(name, code, message, why, fix string) Check {
+	return Check{Name: name, Status: "fail", Code: code, Message: message, Why: why, Fix: fix}
+}
+
+// notChecked builds the check a rule reports when the package did not load: neither a pass it
+// never earned nor a failure it cannot see.
+func notChecked(name, code, why, fix string) Check {
+	return warnCheck(name, code, "not checked: the package did not load", why, fix)
+}
+
+// warnCheck builds a check that needs attention but does not fail the run.
+func warnCheck(name, code, message, why, fix string) Check {
+	return Check{Name: name, Status: "warn", Code: code, Message: message, Why: why, Fix: fix}
+}
+
+// passCheck builds a check that passed.
+func passCheck(name, code, message, why, fix string) Check {
+	return Check{Name: name, Status: "pass", Code: code, Message: message, Why: why, Fix: fix}
 }
 
 // checkModule proves go.mod requires wlog, or a workspace provides it.
 func checkModule(dir string) Check {
 	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
 	if err != nil {
-		return Check{"module", "fail", "no go.mod in " + dir}
+		return failCheck("module", "WLOG_DOCTOR_MODULE", "no go.mod in "+dir,
+			"doctor reads the module to find the app's handlers and drains",
+			"require github.com/jeremygprawira/wlog in go.mod, or open the project inside the workspace")
 	}
 	if strings.Contains(string(data), "github.com/jeremygprawira/wlog") {
-		return Check{"module", "pass", "go.mod requires wlog"}
+		return passCheck("module", "WLOG_DOCTOR_MODULE", "go.mod requires wlog",
+			"doctor reads the module to find the app's handlers and drains",
+			"require github.com/jeremygprawira/wlog in go.mod, or open the project inside the workspace")
 	}
 	if inWorkspace(dir) {
-		return Check{"module", "pass", "a go.work provides wlog"}
+		return passCheck("module", "WLOG_DOCTOR_MODULE", "a go.work provides wlog",
+			"doctor reads the module to find the app's handlers and drains",
+			"require github.com/jeremygprawira/wlog in go.mod, or open the project inside the workspace")
 	}
-	return Check{"module", "fail", "go.mod does not require github.com/jeremygprawira/wlog"}
+	return failCheck("module", "WLOG_DOCTOR_MODULE", "go.mod does not require github.com/jeremygprawira/wlog",
+		"doctor reads the module to find the app's handlers and drains",
+		"require github.com/jeremygprawira/wlog in go.mod, or open the project inside the workspace")
 }
 
 // inWorkspace reports whether a go.work above dir belongs to the wlog workspace, so the
@@ -128,7 +192,9 @@ var adapterModules = map[string]string{
 func checkAdapterRequires(dir string) Check {
 	goMod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
 	if err != nil {
-		return Check{"adapters", "warn", "no go.mod to check"}
+		return warnCheck("adapters", "WLOG_DOCTOR_ADAPTERS", "no go.mod to check",
+			"a module imported but not required breaks the build outside the workspace",
+			"add the module to go.mod with go get")
 	}
 	sources := readSources(dir)
 	missing := []string{}
@@ -138,15 +204,24 @@ func checkAdapterRequires(dir string) Check {
 		}
 	}
 	if len(missing) > 0 {
-		return Check{"adapters", "fail", "imported but not required: " + strings.Join(missing, ", ")}
+		return failCheck("adapters", "WLOG_DOCTOR_ADAPTERS", "imported but not required: "+strings.Join(missing, ", "),
+			"a module imported but not required breaks the build outside the workspace",
+			"add the module to go.mod with go get")
 	}
-	return Check{"adapters", "pass", "every imported adapter is required"}
+	return passCheck("adapters", "WLOG_DOCTOR_ADAPTERS", "every imported adapter is required",
+		"a module imported but not required breaks the build outside the workspace",
+		"add the module to go.mod with go get")
 }
 
 // checkMiddleware proves each package with entry points installs wlog middleware.
-func checkMiddleware(pkgs []*packages.Package, points []entry.Point) Check {
+func checkMiddleware(pkgs []*packages.Package, points []entry.Point, loaded bool) Check {
+	if !loaded {
+		return notChecked("middleware", "WLOG_DOCTOR_MIDDLEWARE", "the check reads the app's types", "fix the load error above, then run doctor again")
+	}
 	if len(points) == 0 {
-		return Check{"middleware", "pass", "no entry points found"}
+		return passCheck("middleware", "WLOG_DOCTOR_MIDDLEWARE", "no entry points found",
+			"without the middleware no event is opened, so nothing is logged",
+			"wrap the router with the adapter's Middleware once, at startup")
 	}
 	byPackage := map[string]*packages.Package{}
 	for _, pkg := range pkgs {
@@ -163,13 +238,20 @@ func checkMiddleware(pkgs []*packages.Package, points []entry.Point) Check {
 		}
 	}
 	if uncovered > 0 {
-		return Check{"middleware", "fail", fmt.Sprintf("%d of %d entry points have no wlog middleware", uncovered, len(points))}
+		return failCheck("middleware", "WLOG_DOCTOR_MIDDLEWARE", fmt.Sprintf("%d of %d entry points have no wlog middleware", uncovered, len(points)),
+			"without the middleware no event is opened, so nothing is logged",
+			"wrap the router with the adapter's Middleware once, at startup")
 	}
-	return Check{"middleware", "pass", fmt.Sprintf("all %d entry points are covered", len(points))}
+	return passCheck("middleware", "WLOG_DOCTOR_MIDDLEWARE", fmt.Sprintf("all %d entry points are covered", len(points)),
+		"without the middleware no event is opened, so nothing is logged",
+		"wrap the router with the adapter's Middleware once, at startup")
 }
 
 // checkLoggerPerRequest warns when a handler builds a fresh logger per request.
-func checkLoggerPerRequest(pkgs []*packages.Package, points []entry.Point) Check {
+func checkLoggerPerRequest(pkgs []*packages.Package, points []entry.Point, loaded bool) Check {
+	if !loaded {
+		return notChecked("logger", "WLOG_DOCTOR_LOGGER", "the check reads the app's types", "fix the load error above, then run doctor again")
+	}
 	byPackage := map[string]*packages.Package{}
 	for _, pkg := range pkgs {
 		byPackage[pkg.PkgPath] = pkg
@@ -180,10 +262,14 @@ func checkLoggerPerRequest(pkgs []*packages.Package, points []entry.Point) Check
 			continue
 		}
 		if handlerBuildsLogger(pkg, point) {
-			return Check{"logger", "warn", point.Function + " builds a logger inside the handler"}
+			return warnCheck("logger", "WLOG_DOCTOR_LOGGER", point.Function+" builds a logger inside the handler",
+				"a logger built inside a handler cannot batch, flush, or be closed once",
+				"build the logger in main and pass it to the middleware")
 		}
 	}
-	return Check{"logger", "pass", "the middleware receives a process logger"}
+	return passCheck("logger", "WLOG_DOCTOR_LOGGER", "the middleware receives a process logger",
+		"a logger built inside a handler cannot batch, flush, or be closed once",
+		"build the logger in main and pass it to the middleware")
 }
 
 // checkDrainEnv proves each required drain variable is set or literal.
@@ -201,16 +287,22 @@ func checkDrainEnv(dir string) Check {
 		}
 	}
 	if len(missing) > 0 {
-		return Check{"drains", "fail", "missing variables: " + strings.Join(missing, ", ")}
+		return failCheck("drains", "WLOG_DOCTOR_DRAINS", "missing variables: "+strings.Join(missing, ", "),
+			"a drain without its variables disables itself at startup",
+			"set the variables in the environment, or drop the drain from the code")
 	}
-	return Check{"drains", "pass", "every built drain has its variables"}
+	return passCheck("drains", "WLOG_DOCTOR_DRAINS", "every built drain has its variables",
+		"a drain without its variables disables itself at startup",
+		"set the variables in the environment, or drop the drain from the code")
 }
 
 // checkRedactor proves a redactor is active outside a test.
 func checkRedactor(dir string) Check {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return Check{"redactor", "warn", "cannot read " + dir}
+		return warnCheck("redactor", "WLOG_DOCTOR_REDACTOR", "cannot read "+dir,
+			"no redaction means a secret reaches every sink",
+			"remove redact.Disabled() outside tests")
 	}
 	for _, item := range entries {
 		if item.IsDir() || !strings.HasSuffix(item.Name(), ".go") || strings.HasSuffix(item.Name(), "_test.go") {
@@ -221,14 +313,21 @@ func checkRedactor(dir string) Check {
 			continue
 		}
 		if strings.Contains(string(source), "redact.Disabled()") {
-			return Check{"redactor", "fail", item.Name() + " disables the redactor"}
+			return failCheck("redactor", "WLOG_DOCTOR_REDACTOR", item.Name()+" disables the redactor",
+				"no redaction means a secret reaches every sink",
+				"remove redact.Disabled() outside tests")
 		}
 	}
-	return Check{"redactor", "pass", "the default redactor is active"}
+	return passCheck("redactor", "WLOG_DOCTOR_REDACTOR", "the default redactor is active",
+		"no redaction means a secret reaches every sink",
+		"remove redact.Disabled() outside tests")
 }
 
 // checkScore proves the map score clears 60.
-func checkScore(points []entry.Point, pkgs []*packages.Package) Check {
+func checkScore(points []entry.Point, pkgs []*packages.Package, loaded bool) Check {
+	if !loaded {
+		return notChecked("score", "WLOG_DOCTOR_SCORE", "the check reads the app's types", "fix the load error above, then run doctor again")
+	}
 	byPackage := map[string]*packages.Package{}
 	for _, pkg := range pkgs {
 		byPackage[pkg.PkgPath] = pkg
@@ -246,9 +345,13 @@ func checkScore(points []entry.Point, pkgs []*packages.Package) Check {
 	}
 	total := score.Total(kept, checks)
 	if total < 60 {
-		return Check{"score", "fail", fmt.Sprintf("wlog map scores %d, below 60", total)}
+		return failCheck("score", "WLOG_DOCTOR_SCORE", fmt.Sprintf("wlog map scores %d, below 60", total),
+			"the rules find the observability gaps the map would score",
+			"run wlog map and fix the rules it ranks first")
 	}
-	return Check{"score", "pass", fmt.Sprintf("wlog map scores %d", total)}
+	return passCheck("score", "WLOG_DOCTOR_SCORE", fmt.Sprintf("wlog map scores %d", total),
+		"the rules find the observability gaps the map would score",
+		"run wlog map and fix the rules it ranks first")
 }
 
 // findCheck returns one check by id.
