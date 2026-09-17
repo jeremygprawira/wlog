@@ -28,9 +28,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Diff` returns a nested tree and an error, instead of a flat dotted map.
 - A failed `audit.Wrap` records the outcome `failure` instead of `error`. Migration: a query
   that filters on `outcome:error` moves to `outcome:failure`.
-- `audit.Record` gains `correlation_id` and `causation_id`, and `audit.Do` fills them from
-  the event's trace group, plus a stable `idempotency_key`. `audit.Actor` gains `model`,
-  `tools`, and `prompt_id` for the agent actor.
+- `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
+  the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
+  gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `audit.Patch` returns RFC 6902 operations with a denied path masked, and `audit.OnlyDrain`
+  forwards the audit fact alone. `redact.Redactor` gains `DeniesPath` and `Replacement` for
+  an adapter that must mask a value itself.
 - `audit.Wrap` records the code the Logger's own extractor produced, so
   `audit.error_code` agrees with `error.code`. A 401 or 403 records the outcome `denied`.
 - `audit.Mock` is silent and ignores `WLOG_LEVEL`.

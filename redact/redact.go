@@ -535,6 +535,11 @@ func (r *Redactor) matchesPath(fullPath []string) bool {
 	return false
 }
 
+// Replacement is the text the redactor writes in place of a value it masks: the fixed
+// text (default "[REDACTED]") or the ReplaceFunc's answer. An adapter that must mask a
+// value itself, such as audit.Patch building a patch, uses the same text as the pipeline.
+func (r *Redactor) Replacement() string { return r.replacementText() }
+
 // Keys returns the effective key denylist, sorted.
 func (r *Redactor) Keys() []string {
 	out := append([]string(nil), r.raw...)
@@ -548,6 +553,19 @@ func (r *Redactor) Keys() []string {
 // flag a literal key that the redactor would already deny.
 func (r *Redactor) Denies(key string) bool {
 	return r.matchesKey(key) || r.matchesLeafGlob(key)
+}
+
+// DeniesPath reports whether the redactor would mask a value at a path from the event
+// root, counting the key rules: a leaf entry that appears in the path, a leaf glob, and a
+// dotted entry that matches the whole path. It does not scan the value itself, which only
+// Apply does. An adapter that must decide before a value reaches an event, such as
+// audit.Patch, uses it.
+func (r *Redactor) DeniesPath(path ...string) bool {
+	full := strings.Join(path, ".")
+	if r.matchesKey(full) || r.matchesLeafGlob(full) {
+		return true
+	}
+	return r.matchesPath(path)
 }
 
 // Fingerprint is a short, stable hash of the effective config: the same set of keys

@@ -42,7 +42,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-AUD-5 Diff, Wrap, Mock, tests, and docs
 - [x] 10-PIPE-7 MinLevel, a public HTTP drain helper, and identity headers
 - [x] 10-AUD-6 Actor types, outcomes, and correlation ids
-- [ ] 10-AUD-7 JSON Patch and audit-only routing
+- [x] 10-AUD-7 JSON Patch and audit-only routing
 - [x] 10-DRN-1 drain-sentry
 - [x] 10-DRN-2 drain-clickhouse and the integration stack
 - [x] 10-DRN-3 drain-file

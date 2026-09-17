@@ -54,6 +54,9 @@ type Record struct {
 	// CausationID names the event that caused this action. Do fills it from
 	// trace.parent_event_id when the caller leaves it empty.
 	CausationID string `json:"causation_id,omitempty"`
+	// Changes holds the RFC 6902 operations that describe what the action changed, as
+	// audit.Patch builds them.
+	Changes []Operation `json:"changes,omitempty"`
 	// Context carries free-form facts, such as a request id or a ticket.
 	Context map[string]any `json:"context,omitempty"`
 	// ErrorCode is the code of the error behind an "error" outcome, set by Wrap.

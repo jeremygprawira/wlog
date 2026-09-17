@@ -58,6 +58,24 @@ target id, and `trace.request_id`. A retried request with the same request id th
 records the same key, and a different request does not. A caller that passes its own value
 keeps it.
 
+A record may carry `changes`, the RFC 6902 operations `audit.Patch` builds, so a reader sees
+what changed and not only its summary.
+
+### Patch and routing
+
+`Patch(before, after, opts...)` returns the RFC 6902 operations that turn one object into
+another, in a stable order: add for a key only `after` holds, remove for a key only `before`
+holds, and replace for a changed one, with each path escaped the JSON Pointer way. It returns
+an error when either side is not an object, exactly as `Diff` does. `WithRedactor` sets the
+redactor it consults, and the default is `redact.Default()`: a path the denylist denies
+carries the replacement text instead of the value, so a patch can describe a change to a
+secret without carrying the secret.
+
+`OnlyDrain(next)` forwards only the audit fact of an event. The forwarded event holds
+`timestamp`, `event_id`, `service`, `trace`, and `audit`, and nothing else, and an event with
+no audit record forwards nothing at all. Use it in front of a backend that must not receive
+the rest of the request.
+
 ### Several records per event
 
 `audit` is an array, so a second `Do`, `Deny`, or `Wrap` adds a record instead of replacing
