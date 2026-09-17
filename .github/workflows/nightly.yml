@@ -68,3 +68,7 @@ jobs:
         with:
           go-version: stable
       - run: make integration
+      # A container that exits during "up --wait" prints nothing about why, so the
+      # job prints every service log when the step above fails.
+      - if: failure()
+        run: docker compose -f docker-compose.integration.yml ps -a && docker compose -f docker-compose.integration.yml logs --no-color --tail 80

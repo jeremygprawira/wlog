@@ -17,6 +17,9 @@ services:
     # refresh when the registry stops serving it. 0.115.1 is the patch of the release
     # the drain tests were written against, so the config schema stays the same.
     image: otel/opentelemetry-collector-contrib:0.115.1
+    # The image runs as its own non-root user, which cannot write the bind mount that
+    # the otlp test reads. This stack is a throwaway, so root writes the file.
+    user: "0:0"
     command: ["--config=env:OTEL_CONFIG"]
     environment:
       # The collector reads its config from this env var, so the stack stays in one file.
