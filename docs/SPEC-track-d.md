@@ -76,6 +76,7 @@ message. Short-lived processes deliver their events before they exit.
 
 ### faas-lambda (package `wloglambda`, aws-lambda-go)
 
+<!-- snippet:sketch -->
 ```go
 func Wrap[TIn, TOut any](h func(context.Context, TIn) (TOut, error), opts ...Option) func(context.Context, TIn) (TOut, error)
 func ProcessSQS(ctx context.Context, e events.SQSEvent, fn func(context.Context, events.SQSMessage) error) events.SQSEventResponse

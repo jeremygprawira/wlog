@@ -13,6 +13,7 @@ handler then emit the same core fields. Each adapter only maps its library onto 
 
 ## propagate
 
+<!-- snippet:sketch -->
 ```go
 type Carrier interface {
 	Get(key string) string
@@ -83,6 +84,7 @@ func WithXRay() Option  // also read X-Amzn-Trace-Id and AWSTraceHeader
 
 ### API
 
+<!-- snippet:sketch -->
 ```go
 type Kind string
 

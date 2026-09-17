@@ -8,15 +8,16 @@
 ## Objective
 
 Tamper-evident audit logging for "who did what, to what, with what outcome". It reuses evlog's
-audit layer idea and the normal event pipeline rather than a separate logging path. Audit
-events are never sampled away. A hash chain makes an edited or deleted line detectable.
+audit layer idea. It also reuses the normal event pipeline, rather than a separate logging path.
+Audit events are never sampled away. A hash chain makes an edited or deleted line detectable.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 type Record struct {
 	Actor   Actor
-	Action  string // e.g. "invoice.refund"
+	Action  string // for example "invoice.refund"
 	Target  Target
 	Outcome string // "success" | "denied" | "failure"
 	Reason  string
@@ -31,9 +32,10 @@ func Do(ctx context.Context, r Record) // adds r to the reserved "audit" array o
 
 func Journal(path string, opts ...Option) wlog.Drain // append-only NDJSON, fsync'd, mode 0600,
                                        // resumes the hash chain from the file's last line
-func WithKey(key []byte) Option      // signs every line, so Verify(path, key) checks the HMAC
-func Verify(path string, key ...[]byte) error // walks a journal file, re-derives each hash from
-                                       // the bytes on disk, returns the first mismatch or nil
+func WithKey(key []byte) Option      // signs every line
+func Verify(path string, key ...[]byte) error // walks a journal file
+                                       // re-derives each hash from the bytes on disk
+                                       // returns the first mismatch, or nil
 func VerifyHead(path, head string, key ...[]byte) error // as Verify, and the last line must end
                                        // the chain at head
 func VerifySigned(path string, key []byte) error // as Verify(path, key): every line must be
@@ -43,58 +45,56 @@ func VerifySigned(path string, key []byte) error // as Verify(path, key): every 
 ### Who acted, and which request it was
 
 Every record names one actor type: `user`, `service`, `system`, or `agent`. An agent actor
-also fills `model`, `tools`, and `prompt_id`, so a review can tell which model, which tools,
+also fills `model`, `tools`, and `prompt_id`. A review can then tell which model, which tools,
 and which prompt were behind an action. `Actor.Valid` reports whether a type is one of the
-four, and `Do` never rejects a record over it, because losing an audit fact is worse than an
-odd type.
+four. `Do` never rejects a record over it, because an odd type is better than a lost fact.
 
 An outcome is `success`, `denied`, or `failure`. `audit.Success`, `audit.Denied`, and
 `audit.Failure` name them.
 
-`Do` fills three fields the caller may leave empty: `correlation_id` from
-`trace.request_id`, `causation_id` from `trace.parent_event_id`, and `idempotency_key`, the
-first 32 hex characters of a SHA-256 over the action, the actor id, the target type, the
-target id, and `trace.request_id`. A retried request with the same request id therefore
-records the same key, and a different request does not. A caller that passes its own value
-keeps it.
+`Do` fills three fields the caller can leave empty. `correlation_id` comes from
+`trace.request_id`, and `causation_id` comes from `trace.parent_event_id`. `idempotency_key`
+is the first 32 hex characters of a SHA-256 over five things: the action, the actor id, the
+target type, the target id, and `trace.request_id`. A retried request records the same key.
+A different request records a different one. A caller that passes its own value keeps it.
 
-A record may carry `changes`, the RFC 6902 operations `audit.Patch` builds, so a reader sees
-what changed and not only its summary.
+A record can carry `changes`, the RFC 6902 operations that `audit.Patch` builds. A reader then
+sees what changed, and not only its summary.
 
 ### Patch and routing
 
 `Patch(before, after, opts...)` returns the RFC 6902 operations that turn one object into
-another, in a stable order: add for a key only `after` holds, remove for a key only `before`
-holds, and replace for a changed one, with each path escaped the JSON Pointer way. It returns
-an error when either side is not an object, exactly as `Diff` does. `WithRedactor` sets the
-redactor it consults, and the default is `redact.Default()`: a path the denylist denies
-carries the replacement text instead of the value, so a patch can describe a change to a
-secret without carrying the secret.
+another, in a stable order. It adds a key only `after` holds, removes a key only `before`
+holds, and replaces a changed one. Each path is escaped the JSON Pointer way. When either side
+is not an object, it returns an error, exactly as `Diff` does. `WithRedactor` sets the redactor
+it consults, and the default is `redact.Default()`. A path the denylist denies carries the
+replacement text instead of the value. A patch can then describe a change to a secret without
+carrying the secret.
 
-`OnlyDrain(next)` forwards only the audit fact of an event. The forwarded event holds
-`timestamp`, `event_id`, `service`, `trace`, and `audit`, and nothing else, and an event with
-no audit record forwards nothing at all. Use it in front of a backend that must not receive
-the rest of the request.
+`OnlyDrain(next)` forwards only the audit fact of an event. The forwarded event holds five
+keys: `timestamp`, `event_id`, `service`, `trace`, and `audit`. It holds nothing else. An event
+with no audit record forwards nothing at all. Use it in front of a backend that must not
+receive the rest of the request.
 
 ### The audit policy from a catalog
 
 `audit.Catalog(reg)` reads the policy of the entry whose `Audit.Action` matches a record's
-action. It fills `target.type` when the record has none, writes `violations` with the name of
-every rule the record breaks, keeps `reason_missing` for the older single-rule field, and
-masks the value of every change operation that the policy's `RedactPaths` names. A record that
-breaks a rule is never dropped.
+action. When the record has no `target.type`, the policy fills it. The policy writes
+`violations`, which names every rule the record breaks. It keeps `reason_missing` for the older
+single-rule field. It also masks the value of every change operation that `RedactPaths` names.
+A record that breaks a rule is never dropped.
 
 ### Several records per event
 
 `audit` is an array, so a second `Do`, `Deny`, or `Wrap` adds a record instead of replacing
-the first. One event holds at most 20 records, per the caps in [SPEC.md](SPEC.md); a record past
-the cap counts as a dropped field rather than disappearing quietly. The `audit` array always has
-room on its event, even when the event already holds the full set of top-level keys, so the key
-cap can never drop an audit record (gate G5).
+the first. One event holds at most 20 records, per the caps in [SPEC.md](SPEC.md). A record past
+the cap counts as a dropped field rather than disappearing quietly. When every other top-level key is
+taken, the `audit` array still has room on its event. The key cap can therefore
+never drop an audit record (gate G5).
 
-`Do` writes to the open event when `ctx` carries one that is still accepting writes. After the
-event's `end` ran, and outside a `Start` altogether, `Do` opens and closes its own event, so a
-late call records the fact instead of writing into a sealed event where it would be lost.
+When `ctx` carries an event that still accepts writes, `Do` writes to that event. After the
+event's `end` ran, and outside a `Start` altogether, `Do` opens and closes its own event. A
+late call then records the fact, instead of writing into a sealed event where it is lost.
 
 ### Never sampled
 
@@ -103,12 +103,12 @@ order). This module then needs no sampling override of its own. It only needs to
 
 ### Hash chain
 
-Computed at write time, **after redaction** (so the chain covers exactly the bytes that leave the
-process, never raw secrets). `hash = sha256(line_bytes)`, where `line_bytes` is the exact JSON
-line that `Journal` writes, with the value of `audit.hash` and, when a key is set,
-`audit.signature` replaced by zeros. The hash therefore covers every other byte on the line, so
-JSON whitespace, a reordered key, a duplicate key, and a number written in another form all fail
-`Verify`. Byte edits such as `1` to `1.0` or `9007199254740993` to `9007199254740992` change the
+Computed at write time, **after redaction**. The chain therefore covers exactly the bytes that
+leave the process, and never a raw secret. `hash = sha256(line_bytes)`. `line_bytes` is the
+exact JSON line that `Journal` writes, with two values replaced by zeros. The first is
+`audit.hash`. The second is `audit.signature`. The writer must hold a key for that value to appear. The hash therefore covers every other byte on the line.
+JSON whitespace, a reordered key, a duplicate key, and a number written in another form all
+fail `Verify`. Byte edits such as `1` to `1.0` or `9007199254740993` to `9007199254740992` change the
 covered bytes, and a CRLF ending does too.
 
 ### Marker lines
@@ -118,12 +118,12 @@ Every 100 records, and once more on `Close`, `Journal` writes a marker line:
 the number of records the chain covered, and `head` is the hash of the last line before the
 marker. The marker is a chain link like any record, so its own hash covers the count and head it
 states. With a key the marker also carries `key_id`, the first 16 hex characters of
-`sha256(key)`, so a reader learns which key to ask for.
+`sha256(key)`. A reader then learns which key to ask for.
 
-`Verify` checks each marker against the lines before it, so a record deleted from the middle
-fails on the count and the head as well as on the chain. A cut at the very end removes the last
-marker too, so the only way to catch it is `VerifyHead` with a head kept outside the file. A
-journal that holds no record at all fails `Verify`.
+`Verify` checks each marker against the lines before it. A record deleted from the middle then
+fails on the count, on the head, and on the chain. A cut at the very end removes the last marker
+too. Only `VerifyHead` catches that cut, with a head kept outside the file. A journal that holds
+no record at all fails `Verify`.
 
 `Journal` owns the chain state (the last hash) and the write lock, so the lines land in chain
 order whatever the arrival order. `prev_hash` and `hash` are set as `audit.prev_hash` and
@@ -137,9 +137,9 @@ not instead of it): it hashes the line it is about to write, appends it, and fsy
 one lock. One NDJSON line per event it receives, opened `O_APPEND|O_CREATE`, mode 0600. Audit
 logs are low-volume, so durability beats throughput here.
 
-One journal file has one writer. On Unix, `Journal` takes an exclusive `flock` on the file, and
-a second writer is refused with a reported error. The kernel drops that lock when the process
-ends, so a crash leaves no stale lock. On Windows the lock is a sibling `<path>.lock` file,
+One journal file has one writer. On Unix, `Journal` takes an exclusive `flock` on the file. A
+second writer is then refused with a reported error. When the process ends, the kernel drops
+that lock, so a crash leaves no stale lock. On Windows the lock is a sibling `<path>.lock` file,
 because the standard library exposes no file lock there. A crash can leave that file behind, and
 the error names it.
 
@@ -155,11 +155,11 @@ open rather than continue a tampered file.
 ### Verify
 
 `Verify(path, key...)` reads the file line by line. For each line it recomputes the hash from the
-bytes on disk, with the chain and signature values zeroed as the writer did, and compares it with
-the stored `audit.hash`. The line's `audit.prev_hash` must also equal the previous line's hash,
-which catches a deleted or a reordered line. The first mismatch is reported with its line number.
-An empty line, a line without a valid `audit.hash`, and a malformed chain field are errors.
-`Verify` only reports; it never repairs a chain.
+bytes on disk, with the chain and signature values zeroed as the writer did. It compares that
+hash with the stored `audit.hash`. The line's `audit.prev_hash` must also equal the previous
+line's hash. That check catches a deleted line and a reordered line. The first mismatch is
+reported with its line number. An empty line, a line without a valid `audit.hash`, and a
+malformed chain field are errors. `Verify` only reports, and it never repairs a chain.
 
 ## Success Criteria
 
@@ -179,9 +179,9 @@ An empty line, a line without a valid `audit.hash`, and a malformed chain field 
 
 ## Testing
 
-Package `audit_test`, black-box. Each tampering test builds its journal in a temp directory,
-changes the bytes it needs, and asserts on `Verify`'s error, so no fixture file can drift from
-the writer's format.
+Package `audit_test`, black-box. Each tampering test builds its journal in a temp directory and
+changes the bytes it needs. It then asserts on `Verify`'s error. No fixture file can therefore
+drift from the writer's format.
 
 ## Boundaries
 

@@ -17,6 +17,7 @@ which keeps this package in the root module and free of a vendor's release cycle
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 // Record is one model call. A zero field is left off the event, so a caller fills only
 // what its own client reports.
@@ -67,6 +68,7 @@ func Add(ctx context.Context, r Record)
 
 ### Pricing
 
+<!-- snippet:sketch -->
 ```go
 // Price is one model's rate, in micros per million tokens.
 type Price struct {
@@ -89,6 +91,7 @@ carries the date it was checked, and a caller overrides any row with `With`.
 
 ### Enricher
 
+<!-- snippet:sketch -->
 ```go
 func Enricher(p *Prices) wlog.Enricher
 ```

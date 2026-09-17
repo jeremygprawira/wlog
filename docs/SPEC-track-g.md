@@ -15,6 +15,7 @@ unless the user opts in.
 
 ## llm additions (root)
 
+<!-- snippet:sketch -->
 ```go
 type Record struct {
 	Provider               string   // OTel gen_ai.provider.name: openai, anthropic, gcp.gemini, gcp.vertex_ai, ...

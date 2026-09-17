@@ -30,7 +30,7 @@ any fields the caller adds.
 | `level` | core | `debug`, `info`, `warn`, or `error` |
 | `operation` | `Start` | the name passed to `Start`, or the route for HTTP |
 | `duration_ms` | core | time from `Start` to emit |
-| `outcome` | core | `success`, or `error` when the level is `error` |
+| `outcome` | core | `success`, or `error` for an error level |
 | `service.name` `service.version` `service.env` | `WithService` | service metadata |
 | `trace.request_id` | http-std | one id per request, also sent as `X-Request-ID` |
 | `trace.trace_id` `trace.span_id` | http-std or `trace/otel` | W3C trace context |
@@ -55,7 +55,7 @@ mistake.
 Every event runs the same five stages, in this order:
 
 ```
-1. keep/sample   a Keeper decides; audit events always pass
+1. keep/sample   a Keeper decides. Audit events always pass
 2. enrich        every Enricher, in order
 3. redact        the active redactor
 4. rename        the active field-name preset

@@ -6,10 +6,11 @@
 ## Objective
 
 Built-in `wlog.Enricher`s for context every event benefits from: host/deployment metadata, a
-parsed user agent, geo from CDN headers, and a user-id lookup — evlog's enricher set, in Go.
+parsed user agent, geo from CDN headers, and a user-id lookup, evlog's enricher set, in Go.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 func Host(opts ...HostOption) wlog.Enricher       // sets host.name host.pid host.pod host.namespace host.node
 func Deployment(opts ...DeployOption) wlog.Enricher // sets deploy.region deploy.commit deploy.version
@@ -27,8 +28,8 @@ func Overwrite(on bool) HostOption // and the equivalent on every other enricher
 `POD_NAMESPACE`, `NODE_NAME`) when present. `Deployment` reads `REGION`, `GIT_COMMIT`/
 `COMMIT_SHA`, and falls back to the Logger's own `service.version`. `UserAgent` parses
 `http.user_agent` (set by `http-std`) with a small stdlib-only matcher recognizing Chrome, Edge,
-Firefox, Safari, common HTTP clients (curl, Go-http-client), and major bots; iOS/Android/Windows/
-macOS/Linux; mobile/desktop/bot device class. `Geo` reads, in order, Cloudflare (`CF-IPCountry`
+Firefox, Safari, common HTTP clients (curl, Go-http-client), and major bots. IOS/Android/Windows/
+macOS/Linux. Mobile/desktop/bot device class. `Geo` reads, in order, Cloudflare (`CF-IPCountry`
 country only), CloudFront (`CloudFront-Viewer-Country/Region/City/Latitude/Longitude`), Vercel
 (`X-Vercel-IP-Country/Country-Region/City/Latitude/Longitude`) headers found on
 `http.request_headers`, or a caller-supplied header map via `GeoHeaders`.
@@ -37,12 +38,12 @@ country only), CloudFront (`CloudFront-Viewer-Country/Region/City/Latitude/Longi
 
 1. `Host()` sets `host.name`/`host.pid` on a plain event with no HTTP context.
 2. `UserAgent()` correctly classifies ≥ 30 real UA strings across the browsers/OSes/device
-   classes listed above; an unrecognized UA sets only `http.user_agent_parsed.raw`.
+   classes listed above. An unrecognized UA sets only `http.user_agent_parsed.raw`.
 3. `Geo()` extracts full country/region/city/lat/lon from CloudFront and Vercel headers, and
    country-only from Cloudflare's single header.
 4. `Overwrite(false)` (default) never replaces a field the event already has; `Overwrite(true)`
    does.
-5. `User(fn)` panicking is isolated by core's existing enricher panic-recovery — no extra
+5. `User(fn)` panicking is isolated by core's existing enricher panic-recovery, no extra
    isolation code needed in this module (reuses `wlog.Logger.runEnrichers`'s guarantee).
 6. Zero imports outside the standard library.
 
@@ -55,7 +56,7 @@ Package `enrich_test`, black-box.
 
 - **Always:** default `Overwrite(false)`.
 - **Ask first:** adding a new CDN's geo headers to the built-in list vs. requiring `GeoHeaders`.
-- **Never:** make a network call from an enricher (no IP-geolocation lookups — CDN headers only).
+- **Never:** make a network call from an enricher (no IP-geolocation lookups, CDN headers only).
 
 ## Open Questions
 

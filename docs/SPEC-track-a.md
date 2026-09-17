@@ -59,6 +59,7 @@ has a one-line setup. An adapter that adds to an open event reads the Logger fro
 
 ### rpc-grpc (package `wloggrpc`, google.golang.org/grpc)
 
+<!-- snippet:sketch -->
 ```go
 func ServerOptions(log *wlog.Logger, opts ...Option) []grpc.ServerOption // chained unary and stream interceptors
 func DialOptions(opts ...Option) []grpc.DialOption                        // client interceptors
@@ -90,6 +91,7 @@ func PropagateTrace(on bool) Option                                        // de
 
 ### rpc-connect (package `wlogconnect`, connectrpc.com/connect)
 
+<!-- snippet:sketch -->
 ```go
 func Interceptor(log *wlog.Logger, opts ...Option) connect.Interceptor // server and client
 ```
@@ -107,6 +109,7 @@ func Interceptor(log *wlog.Logger, opts ...Option) connect.Interceptor // server
 
 ### rpc-gqlgen (package `wloggqlgen`, 99designs/gqlgen)
 
+<!-- snippet:sketch -->
 ```go
 func Extension(opts ...Option) graphql.HandlerExtension // OperationInterceptor and ResponseInterceptor
 func Recover(next graphql.RecoverFunc) graphql.RecoverFunc
@@ -126,6 +129,7 @@ func Recover(next graphql.RecoverFunc) graphql.RecoverFunc
 
 ### rpc-twirp (package `wlogtwirp`, twitchtv/twirp)
 
+<!-- snippet:sketch -->
 ```go
 func ServerHooks(opts ...Option) *twirp.ServerHooks
 func ClientHooks(opts ...Option) *twirp.ClientHooks

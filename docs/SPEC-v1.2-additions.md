@@ -15,6 +15,7 @@ Task D1 in the plan cleans them and adds a back link to this file from each one.
 
 `ErrorInfo` gains two maps that split what an error carries by audience.
 
+<!-- snippet:sketch -->
 ```go
 type ErrorInfo struct {
     // every field in SPEC-core.md stays as it is
@@ -30,6 +31,7 @@ part of this error is safe to send back.
 
 Two helpers cover the common path.
 
+<!-- snippet:sketch -->
 ```go
 func ErrorData(ctx context.Context) map[string]any // the current error's Data, or nil
 func Errorf(ctx context.Context, format string, a ...any) error
@@ -50,6 +52,7 @@ same extractor, so a decorator such as `catalog.Extractor` can wrap it.
 
 ## core: global modes (gap 15)
 
+<!-- snippet:sketch -->
 ```go
 func SetEnabled(on bool)  // process-wide off switch, default on
 func Enabled() bool
@@ -72,6 +75,7 @@ large decoded payload and does not want a second JSON round trip.
 
 `audit.Record` gains five fields.
 
+<!-- snippet:sketch -->
 ```go
 type Record struct {
     // Actor, Action, Target, Outcome, Reason stay as they are
@@ -84,6 +88,7 @@ type Record struct {
 
 New calls:
 
+<!-- snippet:sketch -->
 ```go
 func Deny(ctx context.Context, r Record)  // Outcome "denied", for a refused action
 func Only(ctx context.Context, r Record)  // audit record with no other event fields
@@ -120,6 +125,7 @@ incomplete one.
 
 ## drain-memory: named stores and queries (gap 5)
 
+<!-- snippet:sketch -->
 ```go
 func Named(name string, size int) *Memory // returns the same store for the same name
 func Stores() []string
@@ -142,6 +148,7 @@ between them. `Clear` empties a store and keeps its size.
 
 ## drain-file: read and tail (gap 4)
 
+<!-- snippet:sketch -->
 ```go
 func Read(path string, f memory.Filter) ([]map[string]any, error)
 func Tail(ctx context.Context, path string, f memory.Filter) (<-chan map[string]any, error)
@@ -160,6 +167,7 @@ Both reuse `memory.Filter`, so one filter type covers both readers.
 
 ## redact: a replacement function (partial)
 
+<!-- snippet:sketch -->
 ```go
 func ReplaceFunc(fn func(match string) string) Option
 ```
@@ -170,6 +178,7 @@ string, so a bad mask function can never leak the raw value.
 
 ## errors-herr: the catalog bridge (gap 2)
 
+<!-- snippet:sketch -->
 ```go
 func Catalog(classes ...*herr.Class) []catalog.Entry
 ```

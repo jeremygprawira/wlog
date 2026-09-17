@@ -10,6 +10,7 @@ stdout.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 func New(t testing.TB, opts ...wlog.Option) (*wlog.Logger, *Recorder)
 
@@ -26,7 +27,7 @@ func (r *Recorder) RequireCount(t testing.TB, n int)
 
 `New` builds a real `*wlog.Logger` with `WithFormat(wlog.FormatJSON)` (silences the pretty
 console during tests) plus a `drain/memory.Memory`-backed drain, merges in any user-supplied
-`opts` (so a custom redactor, sampler, etc. can still be tested), and returns both. `Require*`
+`opts` (so a custom redactor, sampler, and so on can still be tested), and returns both. `Require*`
 failures call `t.Helper()` and print the closest event (via `Last()`) alongside the mismatch, so
 a failing assertion shows what was actually logged, not just "not equal".
 
@@ -36,7 +37,7 @@ a failing assertion shows what was actually logged, not just "not equal".
    `rec.RequireField(t, "order_id", "4821")` without the test touching stdout.
 2. `RequireErrorCode` fails with a readable message (showing `Last()`) when the code doesn't
    match or no error was logged.
-3. User options passed to `New` (e.g. a custom redactor) take effect — proven by a test that
+3. User options passed to `New` (for example a custom redactor) take effect, proven by a test that
    configures `redact.Disabled()` and confirms an unmasked value shows up in `Events()`.
 4. Zero imports outside the standard library plus `drain/memory` and `core`, both in-module.
 

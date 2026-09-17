@@ -12,6 +12,7 @@ err)` gets herr's full internal detail without core knowing herr exists.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 func Extractor(opts ...Option) wlog.ErrorExtractor
 

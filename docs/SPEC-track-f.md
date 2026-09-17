@@ -89,6 +89,7 @@ wlog version [--json]          # tool, rules, and schema versions, and the Go ve
 
 ## drain-memory additions
 
+<!-- snippet:sketch -->
 ```go
 func (m *Memory) QueryHandler(opts ...HandlerOption) http.Handler // GET /events
 func (m *Memory) StreamHandler(opts ...HandlerOption) http.Handler // GET /events/stream (SSE v2)

@@ -12,6 +12,7 @@ works in one process only, with no network.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 func New(size int) *Memory // size <= 0 defaults to 1000; implements wlog.Drain
 

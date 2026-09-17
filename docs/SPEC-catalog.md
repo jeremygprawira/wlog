@@ -17,6 +17,7 @@ get the same result.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 // Entry is one code's static facts. A registry copies it, so a caller cannot change an
 // entry after New returns.
@@ -75,18 +76,18 @@ spelling does.
 
 ### Matching, duplicates, and short codes
 
-`Extractor` matches full codes. A registry resolves a short code only after
-`AllowShortCodes`, because a short spelling is easy to hit by accident: the default
-extractor's own `INTERNAL` would otherwise pick up an entry named `internal` and attach that
-entry's status and guidance to every plain error. A nil registry is skipped.
+`Extractor` matches full codes. A registry resolves a short code only after `AllowShortCodes`.
+A short spelling is easy to hit by accident. The default extractor reports a code named
+`INTERNAL`. Without this rule, that code picks up the entry named `internal`. Every plain
+error then carries that entry's status and guidance. A nil registry is skipped.
 
-`Extractor` refuses two registries that define the same full code, because the answer would
-otherwise depend on the order of the arguments, and `MustExtractor` panics instead. Two
-registries with different prefixes never collide.
+`Extractor` refuses two registries that define the same full code. The answer then depends
+on the order of the arguments. `MustExtractor` panics instead of returning the error.
+Two registries with different prefixes never collide.
 
-`errors.Is(err, entry)` is true only inside the registry the error came from: the entry
-carries its domain, so an entry with the same short code in another domain, and a hand-built
-`Entry` that belongs to no registry, never match.
+`errors.Is(err, entry)` is true only inside the registry the error came from. The entry carries
+its domain. An entry with the same short code in another domain never matches, and neither
+does a hand-built `Entry` that belongs to no registry.
 
 ### The agnostic path
 
@@ -126,14 +127,14 @@ are copies, so an event never shares a map with the registry.
 ### The audit policy
 
 `audit.Catalog(reg)` reads the policy of the entry whose `Audit.Action` matches an audit
-record's action. It fills `target.type` when the record has none, lists every rule the record
-breaks in `record.violations`, keeps `record.reason_missing` for the older single-rule field,
-and masks the value of every change operation that `RedactPaths` names.
+record's action. When the record has no `target.type`, the policy fills it. It lists every rule
+the record breaks in `record.violations`, and it keeps `record.reason_missing` for the older
+single-rule field. It also masks the value of every change operation that `RedactPaths` names.
 
 The rule names are `reason_required` and `changes_required`. A record that breaks a rule is
-never dropped, because an incomplete fact is worth more than a lost one, and a reader that
-sees the violation knows to ask for the rest. A `RedactPaths` entry matches a change
-operation's JSON Pointer exactly or as a prefix, so `user.creds` covers `user.creds.nik`.
+never dropped, because an incomplete fact is worth more than a lost one. A reader that sees the
+violation knows to ask for the rest. A `RedactPaths` entry matches a change operation's JSON
+Pointer exactly or as a prefix. `user.creds` therefore covers `user.creds.nik`.
 
 ## Success Criteria
 

@@ -63,7 +63,7 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | ClickHouse | built | `drain/clickhouse` with `DDL` |
 | OTLP | built | `drain/otlp` |
 | Datadog | built | `drain/datadog` |
-| Sentry | partial | `drain/sentry` sends issues and logs; evlog's page focuses on its log adapter |
+| Sentry | partial | `drain/sentry` sends issues and logs. Evlog's page focuses on its log adapter |
 | File system | built | `drain/file` writes NDJSON with rotation, and `file.Read`/`file.Tail` read and follow it |
 | Memory | built | ring buffer, `Snapshot`, `Subscribe`, `SSEHandler`, plus `Named`, `Stores`, `Query`, and `Clear` |
 | PostHog | built | `drain/posthog` |
@@ -87,14 +87,14 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | overview | built | `Drain`, `Enricher`, `Keeper`, plugins |
 | custom-drains | built | `wlog.DrainFunc`, `pipeline.Sender` |
 | custom-enrichers | built | `wlog.EnricherFunc` |
-| custom-framework | partial | `middleware/nethttp` is the base to wrap; no adapter guide |
+| custom-framework | partial | `middleware/nethttp` is the base to wrap. No adapter guide |
 | drain-pipeline | built | `pipeline.Wrap` with batching, retry, bounded buffer, `FanOut`, `Close` |
 | identity-headers | built | `pipeline/httpdrain` sends `User-Agent: wlog/<version>` and `X-Wlog-Source` |
 | stream | built | `drain/memory` with `SSEHandler` |
 | plugins | built | `Plugin` plus optional `Setup`, `Enricher`, `Keeper`, `Drain`, `RequestStarter`, `RequestFinisher` |
 | tail-sampling | built | `sample` keep rules |
 | fs-reader | built | `file.Read` and `file.Tail` |
-| diagnostics-channel | not adopted | Node runtime specific; the Go analogue is the slog input handler, which is built |
+| diagnostics-channel | not adopted | Node runtime specific. The Go analogue is the slog input handler, which is built |
 | consumer-recipes | partial | `docs/customization.md` has drain recipes, not the full set |
 
 ## use-cases
@@ -106,9 +106,9 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | structured-logging-nodejs | built | README quick start covers the Go shape |
 | audit: overview, schema, recording, pipeline, compliance, recipes | built | `audit.Do` plus version, idempotency key, context, `Deny`, `Only`, `Wrap`, `Diff`, `Sign`, `Mock`, and catalog-driven policy. The compliance guidance is not written yet |
 | client-logging | not adopted | browser specific |
-| better-auth: overview, middleware, identify-user, client-sync, performance | not adopted | TypeScript auth library; the concept maps to `enrich.User` and `WithUserFunc` |
+| better-auth: overview, middleware, identify-user, client-sync, performance | not adopted | TypeScript auth library. The concept maps to `enrich.User` and `WithUserFunc` |
 | AI SDK: overview, usage, options, metadata, telemetry | built | `llm` records tokens, tools, stream timing, and exact cost. It is not an SDK wrapper, so a caller fills the record |
-| eve | not adopted | Vercel agent framework; the concept is covered by the `enrich-llm` plan |
+| eve | not adopted | Vercel agent framework. The concept is covered by the `enrich-llm` plan |
 | telemetry: overview, setup, ingest, reference | not adopted | product telemetry for CLI authors |
 
 ## reference
@@ -153,7 +153,7 @@ Ranked by value, with the evlog page that motivates each one.
 | Browser and client logging | JavaScript in the browser, not the language wlog serves |
 | Vite plugin | Vite is a JavaScript build tool |
 | NuxtHub storage | Cloudflare Workers and TypeScript |
-| Better Auth | A TypeScript auth library; wlog covers the user field with `enrich.User` |
-| eve | A TypeScript agent framework; the lasting part is LLM observability, which is gap 1 |
+| Better Auth | A TypeScript auth library. Wlog covers the user field with `enrich.User` |
+| eve | A TypeScript agent framework. The lasting part is LLM observability, which is gap 1 |
 | CLI and product telemetry | wlog sends no telemetry |
 | TypeScript framework adapters | Go has its own frameworks, all covered |

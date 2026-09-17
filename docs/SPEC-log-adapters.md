@@ -24,6 +24,7 @@ event too. A team can then adopt wlog without ripping out its current logging se
 
 ### Output: wlog event to X (slog, zap, zerolog, logrus)
 
+<!-- snippet:sketch -->
 ```go
 func Drain(handler slog.Handler) wlog.Drain     // log/slog
 func Drain(logger *zap.Logger) wlog.Drain       // log/zap
@@ -39,6 +40,7 @@ native nesting, so its adapter flattens each nested group to dotted keys, for ex
 
 ### Input: X calls into a wlog event (slog only, for v1)
 
+<!-- snippet:sketch -->
 ```go
 func Handler(next slog.Handler) slog.Handler
 ```

@@ -55,6 +55,7 @@ Both changes are part of this spec, and approving the spec approves them.
 
 ### ErrorInfo v2
 
+<!-- snippet:sketch -->
 ```go
 type ErrorInfo struct {
 	Code     string         `json:"code,omitempty"`
@@ -102,6 +103,7 @@ falls back to the default.
 
 ### Stages
 
+<!-- snippet:sketch -->
 ```go
 type HeadSampler interface{ Sample(level Level, traceID string) (keep bool, rate float64) }
 type Keeper interface{ Keep(ctx context.Context, event Event) bool } // true forces keep
@@ -122,6 +124,7 @@ Keepers only on events that head sampling dropped, and on events with a rate bel
 
 ### Plugin hooks for every kind
 
+<!-- snippet:sketch -->
 ```go
 type Starter interface {  // replaces RequestStarter
 	OnStart(ctx context.Context, kind string) context.Context
@@ -142,6 +145,7 @@ type Finisher interface { // replaces RequestFinisher
 - Go has no diagnostics channel like Node's. A `Finisher` or `drain-memory` `Subscribe` gives
   in-process code each finished event. (PAR-24)
 
+<!-- snippet:sketch -->
 ```go
 type Measurer interface { // metrics plugins, such as trace-otel and metrics-prometheus
 	Measure(ctx context.Context, m Measure)
@@ -170,6 +174,7 @@ type Measure struct {
 
 ### Writers
 
+<!-- snippet:sketch -->
 ```go
 func WithWriter(w io.Writer, opts ...WriterOption) Option // default os.Stdout
 func WithFormat(f Format) Option                          // FormatAuto, FormatJSON, FormatPretty
@@ -213,6 +218,7 @@ ERROR POST /orders/{id} 502 in 840.2ms: PAYMENT_DECLINED card declined (order_id
 
 ## core-default
 
+<!-- snippet:sketch -->
 ```go
 func SetDefault(l *Logger)
 func Default() *Logger                  // never nil, built with New() on first use
@@ -237,6 +243,7 @@ func Log(ctx context.Context, level Level, msg string, kv ...any)
 
 ## core-problems
 
+<!-- snippet:sketch -->
 ```go
 type Problem struct {
 	Code    string // stable, such as WLOG_DRAIN_FAILED
@@ -296,6 +303,7 @@ Initial codes:
 
 ## core-calls
 
+<!-- snippet:sketch -->
 ```go
 type Call struct {
 	Kind      string // http, db, cache, queue, rpc, llm, storage, other
@@ -357,6 +365,7 @@ func CallSpanID(ctx context.Context) (string, bool)    // that call's span id, f
 A preset changes the JSON that a writer prints. It never changes the canonical event that drains,
 samplers, keepers, `Finisher` hooks, and the audit chain see. (CORE-12, SPEC-G11)
 
+<!-- snippet:sketch -->
 ```go
 // In package wlog.
 type OutputPreset interface {

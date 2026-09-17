@@ -32,6 +32,7 @@ The client or driver behaves exactly as it does without wlog.
 
 ## sqlshape (root, package `store/sqlshape`)
 
+<!-- snippet:sketch -->
 ```go
 type Dialect int // Unknown, Postgres, MySQL, SQLite, SQLServer
 

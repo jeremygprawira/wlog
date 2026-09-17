@@ -24,6 +24,7 @@ event that the backend refused.
 
 ## pipeline.PartialError (root)
 
+<!-- snippet:sketch -->
 ```go
 type PartialError struct {
 	Retry   []int  // batch indexes to send again
@@ -66,6 +67,7 @@ func (e *PartialError) RetryAfter() time.Duration // 0
 
 ## trace-otel (package `wlogotel`, module `trace/otel`)
 
+<!-- snippet:sketch -->
 ```go
 func Plugin(opts ...Option) (wlog.Plugin, error)        // trace ids, spans, metrics, and stats
 func WithMeterProvider(mp metric.MeterProvider) Option  // default otel.GetMeterProvider()
@@ -76,6 +78,7 @@ func WithExceptionEvent(on bool) Option                 // default true
 func WithMaxOperations(n int) Option                    // default 1000 per kind
 ```
 
+<!-- snippet:sketch -->
 ```go
 p, err := wlogotel.Plugin()
 if err != nil {
@@ -141,6 +144,7 @@ Floor: otel, otel/trace, and otel/metric v1.20.0, the first release with
 
 ## trace-otellog (package `wlogotellog`, module `trace/otellog`)
 
+<!-- snippet:sketch -->
 ```go
 func New(provider log.LoggerProvider, opts ...Option) wlog.Drain // nil uses global.GetLoggerProvider()
 func WithServiceAttributes(on bool) Option                        // default false
@@ -168,6 +172,7 @@ func WithServiceAttributes(on bool) Option                        // default fal
 
 ## metrics-prometheus (package `wlogprom`, module `metrics/prometheus`)
 
+<!-- snippet:sketch -->
 ```go
 func New(reg prometheus.Registerer, opts ...Option) (*Recorder, error) // a wlog.Plugin and wlog.Measurer
 func Buckets(b ...float64) Option                                      // default: the semconv buckets above
@@ -216,6 +221,7 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 
 ## drain-elastic (package `elastic`, root)
 
+<!-- snippet:sketch -->
 ```go
 func WithURL(url string) Option
 func WithAPIKey(encoded string) Option        // Authorization: ApiKey <encoded>
@@ -286,6 +292,7 @@ func Template(engine Engine) []byte           // Elasticsearch or OpenSearch
 
 ## drain-syslog (package `syslog`, root)
 
+<!-- snippet:sketch -->
 ```go
 func WithAddr(addr string) Option               // host:port
 func WithNetwork(network string) Option         // tls (default), tcp, or udp
@@ -329,6 +336,7 @@ older BSD format.
 
 ## drain-cloudwatch (package `cloudwatch`, module `drain/cloudwatch`)
 
+<!-- snippet:sketch -->
 ```go
 type API interface {
 	PutLogEvents(ctx context.Context, in *cloudwatchlogs.PutLogEventsInput,

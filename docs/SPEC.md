@@ -41,6 +41,7 @@ The order decides a conflict. For example, safe capture defaults beat richer zer
 
 ### Target usage (illustrative, module specs own the real API)
 
+<!-- snippet:sketch -->
 ```go
 func main() {
 	log := wlog.New(setup.FromEnv()) // WLOG_SERVICE, WLOG_DRAINS=axiom, AXIOM_TOKEN, ...
@@ -230,6 +231,7 @@ flow. Functional options. Unexported concrete types behind small interfaces. Fai
 construction, fail safe at runtime. Every extension point is an interface with a function
 adapter.
 
+<!-- snippet:sketch -->
 ```go
 // Package wlogchi is wlog's go-chi/chi adapter: one event per request, built on httpcore.
 //

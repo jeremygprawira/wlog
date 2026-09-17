@@ -143,7 +143,7 @@ vendor SDK.
 
 ## Boundaries
 
-- **Always:** read env when an option is absent; keep the whole redacted event in the
+- **Always:** read env when an option is absent. Keep the whole redacted event in the
   backend payload.
 - **Ask first:** adding a vendor SDK, changing the recommended ClickHouse schema, adding a
   fourth v1.1 drain.

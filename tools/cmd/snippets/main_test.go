@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,16 +58,51 @@ func TestSnippets_FailsOnWrongOutput(t *testing.T) {
 	}
 }
 
-// TestSnippets_SkipsKnownBadList proves that a file on the list is skipped.
-func TestSnippets_SkipsKnownBadList(t *testing.T) {
+// TestSnippets_CollectsEveryBlock proves the command has no file-level skip list: every Go
+// block of a document is collected, and a sketch is skipped by its own marker.
+func TestSnippets_CollectsEveryBlock(t *testing.T) {
 	blocks, err := collect(fixture(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(blocks) != 3 {
-		t.Fatalf("collected %d blocks, want 3", len(blocks))
+	if len(blocks) != 4 {
+		t.Fatalf("collected %d blocks, want 4", len(blocks))
 	}
-	if blocks[0].file != "./broken.md" || blocks[1].file != "./good.md" || blocks[2].file != "./mismatch.md" {
-		t.Errorf("blocks = %+v, want the three fixtures in order", blocks)
+	files := []string{}
+	for _, b := range blocks {
+		files = append(files, b.file)
+	}
+	for _, want := range []string{"./broken.md", "./good.md", "./mismatch.md", "./sketch.md"} {
+		if !strings.Contains(strings.Join(files, " "), want) {
+			t.Errorf("the walk missed %s: %v", want, files)
+		}
+	}
+	for _, b := range blocks {
+		if b.file == "./sketch.md" && !b.sketch {
+			t.Error("the sketch block is not marked as a sketch")
+		}
+	}
+}
+
+// TestSnippets_SkipsASketchBlock proves a block marked as a sketch is not built, while the
+// blocks around it still are. A spec shows a shape, and a guide shows a program.
+func TestSnippets_SkipsASketchBlock(t *testing.T) {
+	var out bytes.Buffer
+	if err := run(fixture(t), "sketch.md", &out); err != nil {
+		t.Fatalf("run returned %v, want nil for a marked sketch:\n%s", err, out.String())
+	}
+
+	// The marker is per block: the same shape without it is a program, and it fails.
+	dir := t.TempDir()
+	source, err := os.ReadFile(filepath.Join(fixture(t), "sketch.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	unmarked := strings.Replace(string(source), "<!-- snippet:sketch -->\n", "", 1)
+	if err := os.WriteFile(filepath.Join(dir, "unmarked.md"), []byte(unmarked), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := run(dir, "unmarked.md", &out); err == nil {
+		t.Error("an unmarked shape passed, want a build failure")
 	}
 }

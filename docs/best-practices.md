@@ -12,6 +12,7 @@ off a copy of a whole request body you will never read.
 The redactor is the backstop, not the plan. A denied key is masked before any sink sees
 it, proven by `FuzzRedact_NeverLeaks` and by one leak test per drain.
 
+<!-- snippet:sketch -->
 ```go
 wlog.Set(ctx, "order_id", order.ID)
 wlog.Error(ctx, err)
@@ -23,6 +24,7 @@ Use `snake_case`, and put a group in front of its fields, so `http.status` and
 `payment.method` never collide. Declare a `wlog.Key[T]` for a field you set often: a
 wrong value type then fails to compile.
 
+<!-- snippet:sketch -->
 ```go
 var OrderID = wlog.NewKey[string]("order_id")
 OrderID.Set(ctx, order.ID)
@@ -36,18 +38,18 @@ environment.
 
 A `Detach` starts its own event for work that continues after the response is sent: an
 email, a webhook, a report. It copies the trace link, so the child still points at the
-parent. Do not keep writing to the request's event after `end` ran; that write is late
+parent. Do not keep writing to the request's event after `end` ran. That write is late
 and only counted.
 
 `TestDetachExample_ChildOutlivesParent` proves the link.
 
 ## Pick a sampling rate from the question you ask
 
-Head sampling drops events before they are built. Tail sampling keeps the ones you would
-have wanted anyway. Start with `sample.KeepErrorsAndSlow`: keep every error and every
+Head sampling drops events before they are built. Tail sampling keeps the ones you want anyway. Start with `sample.KeepErrorsAndSlow`: keep every error and every
 slow request, then a small share of the rest. Errors are always force-kept, so a low
 rate can never hide a failure.
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithSampler(sample.MustNew(
     sample.Rate(wlog.LevelInfo, 10),
@@ -60,9 +62,10 @@ wlog.WithSampler(sample.MustNew(
 ## Record an audit fact, not a log line
 
 An audit fact says who did what, to what, and with what outcome. A log line says what the
-code did. If an auditor would ask for it, it is an audit record: login, role change,
+code did. If an auditor asks for it, it is an audit record: login, role change,
 refund, export, deletion.
 
+<!-- snippet:sketch -->
 ```go
 audit.Do(ctx, audit.Record{
     Actor:   audit.Actor{Type: "user", ID: user.ID},

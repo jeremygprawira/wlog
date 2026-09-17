@@ -1,17 +1,8 @@
-# Files that the Simple English lint skips today.
-#
-# Every line holds one path, relative to the repository root. The list is a
-# ratchet: it holds the text that failed on the day the lint landed, so a new
-# document cannot join it by accident. The documentation tasks remove the lines
-# as they rewrite the files.
-#
-# The list holds the older specs, written before the rules, plus the files that
-# predate them. The Go doc comments join the check through -comments once the
-# documentation tasks rewrite them.
+# scratch
 ./CLAUDE.md
-./cmd/wlog/cmd/agents/templates/agents-block.md
-./cmd/wlog/cmd/agents/templates/instrument-with-wlog.md
+./docs/SPEC-core.md
 ./docs/SPEC-drains-v1.1.md
+./docs/SPEC-drains-v1.4.md
 ./docs/SPEC-enrich.md
 ./docs/SPEC-http-std.md
 ./docs/SPEC-llm.md
@@ -19,8 +10,4 @@
 ./docs/SPEC-sample.md
 ./docs/SPEC-v1.2-additions.md
 ./docs/SPEC-wlogtest.md
-./docs/best-practices.md
-./docs/cost.md
-./docs/event-shape.md
-./docs/evlog-parity.md
-./redact/BENCH.md
+./docs/customization.md

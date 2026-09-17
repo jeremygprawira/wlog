@@ -12,6 +12,7 @@ same normalized events. Gate G7 (one shape) is this suite passing for every adap
 
 ## Shared harness
 
+<!-- snippet:sketch -->
 ```go
 type Recorder interface {           // implemented by the suite, backed by drain-memory
 	Events() []map[string]any

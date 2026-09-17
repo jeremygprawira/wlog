@@ -23,6 +23,7 @@ needs.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 // middleware/echo and middleware/echo5 (same shape, different import path)
 func Middleware(log *wlog.Logger, opts ...Option) echo.MiddlewareFunc

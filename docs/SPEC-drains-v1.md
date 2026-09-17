@@ -15,6 +15,7 @@ Each drain implements `pipeline.Sender` (`SendBatch(ctx, events) error`). A user
 
 ## Common shape
 
+<!-- snippet:sketch -->
 ```go
 d, err := axiom.New()                    // reads AXIOM_* env; explicit options win over env
 log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))

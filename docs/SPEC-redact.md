@@ -86,6 +86,7 @@ Changes vs boilerplate: removed `public_key` (not secret). Added `pin`, `otp`.
 
 ### Public API
 
+<!-- snippet:sketch -->
 ```go
 type Redactor struct{ /* unexported, immutable after New */ }
 type Option func(*config)
@@ -133,6 +134,7 @@ func MaxStringScan(n int) Option             // default 64KB; longer strings: ke
 
 Usage:
 
+<!-- snippet:sketch -->
 ```go
 r := redact.MustNew(
     redact.AddKeys("nik", "*_pin", "http.request.headers.x-signature"),

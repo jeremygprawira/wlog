@@ -19,6 +19,7 @@ that already runs OTel tracing, without requiring OTel for everyone else. `http-
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 func Enricher() wlog.Enricher
 ```

@@ -11,6 +11,7 @@ options): keep 100%.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 func New(opts ...Option) wlog.Keeper
 
@@ -29,12 +30,12 @@ func KeepErrorsAndSlow(slow time.Duration, healthyRate float64) Option
 `Keep` evaluates in this order: (1) any tail condition (`KeepStatus`/`KeepDuration`/`KeepPath **(a `**` segment matches any run of segments, including none)**`/
 `KeepFunc`) matching → keep, OR-combined; (2) `level == wlog.LevelError` always force-kept
 regardless of tail options (never sampled away, matching SPEC.md); (3) otherwise, head sampling:
-a random draw against `Rate(**a percentage, fractions allowed**)(event's level)` (default 100, i.e. always kept). `wlog.Logger`
+a random draw against `Rate(**a percentage, fractions allowed**)(event's level)` (default 100, that is always kept). `wlog.Logger`
 already force-keeps any event with an `audit` field before calling this `Keeper` at all
 (core's stage order), so `sample` never needs to special-case audit itself.
 
 `KeepErrorsAndSlow(slow, healthyRate)` is sugar for `New(KeepDuration(slow), Rate(**a percentage, fractions allowed**)(wlog.LevelInfo,
-healthyRate), Rate(**a percentage, fractions allowed**)(wlog.LevelDebug, healthyRate))` — errors are always kept per rule (2) above.
+healthyRate), Rate(**a percentage, fractions allowed**)(wlog.LevelDebug, healthyRate))`, errors are always kept per rule (2) above.
 
 Randomness is injectable for tests (`rand.Source` via an unexported option), so a rate test is
 deterministic rather than statistical-and-flaky.
@@ -47,7 +48,7 @@ deterministic rather than statistical-and-flaky.
    errors).
 3. `KeepStatus(500)` force-keeps a 503 event even when its level's head rate is 0.
 4. `KeepDuration(time.Second)` force-keeps a 2s-duration event even at head rate 0.
-5. `KeepPath **(a `**` segment matches any run of segments, including none)**("/api/payments/**")` force-keeps a matching path even at head rate 0; a
+5. `KeepPath **(a `**` segment matches any run of segments, including none)**("/api/payments/**")` force-keeps a matching path even at head rate 0. A
    non-matching path still goes to head sampling.
 6. `KeepErrorsAndSlow` keeps all errors and everything over its slow threshold, and applies
    `healthyRate` to the rest.
@@ -58,13 +59,13 @@ deterministic rather than statistical-and-flaky.
 ## Testing
 
 Table tests per rule, package `sample_test`, black-box. `path.Match` for `KeepPath **(a `**` segment matches any run of segments, including none)**` (same glob
-mechanics as `redact`'s globs, reused for consistency — no second glob implementation).
+mechanics as `redact`'s globs, reused for consistency, no second glob implementation).
 
 ## Boundaries
 
 - **Always:** evaluate tail conditions before head sampling.
-- **Ask first:** changing default rates (100, i.e. no sampling) or preset thresholds.
-- **Never:** let this package see or need to know about `audit` — that bypass lives in core.
+- **Ask first:** changing default rates (100, that is no sampling) or preset thresholds.
+- **Never:** let this package see or need to know about `audit`, that bypass lives in core.
 
 ## Open Questions
 

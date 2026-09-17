@@ -12,9 +12,11 @@
 // the local directory, so a snippet that imports echo, gin, or wlog resolves
 // without a network call.
 //
-// A file listed in tools/snippets-known-bad.txt is skipped. That list holds the
-// blocks that do not compile today, and the documentation tasks remove the lines
-// as they rewrite the files.
+// A block may say it is a sketch: a line holding <!-- snippet:sketch --> right
+// above the fence. A sketch shows the shape of an API rather than a program, so
+// the command does not build it. A spec shows shapes, and a guide shows
+// programs. The marker is per block and visible to a reviewer, which is why the
+// command has no list of skipped files.
 package main
 
 import (
@@ -32,16 +34,18 @@ import (
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
 
-// knownBadPath is the list of files whose blocks the command skips.
-const knownBadPath = "tools/snippets-known-bad.txt"
+// sketchMarker marks the line before a block that shows an API shape.
+const sketchMarker = "<!-- snippet:sketch -->"
 
 // block is one fenced code block.
 type block struct {
 	file string // path relative to the root, with a leading "./"
 	line int    // the line of the first line of code
 	info string // the info string of the fence, such as "go run"
-	code string
-	text string // the next fenced text block, for a block that runs
+	// sketch is true for a block that shows a shape rather than a program.
+	sketch bool
+	code   string
+	text   string // the next fenced text block, for a block that runs
 }
 
 // fence matches one fenced block and captures its info string and body.
@@ -73,10 +77,6 @@ func fail(err error) {
 
 // run checks every Go block and prints one line per problem.
 func run(root, only string, out io.Writer) error {
-	skip, err := readList(filepath.Join(root, knownBadPath))
-	if err != nil {
-		return err
-	}
 	blocks, err := collect(root)
 	if err != nil {
 		return err
@@ -89,12 +89,17 @@ func run(root, only string, out io.Writer) error {
 	defer func() { _ = os.RemoveAll(scratch.dir) }()
 
 	var problems []string
-	checked := 0
+	selected := 0
 	for i, b := range blocks {
-		if skip[b.file] || (only != "" && !strings.Contains(b.file, only)) {
+		if only != "" && !strings.Contains(b.file, only) {
 			continue
 		}
-		checked++
+		// A selected block counts, even a sketch: a document of shapes is a document, and the
+		// guard below only asks whether the search found anything at all.
+		selected++
+		if b.sketch {
+			continue
+		}
 		problem := checkBlock(scratch, i, b)
 		if problem != "" {
 			problems = append(problems, problem)
@@ -109,7 +114,7 @@ func run(root, only string, out io.Writer) error {
 	if len(problems) > 0 {
 		return fmt.Errorf("%d snippet(s) fail", len(problems))
 	}
-	if checked == 0 {
+	if selected == 0 {
 		return fmt.Errorf("no Go block found")
 	}
 	return nil
@@ -147,6 +152,15 @@ func checkBlock(scratch *scratchModule, index int, b block) string {
 			b.file, b.line, indent([]byte(got)), indent([]byte(want)))
 	}
 	return ""
+}
+
+// isSketch reports whether the text before a fence ends with the sketch marker.
+func isSketch(before string) bool {
+	lines := strings.Split(strings.TrimRight(before, "\n"), "\n")
+	if len(lines) == 0 {
+		return false
+	}
+	return strings.TrimSpace(lines[len(lines)-1]) == sketchMarker
 }
 
 // runs reports whether a block asks to run.
@@ -217,10 +231,11 @@ func blocksOf(root, path string) ([]block, error) {
 			continue
 		}
 		b := block{
-			file: rel(root, path),
-			line: strings.Count(body[:m[0]], "\n") + 1,
-			info: strings.TrimSpace(info),
-			code: code,
+			file:   rel(root, path),
+			line:   strings.Count(body[:m[0]], "\n") + 1,
+			info:   strings.TrimSpace(info),
+			sketch: isSketch(body[:m[0]]),
+			code:   code,
 		}
 		// The text block directly after a block that runs holds its output.
 		if i+1 < len(matches) && strings.TrimSpace(body[matches[i+1][2]:matches[i+1][3]]) == "text" {
@@ -229,26 +244,6 @@ func blocksOf(root, path string) ([]block, error) {
 		out = append(out, b)
 	}
 	return out, nil
-}
-
-// readList reads a list of paths, one per line. A missing list is not an error,
-// because the lists shrink to nothing as the documentation tasks land.
-func readList(path string) (map[string]bool, error) {
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return map[string]bool{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	skip := map[string]bool{}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(strings.SplitN(line, "#", 2)[0])
-		if line != "" {
-			skip[line] = true
-		}
-	}
-	return skip, nil
 }
 
 // scratchModule is a throwaway module whose build list holds every module of the

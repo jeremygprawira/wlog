@@ -44,6 +44,7 @@ User keys set with `Set`/`SetGroup`/`Append` stay at the top level, outside thes
 
 ### Event lifecycle
 
+<!-- snippet:sketch -->
 ```go
 type Logger struct{ /* unexported */ }
 
@@ -67,6 +68,7 @@ dropped silently. A write never blocks and never panics (G3).
 
 ### Enrichment API
 
+<!-- snippet:sketch -->
 ```go
 func Set(ctx context.Context, key string, value any)
 func SetGroup(ctx context.Context, group string, kv ...any)   // pairs, or a single map[string]any
@@ -84,6 +86,7 @@ caps from SPEC.md G4: `MaxKeys` (default 200), `MaxGroupFields` (default 50), `M
 
 ### Folded log lines
 
+<!-- snippet:sketch -->
 ```go
 type LogLine struct {
     Level string         `json:"level"`
@@ -100,6 +103,7 @@ overflow. `AppendLog` is a no-op on a sealed event or a `ctx` with no event, and
 
 ### Typed keys (C11)
 
+<!-- snippet:sketch -->
 ```go
 type Key[T any] struct{ name string }
 
@@ -117,6 +121,7 @@ no-op check (never rejects the write).
 
 ### Errors (C4)
 
+<!-- snippet:sketch -->
 ```go
 type ErrorInfo struct {
     Code, Message, Kind string
@@ -142,6 +147,7 @@ previous `error` value (if any) to `errors[]` (cap 10, overflow counted in
 
 ### Drains, plugins, enrichers, keepers (C6, C7, C10)
 
+<!-- snippet:sketch -->
 ```go
 type Drain interface{ Send(ctx context.Context, event map[string]any) }
 type DrainFunc func(ctx context.Context, event map[string]any)
@@ -184,6 +190,7 @@ sampling).
 
 ### Redactor (C8)
 
+<!-- snippet:sketch -->
 ```go
 func WithRedactor(r *redact.Redactor) Option
 func (l *Logger) SetRedactor(r *redact.Redactor)   // atomic.Pointer swap
@@ -195,6 +202,7 @@ current at that moment. `redact.fingerprint` (from `r.Fingerprint()`) is set on 
 
 ### Field-name presets (C9)
 
+<!-- snippet:sketch -->
 ```go
 func FieldsNamespaced() FieldNames   // default, per Reserved keys above
 func FieldsFlat() FieldNames         // method, path, status_code, request_id, ... (boilerplate-compatible)
@@ -208,6 +216,7 @@ Renaming runs after redaction (step 4), so denylist entries always match canonic
 
 ### Sinks (C1, C13)
 
+<!-- snippet:sketch -->
 ```go
 func WithSinks(s ...Sink) Option   // default: one auto-format stdout sink
 type Sink interface{ Write(event map[string]any) }
@@ -219,6 +228,7 @@ calls `OnError` and does not block or retry (that is `pipeline`'s job for drains
 
 ### Config (C14)
 
+<!-- snippet:sketch -->
 ```go
 func WithService(name, version, env string) Option
 func WithLevel(min Level) Option

@@ -14,6 +14,7 @@ adapter only passes what its framework knows, at the moment it knows it.
 
 ## Framework-neutral view
 
+<!-- snippet:sketch -->
 ```go
 type Request interface {
 	Method() string
@@ -39,6 +40,7 @@ Fiber, fasthttp, Hertz) reuses its buffers after the handler returns.
 
 ## Exchange API
 
+<!-- snippet:sketch -->
 ```go
 func New(log *wlog.Logger, opts ...Option) *Core // built once per middleware
 func (c *Core) Skip(r Request) bool
@@ -93,6 +95,7 @@ func NetHTTP(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handler
 
 ## Options
 
+<!-- snippet:sketch -->
 ```go
 func CaptureAll() Option
 func CaptureHeaders(names ...string) Option          // adds names to the request allow-list
@@ -143,6 +146,7 @@ wrote it.
 
 ## Problem responses
 
+<!-- snippet:sketch -->
 ```go
 func WriteProblem(w http.ResponseWriter, r *http.Request, err error) // RFC 9457
 func ParseProblem(body []byte) (wlog.ErrorInfo, bool)

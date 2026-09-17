@@ -59,6 +59,7 @@ about a global call inside a handler.
 
 ### log-slog (root, package `wlogslog`)
 
+<!-- snippet:sketch -->
 ```go
 func Handler(next slog.Handler, opts ...Option) slog.Handler // input
 func Drain(h slog.Handler, opts ...DrainOption) wlog.Drain   // output
@@ -74,6 +75,7 @@ func FoldLevel(l slog.Level) Option
 
 ### log-logr (package `wloglogr`)
 
+<!-- snippet:sketch -->
 ```go
 func Plugin(opts ...Option) wlog.Plugin                  // Starter: wraps logr.FromContextOrDiscard(ctx)
 func Sink(ctx context.Context, next logr.LogSink) logr.LogSink
@@ -91,6 +93,7 @@ func Drain(l logr.Logger) wlog.Drain
 
 ### log-zap (package `wlogzap`)
 
+<!-- snippet:sketch -->
 ```go
 func Core(next zapcore.Core, opts ...Option) zapcore.Core          // folds entries that carry a ctx field
 func Plugin(base *zap.Logger, store func(context.Context, *zap.Logger) context.Context) wlog.Plugin
@@ -109,6 +112,7 @@ func Drain(l *zap.Logger, opts ...DrainOption) wlog.Drain
 
 ### log-zerolog (package `wlogzerolog`)
 
+<!-- snippet:sketch -->
 ```go
 func Hook(opts ...Option) zerolog.Hook                     // level and message, for events with .Ctx(ctx)
 func Plugin(base zerolog.Logger) wlog.Plugin               // binds a writer, found through zerolog.Ctx
@@ -127,6 +131,7 @@ func Drain(l zerolog.Logger) wlog.Drain
 
 ### log-logrus (package `wloglogrus`)
 
+<!-- snippet:sketch -->
 ```go
 func Install(l *logrus.Logger, opts ...Option) // adds the hook and wraps the formatter
 func Drain(l *logrus.Logger) wlog.Drain
@@ -139,6 +144,7 @@ func Drain(l *logrus.Logger) wlog.Drain
 
 ### log-hclog (package `wloghclog`)
 
+<!-- snippet:sketch -->
 ```go
 func Plugin(base hclog.Logger) wlog.Plugin // binds a logger with hclog.WithContext
 func Bind(ctx context.Context, l hclog.Logger) hclog.Logger
@@ -151,6 +157,7 @@ func Drain(l hclog.Logger) wlog.Drain
 
 ### log-std (root, package `wlogstdlog`)
 
+<!-- snippet:sketch -->
 ```go
 func Logger(ctx context.Context, prefix string, flags int) *log.Logger // per-unit, folds each line
 func ErrorLog(l *wlog.Logger) *log.Logger                              // for http.Server.ErrorLog, plain events
@@ -223,6 +230,7 @@ core extractor recover.
 
 ## flag-openfeature (package `wlogopenfeature`)
 
+<!-- snippet:sketch -->
 ```go
 func Hook(opts ...Option) openfeature.Hook // Error and Finally
 func WithValues() Option                   // also record bool and number values

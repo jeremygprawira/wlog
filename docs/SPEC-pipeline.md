@@ -8,11 +8,12 @@
 Wrap a batch-sending backend with batching, retry, and a bounded buffer, so a real drain
 (Axiom, Loki, a file) never slows down or blocks the request that logged through it (gate G3),
 and never grows memory without bound (gate G4). `wlog.Drain.Send` has no error return, so retry
-needs a slightly richer interface than core's — `pipeline` defines it and hands back a plain
+needs a slightly richer interface than core's, `pipeline` defines it and hands back a plain
 `wlog.Drain` that any `wlog.Logger` can use.
 
 ## Behaviour
 
+<!-- snippet:sketch -->
 ```go
 // Sender is what pipeline.Wrap needs from a real backend: send a batch, report failure.
 // A phase-4 drain (Axiom, Loki, ...) implements this, not wlog.Drain directly.
@@ -77,7 +78,7 @@ background goroutine.
 ### FanOut
 
 `FanOut(drains...)` returns a `Drain` whose `Send` queues the event for every drain and returns
-immediately, without waiting for any of them — matching gate G3, since `FanOut` is itself just a
+immediately, without waiting for any of them, matching gate G3, since `FanOut` is itself just a
 `wlog.Drain` and core calls `Send` synchronously from the event pipeline.
 
 Each drain gets one bounded queue of 256 events and one goroutine that reads it. A full queue
@@ -100,17 +101,17 @@ the event copies it first, per the core drain contract (CORE-11).
    interval elapses.
 2. A partial batch (< `BatchSize`) flushes via `SendBatch` after `BatchInterval`.
 3. A `SendBatch` that errors twice then succeeds is retried with the configured backoff and
-   delivers all events; a `SendBatch` that always errors exhausts `MaxAttempts` and calls
+   delivers all events. A `SendBatch` that always errors exhausts `MaxAttempts` and calls
    `OnDropped` once with the whole batch.
 4. `Close(ctx)` flushes every pending event through one last `SendBatch` and returns only after
    it settles or `ctx`'s deadline passes.
 5. `MaxBuffer` exceeded drops the oldest event, calls `OnDropped`, never blocks the caller —
    proven with a `Sender` whose `SendBatch` never returns, under a tight test timeout.
-6. `FanOut` delivers to every drain; one drain hanging does not prevent the others from
+6. `FanOut` delivers to every drain. One drain hanging does not prevent the others from
    receiving the event, and costs one queue and one goroutine, not one goroutine per event.
    A panicking drain is recovered, and `Flush` and `Close` reach every drain that implements
    them.
-7. Zero imports outside the standard library; passes `-race` with concurrent `Send` and `Close`.
+7. Zero imports outside the standard library. Passes `-race` with concurrent `Send` and `Close`.
 
 ## Testing
 

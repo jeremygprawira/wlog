@@ -17,6 +17,7 @@ variables alone. Plus the one framework example still missing, and the best-prac
 
 Every drain follows the shape [SPEC-drains-v1.md](SPEC-drains-v1.md) already set.
 
+<!-- snippet:sketch -->
 ```go
 func New(opts ...Option) (wlog.Drain, error)     // reads env, then applies opts, and wraps
 func NewSender(opts ...Option) (*Sender, error)  // the raw pipeline.Sender
@@ -71,6 +72,7 @@ an OTLP bug.
 
 `examples/lambda` holds a runnable handler and a small helper.
 
+<!-- snippet:sketch -->
 ```go
 func Handler(log *wlog.Logger, fn func(ctx context.Context, in Event) (Response, error)) ...
 ```

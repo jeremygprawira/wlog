@@ -3,6 +3,7 @@
 Every default can change through an option. An option always wins over an environment
 variable, and one option of the same kind given twice wins with the last call.
 
+<!-- snippet:sketch -->
 ```go
 log := wlog.New(
     wlog.WithService("orders", "1.4.0", "prod"),
@@ -12,6 +13,7 @@ log := wlog.New(
 
 ## Service, level, and format
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithService("orders", "1.4.0", "prod") // service.name/version/env
 wlog.WithLevel(wlog.LevelInfo)              // drop debug events
@@ -20,6 +22,7 @@ wlog.WithFormat(wlog.FormatPretty)          // console output for development
 
 ## Redaction
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithRedactor(redact.MustNew(
     redact.AddKeys("iban", "*_pin"),          // add key names and globs
@@ -36,6 +39,7 @@ Swap the redactor at runtime with `log.SetRedactor(r)`. It is atomic and safe un
 
 ## Capture (HTTP)
 
+<!-- snippet:sketch -->
 ```go
 wlogstd.Middleware(log,
     wlogstd.SkipPaths("/health", "/metrics"),
@@ -54,6 +58,7 @@ route from its own router, so `WithRouteFunc` stays in the `middleware/nethttp` 
 
 ## Field names
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithFieldNames(wlog.FieldsFlat())  // service, http.method, error
 wlog.WithFieldNames(wlog.FieldsOTel())  // service.name, http.request.method
@@ -62,6 +67,7 @@ wlog.WithFieldNames(wlog.FieldNames{"level": "severity"}) // one key at a time
 
 ## Sampling
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithSampler(sample.MustNew(
     sample.Rate(wlog.LevelInfo, 10),                  // keep 10% of info events
@@ -77,6 +83,7 @@ sampling, because their reserved key is set.
 
 ## Enrichers
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithEnrichers(
     enrich.Host(),        // host.name, host.pid, host.pod
@@ -94,6 +101,7 @@ other field.
 
 A one-off drain is one function:
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithDrains(wlog.DrainFunc(func(ctx context.Context, event map[string]any) {
     // ship the event
@@ -103,6 +111,7 @@ wlog.WithDrains(wlog.DrainFunc(func(ctx context.Context, event map[string]any) {
 A backend drain implements `SendBatch`, then `pipeline.Wrap` adds batching, retry, and a
 bounded buffer:
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithDrains(pipeline.Wrap(
     axiom.MustNew(),                        // reads AXIOM_* env
@@ -123,6 +132,7 @@ and never panics into the request.
 
 ## Errors
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithErrorExtractor(wlogherr.Extractor()) // herr code, public message, why/fix/link
 wlog.WithErrorExtractor(myExtractor{})        // anything implementing ErrorExtractor
@@ -132,6 +142,7 @@ The default extractor sets `code: INTERNAL` and walks `errors.Unwrap` for the ca
 
 ## Logger adapters
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithDrains(wlogslog.Drain(handler)) // one slog record per event
 wlog.WithDrains(wlogzap.Drain(logger))
@@ -146,6 +157,7 @@ slog.SetDefault(slog.New(wlogslog.Handler(slog.Default().Handler()))) // fold sl
 `http-std` parses the W3C `traceparent` header already. Add the OpenTelemetry enricher to
 take the ids from an active span instead:
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithEnrichers(wlogotel.Enricher())
 ```
@@ -156,12 +168,14 @@ A plugin is any value with `Name() string` that also implements `Setup`, `Enrich
 `Keeper`, `Drain`, `RequestStarter`, or `RequestFinisher`. One struct can implement
 several.
 
+<!-- snippet:sketch -->
 ```go
 wlog.WithPlugins(myPlugin{})
 ```
 
 ## Typed keys
 
+<!-- snippet:sketch -->
 ```go
 var OrderID = wlog.NewKey[string]("order_id")
 OrderID.Set(ctx, order.ID)               // compile error for a non-string
@@ -171,6 +185,7 @@ wlog.StrictKeys(OrderID)                 // in local/dev, flag an unregistered n
 
 ## Audit
 
+<!-- snippet:sketch -->
 ```go
 audit.Do(ctx, audit.Record{
     Actor:   audit.Actor{Type: "user", ID: "u-42"},

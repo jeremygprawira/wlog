@@ -13,6 +13,7 @@ and it never crashes the app.
 
 ## Behavior
 
+<!-- snippet:sketch -->
 ```go
 type Factory struct {
 	Name string                                     // the WLOG_DRAINS name, such as "kafka"
