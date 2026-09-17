@@ -28,6 +28,8 @@ type Entry struct {
 	Why     string
 	Fix     string
 	Link    string
+	Data     map[string]any // defaults safe to show a client, merged under the call-site values
+	Internal map[string]any // log-only defaults, merged the same way
 	Audit   *Audit // nil when the code needs no audit record
 }
 
@@ -102,13 +104,30 @@ a `%w` param.
 `invoice {id} was not found` into `invoice 42 was not found`. A placeholder with no param
 stays as written, so a missing value never panics and never renders an empty gap.
 
+Rendering is one pass: a parameter value that itself holds a placeholder is written as it
+stands and never filled again, so one parameter cannot rewrite another's text.
+
+The extractor never copies `Message` into the `ErrorInfo`. The entry holds a template, not a
+message, and the wrapped extractor's own message describes the error far better.
+
+### Domain, and entry defaults
+
+The extractor records the registry's domain in `error.attrs.domain`, as the lower-case
+prefix: the code `BILLING_DECLINED` reports `billing`. A value the wrapped extractor already
+put in `attrs` wins.
+
+`Entry.Data` and `Entry.Internal` hold defaults that merge under the values a per-request
+extractor filled, at the top level: a static default never replaces a real detail. Both maps
+are copies, so an event never shares a map with the registry.
+
 ## Success Criteria
 
 1. `New` registers entries under one prefix, and `Codes` returns them sorted and prefixed.
 2. `New` panics on a duplicate code and on an empty code, since both are author mistakes
    that must fail at startup, not at request time.
 3. `Extractor` fills `Kind`, `Status`, `Why`, `Fix`, and `Link` on an `ErrorInfo` whose
-   code matches an entry, and leaves every field the wrapped extractor already filled.
+   code matches an entry, and leaves every field the wrapped extractor already filled. It
+   never fills `Message`.
 4. `Extractor` passes an unmatched code through untouched.
 5. The same registry produces the same `ErrorInfo` through the herr extractor and through
    the default extractor, proving the agnostic claim. The herr class code is
@@ -116,6 +135,10 @@ stays as written, so a missing value never panics and never renders an empty gap
 10. `Extractor` matches a full code only, `AllowShortCodes` opts one registry in, a nil
     registry is skipped, and two registries that define one code are refused.
 11. `errors.Is` matches an entry from the error's own registry only.
+12. `Get` and `CodedError.Entry` return deep copies, so a caller cannot change a registry
+    through what it received.
+13. `Extractor` writes `error.attrs.domain`, and merges `Data` and `Internal` defaults under
+    the call-site values.
 6. `Registry.Err` supports `errors.Is` against its own entry and `errors.As` to reach the
    coded error, and it unwraps to a cause passed as `%w`.
 7. A template renders its params, and a missing param leaves its placeholder in place.

@@ -13,7 +13,10 @@ var ErrUnknownCode = errors.New("catalog: unknown code")
 
 // Registry holds one domain's entries under one prefix.
 type Registry struct {
-	prefix  string
+	prefix string
+	// domain is the lower-case prefix a record reports as the code's domain, so an event
+	// reads "billing" while the wire code reads "BILLING_DECLINED".
+	domain  string
 	entries map[string]Entry // keyed by full code
 	short   map[string]string
 	// allowShort lets the extractor resolve a short code too. Off by default, so the
@@ -30,7 +33,7 @@ func New(prefix string, entries ...Entry) *Registry {
 	if p == "" {
 		panic("catalog: prefix is empty")
 	}
-	r := &Registry{prefix: p, entries: map[string]Entry{}, short: map[string]string{}}
+	r := &Registry{prefix: p, domain: strings.ToLower(strings.TrimSpace(prefix)), entries: map[string]Entry{}, short: map[string]string{}}
 	for _, entry := range entries {
 		full, short := splitCode(p, entry.Code)
 		if short == "" {
@@ -40,7 +43,7 @@ func New(prefix string, entries ...Entry) *Registry {
 			panic("catalog: duplicate code " + full)
 		}
 		copied := entry
-		copied.domain = p
+		copied.domain = r.domain
 		copied.full = full
 		copied.Code = short
 		if entry.Audit != nil {
@@ -55,6 +58,10 @@ func New(prefix string, entries ...Entry) *Registry {
 
 // Prefix returns the upper-case prefix.
 func (r *Registry) Prefix() string { return r.prefix }
+
+// Domain returns the lower-case prefix a record reports as the code's domain, as in
+// "billing" for the code BILLING_DECLINED.
+func (r *Registry) Domain() string { return r.domain }
 
 // Codes returns every full code, sorted.
 func (r *Registry) Codes() []string {
@@ -84,14 +91,15 @@ func (r *Registry) getFull(code string) (Entry, bool) {
 	return entry, ok
 }
 
-// Get resolves a full or a short code to its entry.
+// Get resolves a full or a short code to its entry. It returns a deep copy, so a caller
+// cannot change what the registry holds.
 func (r *Registry) Get(code string) (Entry, bool) {
 	upper := strings.ToUpper(strings.TrimSpace(code))
 	if entry, ok := r.entries[upper]; ok {
-		return entry, true
+		return entry.clone(), true
 	}
-	if full, ok := r.short[strings.ToUpper(strings.TrimSpace(code))]; ok {
-		return r.entries[full], true
+	if full, ok := r.short[upper]; ok {
+		return r.entries[full].clone(), true
 	}
 	return Entry{}, false
 }
@@ -109,10 +117,10 @@ func (r *Registry) Err(code string, params ...any) error {
 		message = fullCode(r.prefix, entry.Code)
 	}
 	return &codedError{
-		prefix:  r.prefix,
+		domain:  r.domain,
 		full:    entry.full,
 		message: message,
-		entry:   entry,
+		entry:   entry.clone(),
 		cause:   cause,
 	}
 }
@@ -135,10 +143,14 @@ func splitCode(prefix, code string) (full, short string) {
 	return fullCode(prefix, upper), upper
 }
 
-// render fills {name} placeholders from key, value pairs. A placeholder with no pair
-// stays as written, so a missing value never panics. It also returns the cause.
+// render fills {name} placeholders from key, value pairs. A placeholder with no pair stays
+// as written, so a missing value never panics. It also returns the cause.
+//
+// It renders in one pass: a value that itself holds a placeholder is written as it stands
+// and never filled again, so a parameter can never rewrite another parameter's text.
 func render(template string, params []any) (string, error) {
 	var cause error
+	pairs := make([]string, 0, len(params))
 	for i := 0; i+1 < len(params); i += 2 {
 		key, ok := params[i].(string)
 		if !ok {
@@ -150,12 +162,15 @@ func render(template string, params []any) (string, error) {
 				cause = err
 			}
 		}
-		template = strings.ReplaceAll(template, "{"+key+"}", fmt.Sprint(value))
+		pairs = append(pairs, "{"+key+"}", fmt.Sprint(value))
 	}
 	if len(params)%2 == 1 {
 		if err, ok := params[len(params)-1].(error); ok {
 			cause = err
 		}
 	}
-	return template, cause
+	if len(pairs) == 0 {
+		return template, cause
+	}
+	return strings.NewReplacer(pairs...).Replace(template), cause
 }

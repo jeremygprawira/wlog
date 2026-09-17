@@ -31,6 +31,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `catalog.Entry` gains `Data` and `Internal` defaults, which the extractor merges under the
+  values a per-request extractor filled, and `catalog.Extractor` writes `error.attrs.domain`.
+  `Get` and `CodedError.Entry` now return deep copies, a template renders in one pass, and
+  the extractor no longer copies a raw template into `ErrorInfo.Message`.
 - `catalog.Extractor` returns an error, so `MustExtractor` joins it, and it matches full
   codes only: `Registry.AllowShortCodes()` opts one registry in. Migration: use
   `catalog.MustExtractor(...)` where the old call discarded nothing, and declare a

@@ -11,7 +11,7 @@ type CodedError interface {
 
 // codedError implements CodedError.
 type codedError struct {
-	prefix  string
+	domain  string
 	full    string
 	message string
 	entry   Entry
@@ -30,8 +30,9 @@ func (e *codedError) Cause() error { return e.cause }
 // Code returns the full, prefixed code.
 func (e *codedError) Code() string { return e.full }
 
-// Entry returns the entry the code resolved to.
-func (e *codedError) Entry() Entry { return e.entry }
+// Entry returns the entry the code resolved to, as a deep copy, so a caller cannot change
+// what the registry holds.
+func (e *codedError) Entry() Entry { return e.entry.clone() }
 
 // Is makes errors.Is(err, entry) true for this entry, and true for another coded error
 // with the same full code.
@@ -44,7 +45,7 @@ func (e *codedError) Is(target error) bool {
 	case *codedError:
 		return t.full == e.full
 	case Entry:
-		return t.domain != "" && t.domain == e.prefix && t.full == e.full
+		return t.domain != "" && t.domain == e.domain && t.full == e.full
 	default:
 		return false
 	}

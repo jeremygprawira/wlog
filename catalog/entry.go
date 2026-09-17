@@ -20,7 +20,55 @@ type Entry struct {
 	Why     string
 	Fix     string
 	Link    string
-	Audit   *Audit // nil when the code needs no audit record
+	// Data holds defaults that are safe to send back to a client, such as a rejected
+	// field name. It merges under the values a per-request extractor filled.
+	Data map[string]any
+	// Internal holds log-only defaults, such as a row id. It merges the same way.
+	Internal map[string]any
+	Audit    *Audit // nil when the code needs no audit record
+}
+
+// clone returns a copy of the entry that shares nothing with the original: the Audit and
+// both default maps are copied, at every depth, so a caller can never change the registry
+// by changing what it received.
+func (e Entry) clone() Entry {
+	out := e
+	if e.Audit != nil {
+		audit := *e.Audit
+		out.Audit = &audit
+	}
+	out.Data = copyTree(e.Data)
+	out.Internal = copyTree(e.Internal)
+	return out
+}
+
+// copyTree copies a JSON tree of maps and slices, so the copy shares no map or slice with
+// the original.
+func copyTree(value map[string]any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		out[key] = copyValue(item)
+	}
+	return out
+}
+
+// copyValue copies one value of a JSON tree.
+func copyValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return copyTree(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = copyValue(item)
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 // Error makes an Entry usable as an errors.Is target. errors.Is(err, entry) is true

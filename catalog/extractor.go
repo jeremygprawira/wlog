@@ -75,9 +75,6 @@ func (e *extractor) Extract(err error) wlog.ErrorInfo {
 	if info.Status == 0 {
 		info.Status = entry.Status
 	}
-	if info.Message == "" {
-		info.Message = entry.Message
-	}
 	if info.Why == "" {
 		info.Why = entry.Why
 	}
@@ -87,7 +84,49 @@ func (e *extractor) Extract(err error) wlog.ErrorInfo {
 	if info.Link == "" {
 		info.Link = entry.Link
 	}
+	// "Message" is deliberately not filled: the entry holds a template, not a message, and
+	// the wrapped extractor's own message describes this error far better than a static one
+	// would. Copying the raw template in was worse than leaving it out.
+	info.Attrs = withDomain(info.Attrs, entry.domain)
+	info.Data = mergeDefaults(info.Data, entry.Data)
+	info.Internal = mergeDefaults(info.Internal, entry.Internal)
 	return info
+}
+
+// withDomain records which domain the code belongs to, under the key SPEC.md names. A
+// value the wrapped extractor already set wins.
+func withDomain(attrs map[string]any, domain string) map[string]any {
+	if domain == "" {
+		return attrs
+	}
+	if _, exists := attrs["domain"]; exists {
+		return attrs
+	}
+	out := make(map[string]any, len(attrs)+1)
+	for key, value := range attrs {
+		out[key] = value
+	}
+	out["domain"] = domain
+	return out
+}
+
+// mergeDefaults returns defaults under the values a per-request extractor already filled,
+// so a static default never replaces a real detail. Both maps are new: the registry's own
+// maps are never shared with an event.
+func mergeDefaults(filled, defaults map[string]any) map[string]any {
+	if len(defaults) == 0 {
+		return filled
+	}
+	out := make(map[string]any, len(filled)+len(defaults))
+	for key, value := range filled {
+		out[key] = value
+	}
+	for key, value := range defaults {
+		if _, exists := out[key]; !exists {
+			out[key] = copyValue(value)
+		}
+	}
+	return out
 }
 
 // lookup returns the entry whose full code matches. A registry that allowed short codes
