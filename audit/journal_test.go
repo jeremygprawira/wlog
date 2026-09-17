@@ -170,9 +170,14 @@ func TestAudit_AUD2_ConcurrentJournalVerifies(t *testing.T) {
 	if err := audit.Verify(path); err != nil {
 		t.Fatalf("Verify after 100 concurrent records: %v", err)
 	}
-	b, _ := os.ReadFile(path)
-	if lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n"); len(lines) != n {
-		t.Fatalf("got %d lines, want %d", len(lines), n)
+	records := 0
+	for _, line := range journalLines(t, path) {
+		if !strings.Contains(line, `"audit.marker"`) {
+			records++
+		}
+	}
+	if records != n {
+		t.Fatalf("got %d record lines, want %d", records, n)
 	}
 }
 
@@ -278,5 +283,158 @@ func TestAudit_AUD3_RestartVerifies(t *testing.T) {
 	}
 	if got, want := first["audit.prev_hash"], last["audit.hash"]; got != want {
 		t.Errorf("the restarted journal started from %v, want the previous last hash %v", got, want)
+	}
+}
+
+// writeJournalClosed writes n audit records and closes the Logger, so Journal writes
+// its final marker line.
+func writeJournalClosed(t *testing.T, path string, n int, opts ...audit.Option) {
+	t.Helper()
+	log := wlog.New(wlog.WithDrains(audit.Journal(path, opts...)))
+	ctx := log.WithContext(context.Background())
+	for i := 0; i < n; i++ {
+		r := testRecord()
+		r.Target.ID = "inv" + strconv.Itoa(i)
+		audit.Do(ctx, r)
+	}
+	if err := log.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// journalLines returns the non-empty lines of a journal file.
+func journalLines(t *testing.T, path string) []string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	return strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+}
+
+// TestAudit_AUD1_EmptyFileFails proves that Verify rejects an empty journal instead of
+// reporting success for a file with nothing in it.
+func TestAudit_AUD1_EmptyFileFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.ndjson")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := audit.Verify(path); err == nil {
+		t.Error("Verify accepted an empty journal")
+	}
+}
+
+// TestAudit_AUD1_TruncationFails proves that marker lines catch a cut journal. Cutting
+// lines from the end removes the marker, which only an expected head can notice.
+func TestAudit_AUD1_TruncationFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.ndjson")
+	writeJournalClosed(t, path, 3)
+
+	if err := audit.Verify(path); err != nil {
+		t.Fatalf("Verify the full journal: %v", err)
+	}
+	lines := journalLines(t, path)
+	if len(lines) != 4 {
+		t.Fatalf("got %d lines, want 3 records and a marker", len(lines))
+	}
+	var last map[string]any
+	if err := json.Unmarshal([]byte(lines[3]), &last); err != nil {
+		t.Fatalf("decode the marker: %v", err)
+	}
+	head, _ := last["audit.hash"].(string)
+
+	// Cutting the marker line leaves a valid-looking chain, so only the expected head
+	// from outside the file can catch it.
+	cut := filepath.Join(t.TempDir(), "cut.ndjson")
+	if err := os.WriteFile(cut, []byte(strings.Join(lines[:3], "\n")+"\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	err := audit.VerifyHead(cut, head)
+	if err == nil {
+		t.Fatal("VerifyHead accepted a journal cut after its last record")
+	}
+	if !strings.Contains(err.Error(), "head") {
+		t.Errorf("error = %v, want a head mismatch", err)
+	}
+	if err := audit.VerifyHead(path, head); err != nil {
+		t.Errorf("VerifyHead on the full journal: %v", err)
+	}
+
+	// Cutting a record in the middle leaves the marker's count and head behind.
+	mid := filepath.Join(t.TempDir(), "mid.ndjson")
+	if err := os.WriteFile(mid, []byte(strings.Join(append(lines[:1], lines[2:]...), "\n")+"\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := audit.Verify(mid); err == nil {
+		t.Error("Verify accepted a journal with a record cut from the middle")
+	}
+}
+
+// TestAudit_AUD10_SignedNeedsKey proves that a signed journal verifies only under its
+// key, that every marker carries a key id, and that VerifySigned rejects an unsigned
+// journal even when the key is right.
+func TestAudit_AUD10_SignedNeedsKey(t *testing.T) {
+	key := []byte("key-one")
+	path := filepath.Join(t.TempDir(), "signed.ndjson")
+	writeJournalClosed(t, path, 3, audit.WithKey(key))
+
+	if err := audit.Verify(path, key); err != nil {
+		t.Fatalf("Verify with the right key: %v", err)
+	}
+	if err := audit.Verify(path, []byte("key-two")); err == nil {
+		t.Error("Verify accepted the wrong key")
+	}
+	if err := audit.VerifySigned(path, key); err != nil {
+		t.Fatalf("VerifySigned with the right key: %v", err)
+	}
+
+	lines := journalLines(t, path)
+	var last map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &last); err != nil {
+		t.Fatalf("decode the closing marker: %v", err)
+	}
+	m, ok := last["audit.marker"].(map[string]any)
+	if !ok {
+		t.Fatalf("the last line is not a marker: %s", lines[len(lines)-1])
+	}
+	if id, _ := m["key_id"].(string); id == "" {
+		t.Error("the signed marker carries no key_id")
+	}
+
+	plain := filepath.Join(t.TempDir(), "plain.ndjson")
+	writeJournalClosed(t, plain, 2)
+	if err := audit.VerifySigned(plain, key); err == nil {
+		t.Error("VerifySigned accepted an unsigned journal")
+	}
+	if err := audit.Verify(plain); err != nil {
+		t.Errorf("Verify on an unsigned journal: %v", err)
+	}
+}
+
+// TestAudit_AUD10_MarkerEveryHundredRecords proves a marker lands every 100 records and
+// once more on Close.
+func TestAudit_AUD10_MarkerEveryHundredRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.ndjson")
+	writeJournalClosed(t, path, 100)
+
+	lines := journalLines(t, path)
+	if len(lines) != 102 {
+		t.Fatalf("got %d lines, want 100 records, a marker at 100, and a closing marker", len(lines))
+	}
+	for _, i := range []int{100, 101} {
+		var rec map[string]any
+		if err := json.Unmarshal([]byte(lines[i]), &rec); err != nil {
+			t.Fatalf("decode line %d: %v", i+1, err)
+		}
+		m, ok := rec["audit.marker"].(map[string]any)
+		if !ok {
+			t.Fatalf("line %d holds no marker: %s", i+1, lines[i])
+		}
+		if got, _ := m["count"].(float64); int(got) != 100 {
+			t.Errorf("marker at line %d has count %v, want 100", i+1, m["count"])
+		}
+	}
+	if err := audit.Verify(path); err != nil {
+		t.Fatalf("Verify: %v", err)
 	}
 }

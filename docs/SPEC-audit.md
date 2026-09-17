@@ -32,6 +32,10 @@ func Journal(path string, opts ...Option) wlog.Drain // append-only NDJSON, fsyn
 func WithKey(key []byte) Option      // signs every line, so Verify(path, key) checks the HMAC
 func Verify(path string, key ...[]byte) error // walks a journal file, re-derives each hash from
                                        // the bytes on disk, returns the first mismatch or nil
+func VerifyHead(path, head string, key ...[]byte) error // as Verify, and the last line must end
+                                       // the chain at head
+func VerifySigned(path string, key []byte) error // as Verify(path, key): every line must be
+                                       // signed
 ```
 
 ### Never sampled
@@ -48,6 +52,20 @@ line that `Journal` writes, with the value of `audit.hash` and, when a key is se
 JSON whitespace, a reordered key, a duplicate key, and a number written in another form all fail
 `Verify`. Byte edits such as `1` to `1.0` or `9007199254740993` to `9007199254740992` change the
 covered bytes, and a CRLF ending does too.
+
+### Marker lines
+
+Every 100 records, and once more on `Close`, `Journal` writes a marker line:
+`{"audit.marker":{"count":N,"head":"H"},"audit.hash":"...","audit.prev_hash":"..."}`. `count` is
+the number of records the chain covered, and `head` is the hash of the last line before the
+marker. The marker is a chain link like any record, so its own hash covers the count and head it
+states. With a key the marker also carries `key_id`, the first 16 hex characters of
+`sha256(key)`, so a reader learns which key to ask for.
+
+`Verify` checks each marker against the lines before it, so a record deleted from the middle
+fails on the count and the head as well as on the chain. A cut at the very end removes the last
+marker too, so the only way to catch it is `VerifyHead` with a head kept outside the file. A
+journal that holds no record at all fails `Verify`.
 
 `Journal` owns the chain state (the last hash) and the write lock, so the lines land in chain
 order whatever the arrival order. `prev_hash` and `hash` are set as `audit.prev_hash` and
@@ -80,7 +98,7 @@ An empty line, a line without a valid `audit.hash`, and a malformed chain field 
    G5 part 1). `sample.New(sample.Rate(wlog.LevelInfo, 0))` proves it.
 3. 100 concurrent `Do` calls on one Logger produce a chain that `Verify` accepts, under `-race`.
 4. Editing one byte in a journal file, deleting a line, or swapping two lines each make `Verify`
-   fail and name the line.
+   fail and name the line. A cut at the end fails `VerifyHead`. An empty file fails `Verify`.
 5. The Actor's `Email` is masked by the default redactor like any other field, and the stored
    hash covers the *masked* bytes (so `Verify` still passes after redaction, and the journal
    never contains the raw email).

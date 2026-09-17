@@ -15,6 +15,10 @@ import (
 	"github.com/jeremygprawira/wlog"
 )
 
+// markerEvery is how many records land between two marker lines. A marker states the
+// count and the head of the chain, so a reader can see whether lines went missing.
+const markerEvery = 100
+
 // chainPlaceholder is 64 zeros, written where the chain hash belongs while Journal
 // builds the line. The hash covers those zeros, so replacing them with the real hash
 // later does not change the covered bytes.
@@ -55,6 +59,8 @@ type journal struct {
 	file *os.File
 	prev string
 	key  []byte
+	// records counts the record lines this file holds, markers excluded.
+	records int
 }
 
 // Send chains one audit event and appends it.
@@ -72,18 +78,57 @@ func (j *journal) Send(_ context.Context, event map[string]any) {
 		return
 	}
 
+	if err := j.append(event); err != nil {
+		return
+	}
+	j.records++
+	if j.records%markerEvery == 0 {
+		_ = j.appendMarker()
+	}
+}
+
+// Close writes a final marker and closes the file, so a reader learns how many records
+// the file holds. A journal that never received a record writes nothing.
+func (j *journal) Close(context.Context) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.file == nil {
+		return nil
+	}
+	if j.records > 0 {
+		_ = j.appendMarker()
+	}
+	err := j.file.Close()
+	j.file = nil
+	return err
+}
+
+// append chains one line for event and writes it. The caller must hold j.mu.
+func (j *journal) append(event map[string]any) error {
 	event["audit.prev_hash"] = j.prev
 	line, hash, err := j.seal(event)
 	if err != nil {
-		return
+		return err
 	}
 	if _, err := j.file.Write(line); err != nil {
-		return
+		return err
 	}
 	if err := j.file.Sync(); err != nil {
-		return
+		return err
 	}
 	j.prev = hash
+	return nil
+}
+
+// appendMarker writes the line that says how many records the chain covers and the hash
+// they end at. With a key the marker also carries the key id, so a reader knows which
+// key to ask for.
+func (j *journal) appendMarker() error {
+	body := map[string]any{"count": j.records, "head": j.prev}
+	if j.key != nil {
+		body["key_id"] = keyID(j.key)
+	}
+	return j.append(map[string]any{"audit.marker": body})
 }
 
 // seal returns the exact line bytes for event, plus the chain hash it wrote.
@@ -171,7 +216,9 @@ func (j *journal) ensureOpen() error {
 		return err
 	}
 	j.file = f
-	if last, ok := lastLine(f); ok {
+	records, last, ok := scanFile(f)
+	j.records = records
+	if ok {
 		if h, _, err := chainValue(last, "audit.hash"); err == nil {
 			j.prev = string(h)
 		}
@@ -179,22 +226,41 @@ func (j *journal) ensureOpen() error {
 	return nil
 }
 
-// lastLine returns the final non-empty line of f, read from the start. Writes after
-// this still land at end-of-file: f was opened with os.O_APPEND, which repositions the
-// offset before every write regardless of where reads left it.
-func lastLine(f *os.File) ([]byte, bool) {
+// scanFile returns how many record lines f holds, and its last non-empty line, read
+// from the start. Writes after this still land at end-of-file: f was opened with
+// os.O_APPEND, which repositions the offset before every write regardless of where
+// reads left it.
+func scanFile(f *os.File) (records int, last []byte, found bool) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, false
+		return 0, nil, false
 	}
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 64*1024), 1<<20)
-	var last []byte
-	found := false
 	for scanner.Scan() {
-		if line := scanner.Bytes(); len(line) > 0 {
-			last = append(last[:0], line...)
-			found = true
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
 		}
+		last = append(last[:0], line...)
+		found = true
+		if isMarker(line) {
+			continue
+		}
+		records++
 	}
-	return last, found
+	return records, last, found
+}
+
+// isMarker reports whether one line holds a marker rather than a record. It parses the
+// line, so a record that merely mentions the word is still counted as a record.
+func isMarker(line []byte) bool {
+	if !bytes.Contains(line, []byte(`"audit.marker"`)) {
+		return false
+	}
+	var rec map[string]any
+	if err := json.Unmarshal(line, &rec); err != nil {
+		return false
+	}
+	_, ok := rec["audit.marker"]
+	return ok
 }

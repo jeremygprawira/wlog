@@ -36,7 +36,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-PIPE-5 FanOut rewrite
 - [x] 10-PIPE-6 HTTP drain helper
 - [x] 10-AUD-1 Journal owns the chain
-- [ ] 10-AUD-2 Marker lines and verification rules
+- [x] 10-AUD-2 Marker lines and verification rules
 - [ ] 10-AUD-3 File lock and crash recovery
 - [ ] 10-AUD-4 Several records and no silent loss
 - [ ] 10-AUD-5 Diff, Wrap, Mock, tests, and docs

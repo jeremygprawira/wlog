@@ -15,6 +15,13 @@ func WithKey(key []byte) Option {
 	return func(j *journal) { j.key = key }
 }
 
+// keyID returns a short, stable id for a signing key. A marker carries it, so a reader
+// learns which key signed the chain without seeing the key.
+func keyID(key []byte) string {
+	sum := sha256.Sum256(key)
+	return hex.EncodeToString(sum[:])[:16]
+}
+
 // signature returns the hex HMAC-SHA256 of one hash string.
 func signature(key []byte, hash string) string {
 	mac := hmac.New(sha256.New, key)
