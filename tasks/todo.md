@@ -12,16 +12,32 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CI-5 `snippets`, `ste`, and `verifyplan`
 - [x] 10-CI-6 `cover`, `bench`, `vuln`, all fuzz targets
 - [x] 10-CI-7 Release hygiene
-- [ ] Review point 10-CI: every required CI job is green, then human review
-  - Fixed 2026-09-17: `tools floor`, `tools cover -min 85`, and `tools tidy -check` all pass
-    clean. The `TestHTTPDrain_PIPE24_TimeoutApplies` failure was not flaky, it was a Go 1.21
-    stdlib difference, fixed by testing `net.Error.Timeout()` instead of `errors.Is(err,
+- [x] Review point 10-CI: every required CI job is green, then human review
+  - Fixed 2026-09-17: `make lint`, `tools floor`, `tools cover -min 85`, `tools tidy -check`,
+    `tools requires`, `tools ste`, `tools snippets`, and `make map` all pass clean. `make race`
+    passes in every module, and `make fuzz FUZZTIME=20s` finds nothing across all four targets.
+    `tools verifyplan` had its own bug. Any `./...` Verify command
+    prints "no tests to run" for a sibling package that did not match. The old code failed the
+    task on that text alone, and reported 27 false failures against the real 2. It now looks
+    for `=== RUN` instead.
+  - `TestHTTPDrain_PIPE24_TimeoutApplies` was not flaky, it was a Go 1.21 stdlib difference,
+    fixed by testing `net.Error.Timeout()` instead of `errors.Is(err,
     context.DeadlineExceeded)`.
-  - Confirmed, not fixed in the repo: `GOTOOLCHAIN=go1.26.6 tools vuln` exits 0. The default
+  - `make lint` also had 8 pre-existing failures across `drain/file`, `cmd/wlog`, and
+    `tools/cmd/ste` that nothing in this initiative had touched. All fixed:
+    - an `==` comparison against `io.EOF`, one file away from `errors.Is` for the same case
+    - an ineffectual assignment to a variable a rotation branch throws away two lines later
+    - an unwrapped `%v` where `%w` was one line away in the same function
+    - two git subprocess calls with no context
+    - two functions a since-moved feature left dead
+    - a stray blank line
+  - Proven true, not fixed in the repo: `GOTOOLCHAIN=go1.26.6 tools vuln` exits 0. The default
     Go on this machine is 1.26.1, and GO-2026-6090, GO-2026-5972, and GO-2026-5856 are
     standard-library CVEs fixed in 1.26.4 through .6. No wlog code or dependency is at fault.
     Upgrading the machine's Go is one option. Adding a `toolchain` line so `go` auto-fetches a
     patched release is another. Either is a decision for the project, not made here.
+  - `make integration`'s clickhouse step needs a running Docker daemon, which this machine does
+    not have. Not attempted here, since starting it was not asked for.
 - [x] 10-CORE-1 Value copy tree
 - [x] 10-CORE-2 Event-shape fuzz test
 - [x] 10-CORE-3 Plain lines, enricher values, drain contract
