@@ -38,6 +38,9 @@ func Add(ctx context.Context, r Record) {
 	if cached := intOf(existing["cached_input_tokens"]) + r.CachedInputTokens; cached > 0 {
 		fields["cached_input_tokens"] = cached
 	}
+	if written := intOf(existing["cache_write_input_tokens"]) + r.CacheWriteInputTokens; written > 0 {
+		fields["cache_write_input_tokens"] = written
+	}
 	if reasoning := intOf(existing["reasoning_tokens"]) + r.ReasoningTokens; reasoning > 0 {
 		fields["reasoning_tokens"] = reasoning
 	}
@@ -102,6 +105,9 @@ func fieldsFor(r Record) map[string]any {
 	}
 	if r.CachedInputTokens > 0 {
 		fields["cached_input_tokens"] = r.CachedInputTokens
+	}
+	if r.CacheWriteInputTokens > 0 {
+		fields["cache_write_input_tokens"] = r.CacheWriteInputTokens
 	}
 	if r.ReasoningTokens > 0 {
 		fields["reasoning_tokens"] = r.ReasoningTokens

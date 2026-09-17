@@ -16,19 +16,35 @@ func testPrices() *llm.Prices {
 	})
 }
 
-// TestLLM_Cost_PricesTokens proves input, output, and cached tokens are priced, with the
-// cached token at the cached rate.
+// TestLLM_Cost_PricesTokens proves each part of the input is priced at its own rate: the
+// uncached part at the input rate, a cache read at the cached rate, a cache write at the
+// write rate, and the output at the output rate.
 func TestLLM_Cost_PricesTokens(t *testing.T) {
-	cost, ok := testPrices().Cost(llm.Record{
-		Model: "model-a", InputTokens: 10, CachedInputTokens: 4, OutputTokens: 2,
+	prices := llm.NewPrices(map[string]llm.Price{
+		"model-a": {
+			InputPerMillion: 3_000_000, OutputPerMillion: 15_000_000,
+			CachedInputPerMillion: 300_000, CacheWritePerMillion: 3_750_000,
+		},
+	})
+	cost, ok := prices.Cost(llm.Record{
+		Model: "model-a", InputTokens: 10, CachedInputTokens: 4, CacheWriteInputTokens: 2, OutputTokens: 2,
 	})
 	if !ok {
 		t.Fatal("Cost reported false for a known model")
 	}
-	// 6 regular input at 3 micros each = 18, 4 cached at 0.3 micros each = 1.2 -> 1
-	// with half-up rounding, 2 output at 15 each = 30.
-	if cost.InputMicros != 19 || cost.OutputMicros != 30 || cost.TotalMicros != 49 {
-		t.Errorf("cost = %+v, want input 19, output 30, total 49", cost)
+	// 4 uncached at 3 micros each = 12, 4 read at 0.3 micros each = 1.2 -> 1 with half-up
+	// rounding, 2 written at 3.75 micros each = 7.5 -> 8, 2 output at 15 each = 30.
+	if cost.InputMicros != 12 {
+		t.Errorf("InputMicros = %d, want 12 for the uncached part", cost.InputMicros)
+	}
+	if cost.CacheReadMicros != 1 {
+		t.Errorf("CacheReadMicros = %d, want 1", cost.CacheReadMicros)
+	}
+	if cost.CacheWriteMicros != 8 {
+		t.Errorf("CacheWriteMicros = %d, want 8", cost.CacheWriteMicros)
+	}
+	if cost.OutputMicros != 30 || cost.TotalMicros != 51 {
+		t.Errorf("cost = %+v, want output 30 and total 51", cost)
 	}
 }
 

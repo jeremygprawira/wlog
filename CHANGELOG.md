@@ -31,6 +31,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `llm.Record` gains `CacheWriteInputTokens`, a subset of `InputTokens`, so a cache write is
+  billed above the input rate. `llm.Cost` splits into `InputMicros` (uncached only),
+  `CacheReadMicros`, `CacheWriteMicros`, and `OutputMicros`, and `llm.Price` gains
+  `CacheWritePerMillion`. `DefaultPrices` is rebuilt from the vendor pages, prices a dated
+  snapshot by the longest matching row name, and drops the rows that were wrong.
 - `llm.calls` and `llm.tool_calls` stop at 200 entries, with the extras counted in
   `wlog.dropped_fields`, and `llm.cost_usd` is gone: money stays in whole micros. The price
   enricher never replaces a cost the caller set, and `wlog.CountDropped` lets an adapter

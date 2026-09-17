@@ -17,10 +17,23 @@ type Record struct {
 	Model     string // the exact model id billed, such as "claude-sonnet-5"
 	Operation string // "chat", "embedding", "rerank", or any string
 
-	InputTokens       int
-	OutputTokens      int
-	CachedInputTokens int // tokens served from a prompt cache, billed at a lower rate
-	ReasoningTokens   int
+	// InputTokens is the whole input count, the way the providers report it: it includes
+	// the cache reads and the cache writes. CachedInputTokens and CacheWriteInputTokens are
+	// subsets of it, so a caller maps each provider onto the same shape.
+	//
+	// Anthropic reports input_tokens WITHOUT its cache parts, so its adapter adds
+	// input_tokens + cache_creation_input_tokens + cache_read_input_tokens here. OpenAI and
+	// Gemini already include them in their prompt count, so their adapters map it across.
+	InputTokens int
+	// CachedInputTokens is the part of the input served from a prompt cache, billed at the
+	// lower cache-read rate.
+	CachedInputTokens int
+	// CacheWriteInputTokens is the part of the input written to a prompt cache, billed above
+	// the plain input rate.
+	CacheWriteInputTokens int
+
+	OutputTokens    int
+	ReasoningTokens int // a subset of OutputTokens
 
 	ToolCalls []ToolCall
 
@@ -42,9 +55,14 @@ type ToolCall struct {
 // Cost is money, in whole millionths of a US dollar, so no float rounding reaches the
 // event. USD renders it for a human.
 type Cost struct {
-	InputMicros  int64
-	OutputMicros int64
-	TotalMicros  int64
+	// InputMicros prices only the uncached input: the part of the input that is neither a
+	// cache read nor a cache write. Each part carries its own rate, so a cache-heavy call is
+	// never billed as fresh input.
+	InputMicros      int64
+	CacheReadMicros  int64
+	CacheWriteMicros int64
+	OutputMicros     int64
+	TotalMicros      int64
 }
 
 // USD returns the total as dollars.
