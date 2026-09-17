@@ -26,9 +26,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   `audit.WithOnError`. `audit.VerifyHead` catches a journal cut at the end, and
   `audit.VerifySigned` requires a signature on every line.
 - `audit.Diff` returns a nested tree and an error, instead of a flat dotted map.
-- `audit.Journal` is now at the same place, and `audit.Wrap` records the code the Logger's
-  own extractor produced, so `audit.error_code` agrees with `error.code`. A 401 or 403
-  records the outcome `denied`.
+- `audit.Wrap` records the code the Logger's own extractor produced, so
+  `audit.error_code` agrees with `error.code`. A 401 or 403 records the outcome `denied`.
+- `audit.Mock` is silent and ignores `WLOG_LEVEL`.
 - `pipeline.MinLevel` filters an event by level before the buffer, while an event with
   audit records always passes.
 - The shared HTTP drain helper moved from `internal/httpdrain` to the public package
