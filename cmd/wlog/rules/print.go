@@ -22,7 +22,7 @@ func noPrint(pkg *packages.Package, point entry.Point) Check {
 	if body == nil {
 		return pass(RuleNoPrint, WeightNoPrint)
 	}
-	found := false
+	var at ast.Node
 	ast.Inspect(body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -33,13 +33,15 @@ func noPrint(pkg *packages.Package, point entry.Point) Check {
 			return true
 		}
 		if isPrintCall(pkg, call, obj.Pkg().Path(), obj.Name()) {
-			found = true
+			at = call
 			return false
 		}
 		return true
 	})
-	if found {
-		return fail(RuleNoPrint, WeightNoPrint, "handler uses print logging")
+	if at != nil {
+		check := fail(RuleNoPrint, WeightNoPrint, "handler uses print logging")
+		check.Node = at
+		return check
 	}
 	return pass(RuleNoPrint, WeightNoPrint)
 }

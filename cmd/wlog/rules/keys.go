@@ -19,10 +19,13 @@ func noDenylisted(pkg *packages.Package, point entry.Point) Check {
 		return pass(RuleNoDenylisted, WeightNoDenylisted)
 	}
 	redactor := redact.Default()
-	denied := declaredDeniedKey(pkg, redactor)
-	if denied != "" {
-		return fail(RuleNoDenylisted, WeightNoDenylisted, "denylisted key: "+denied)
+	if node, denied := declaredDeniedKey(pkg, redactor); denied != "" {
+		check := fail(RuleNoDenylisted, WeightNoDenylisted, "denylisted key: "+denied)
+		check.Node = node
+		return check
 	}
+	denied := ""
+	var at ast.Node
 	ast.Inspect(body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -37,7 +40,7 @@ func noDenylisted(pkg *packages.Package, point entry.Point) Check {
 			// declaration is as good a place to catch it as a write (CLI-14).
 			for _, key := range newKeyNames(call) {
 				if redactor.Denies(key) {
-					denied = key
+					denied, at = key, call
 					return false
 				}
 			}
@@ -49,21 +52,25 @@ func noDenylisted(pkg *packages.Package, point entry.Point) Check {
 		for _, key := range literalKeys(call, obj.Name()) {
 			if redactor.Denies(key) {
 				denied = key
+				at = call
 				return false
 			}
 		}
 		return true
 	})
 	if denied != "" {
-		return fail(RuleNoDenylisted, WeightNoDenylisted, "denylisted key: "+denied)
+		check := fail(RuleNoDenylisted, WeightNoDenylisted, "denylisted key: "+denied)
+		check.Node = at
+		return check
 	}
 	return pass(RuleNoDenylisted, WeightNoDenylisted)
 }
 
 // declaredDeniedKey returns a typed key the package declares whose name the redactor denies, or
 // "". The declaration usually sits outside the handler, so the whole package is searched.
-func declaredDeniedKey(pkg *packages.Package, redactor *redact.Redactor) string {
+func declaredDeniedKey(pkg *packages.Package, redactor *redact.Redactor) (ast.Node, string) {
 	for _, file := range pkg.Syntax {
+		var at ast.Node
 		denied := ""
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
@@ -72,17 +79,17 @@ func declaredDeniedKey(pkg *packages.Package, redactor *redact.Redactor) string 
 			}
 			for _, key := range newKeyNames(call) {
 				if redactor.Denies(key) {
-					denied = key
+					denied, at = key, call
 					return false
 				}
 			}
 			return true
 		})
 		if denied != "" {
-			return denied
+			return at, denied
 		}
 	}
-	return ""
+	return nil, ""
 }
 
 // isWlogNewKeyCall reports whether a call is wlog.NewKey, however its type argument is written.

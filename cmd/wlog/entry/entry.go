@@ -50,17 +50,78 @@ func (p Point) expand() []Point {
 	return points
 }
 
-// Load loads packages for patterns with the syntax and type information the finder
-// needs.
+// Load loads packages for patterns with the syntax and type information the finder needs.
+//
+// It reads the named packages with syntax, and their dependencies as export data. Loading the
+// SYNTAX of every transitive dependency is what made a two-file app cost hundreds of megabytes,
+// because the app's routers pull in whole frameworks. The app's own sibling packages are loaded
+// for real by loadLocal, so a handler declared next to the one that registers it still resolves.
 func Load(patterns ...string) ([]*packages.Package, error) {
-	cfg := &packages.Config{
-		// NeedImports is what makes NeedDeps useful: without it a dependency never reaches
-		// pkg.Imports, and a handler declared in another package cannot be resolved.
+	cfg := loadConfig()
+	pkgs, err := packages.Load(cfg, patterns...)
+	if err != nil {
+		return nil, err
+	}
+	return loadLocal(cfg, pkgs)
+}
+
+// loadConfig is the mode every load shares.
+func loadConfig() *packages.Config {
+	return &packages.Config{
+		// NeedImports gives every package its direct imports; NeedDeps is what would add their
+		// syntax, and it is the setting the memory budget cannot afford.
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
 			packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo |
-			packages.NeedDeps | packages.NeedModule,
+			packages.NeedModule,
 	}
-	return packages.Load(cfg, patterns...)
+}
+
+// loadLocal loads the module's own packages that the named ones reach, with syntax, so a handler
+// declared in a sibling package is visible. It walks the import graph inside the module only, and
+// stops when a round adds nothing.
+func loadLocal(cfg *packages.Config, pkgs []*packages.Package) ([]*packages.Package, error) {
+	loaded := map[string]bool{}
+	for _, pkg := range pkgs {
+		loaded[pkg.PkgPath] = true
+	}
+
+	for round := 0; round < 5; round++ {
+		var pending []string
+		seen := map[string]bool{}
+		for _, pkg := range pkgs {
+			for path, dep := range pkg.Imports {
+				if loaded[path] || seen[path] || !inSameModule(pkg, dep) {
+					continue
+				}
+				seen[path] = true
+				pending = append(pending, path)
+			}
+		}
+		if len(pending) == 0 {
+			return pkgs, nil
+		}
+		more, err := packages.Load(cfg, pending...)
+		if err != nil {
+			return pkgs, err
+		}
+		for _, pkg := range more {
+			if !loaded[pkg.PkgPath] {
+				loaded[pkg.PkgPath] = true
+				pkgs = append(pkgs, pkg)
+			}
+		}
+	}
+	return pkgs, nil
+}
+
+// inSameModule reports whether a dependency belongs to the module of the package that imports it.
+// A missing module on either side is answered as false, which keeps a third-party package out of
+// the syntax load.
+func inSameModule(pkg, dep *packages.Package) bool {
+	if pkg.Module == nil || dep.Module == nil {
+		return false
+	}
+	return dep.Module.Path == pkg.Module.Path
 }
 
 // Find returns every entry point in pkgs, sorted so the map is deterministic.
@@ -107,14 +168,23 @@ func Program(pkgs []*packages.Package) []*packages.Package { return allPackages(
 // allPackages returns every loaded package: the requested ones and the dependencies the
 // loader kept syntax for, walked through the import graph.
 func allPackages(pkgs []*packages.Package) []*packages.Package {
-	seen := map[string]bool{}
+	index := map[string]int{}
 	var out []*packages.Package
 	var walk func(pkg *packages.Package)
 	walk = func(pkg *packages.Package) {
-		if pkg == nil || seen[pkg.PkgPath] {
+		if pkg == nil {
 			return
 		}
-		seen[pkg.PkgPath] = true
+		if at, seen := index[pkg.PkgPath]; seen {
+			if len(pkg.Syntax) > 0 && len(out[at].Syntax) == 0 {
+				// The same package arrives twice: once from an import, as export data with no
+				// syntax, and once from the pass that loaded the app's own packages for real.
+				// The copy that can answer "where is this handler declared" wins.
+				out[at] = pkg
+			}
+			return
+		}
+		index[pkg.PkgPath] = len(out)
 		out = append(out, pkg)
 		for _, dep := range pkg.Imports {
 			walk(dep)
@@ -578,7 +648,10 @@ func isConversion(pkg *packages.Package, call *ast.CallExpr) bool {
 // funcTarget resolves a named function or method to its declaration in any loaded package,
 // which is what makes a handler declared in another package visible.
 func funcTarget(pkgs []*packages.Package, fn *types.Func) (handlerTargetInfo, bool) {
-	owner, decl := declForAny(pkgs, fn.Pos())
+	if fn.Pkg() == nil {
+		return handlerTargetInfo{}, false
+	}
+	owner, decl := declForAny(pkgs, fn.Pkg().Path(), fn.Name())
 	if decl == nil {
 		return handlerTargetInfo{}, false
 	}
@@ -614,13 +687,19 @@ func serveHTTPTarget(pkgs []*packages.Package, pkg *packages.Package, t types.Ty
 	return handlerTargetInfo{}, false
 }
 
-// declForAny finds the declaration of a named function at pos, in any loaded package. The
-// loader asks for its dependencies' syntax too, so a handler in another package is here.
-func declForAny(pkgs []*packages.Package, pos token.Pos) (*packages.Package, *ast.FuncDecl) {
+// declForAny finds a named function's declaration in the loaded package with this path.
+//
+// It matches by name rather than by position because the app's own packages are loaded in a
+// second pass: two loads parse the same file twice, and the token position from the first load
+// does not name the declaration in the second.
+func declForAny(pkgs []*packages.Package, pkgPath, name string) (*packages.Package, *ast.FuncDecl) {
 	for _, pkg := range pkgs {
+		if pkg.PkgPath != pkgPath {
+			continue
+		}
 		for _, file := range pkg.Syntax {
 			for _, decl := range file.Decls {
-				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Pos() == pos {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == name {
 					return pkg, fn
 				}
 			}

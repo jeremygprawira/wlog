@@ -28,6 +28,7 @@ func keysStrict(pkg *packages.Package, point entry.Point) Check {
 	}
 
 	nearMiss := ""
+	var at ast.Node
 	ast.Inspect(body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -44,6 +45,7 @@ func keysStrict(pkg *packages.Package, point entry.Point) Check {
 				}
 				if canonicalKey(key) == canonicalKey(name) {
 					nearMiss = key + " (the typed key is " + name + ")"
+					at = call
 					return false
 				}
 			}
@@ -51,7 +53,9 @@ func keysStrict(pkg *packages.Package, point entry.Point) Check {
 		return true
 	})
 	if nearMiss != "" {
-		return fail(RuleKeysStrict, WeightKeysStrict, "near-miss key: "+nearMiss)
+		check := fail(RuleKeysStrict, WeightKeysStrict, "near-miss key: "+nearMiss)
+		check.Node = at
+		return check
 	}
 	return pass(RuleKeysStrict, WeightKeysStrict)
 }

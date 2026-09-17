@@ -151,6 +151,10 @@ type Check struct {
 	Applicable bool   `json:"applicable"`
 	Detail     string `json:"detail"`
 	Suggestion bool   `json:"suggestion,omitempty"`
+
+	// Node is the code a reader must change, such as the call that names a denied key. A rule
+	// that can name it sets it, so an editor jumps to the line rather than to the handler.
+	Node ast.Node `json:"-"`
 }
 
 // Config holds the user's additions to the rules.
