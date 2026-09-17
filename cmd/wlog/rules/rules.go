@@ -25,6 +25,7 @@ const (
 	RuleSwallowedError = "swallowed-error"
 	RuleUseCatalog     = "use-catalog"
 	RuleAuditCoverage  = "audit-coverage"
+	RuleKeysStrict     = "keys.strict"
 )
 
 // Rule weights. A rule's weight counts toward a handler's score only when the rule
@@ -38,6 +39,9 @@ const (
 	WeightNoDenylisted   = 5
 	WeightErrorGuidance  = 15
 	WeightSwallowedError = 15
+	// A near-miss key is a correctness lint rather than a coverage gap, so the rule reports
+	// without moving a score: the same choice use-catalog and audit-coverage make.
+	WeightKeysStrict = 0
 )
 
 // Package paths the rules recognize.
@@ -64,6 +68,7 @@ func Order() []Rule {
 		{RuleSensitiveAudit, WeightSensitiveAudit},
 		{RuleNoPrint, WeightNoPrint},
 		{RuleNoDenylisted, WeightNoDenylisted},
+		{RuleKeysStrict, WeightKeysStrict},
 		{RuleUseCatalog, 0},
 		{RuleAuditCoverage, 0},
 	}
@@ -137,6 +142,7 @@ func Evaluate(pkg *packages.Package, point entry.Point, cfg Config) []Check {
 	checks = append(checks,
 		noPrint(pkg, point),
 		noDenylisted(pkg, point),
+		keysStrict(pkg, point),
 		useCatalog(pkg, point),
 		auditCoverage(pkg, point),
 	)

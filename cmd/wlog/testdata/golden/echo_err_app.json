@@ -59,6 +59,12 @@
           "detail": ""
         },
         {
+          "id": "keys.strict",
+          "weight": 0,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
@@ -128,6 +134,12 @@
           "detail": ""
         },
         {
+          "id": "keys.strict",
+          "weight": 0,
+          "pass": true,
+          "detail": ""
+        },
+        {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
@@ -193,6 +205,12 @@
         {
           "id": "keys.no_denylisted",
           "weight": 5,
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "id": "keys.strict",
+          "weight": 0,
           "pass": true,
           "detail": ""
         },

@@ -7,5 +7,6 @@ error-guidance         PASS
 swallowed-error        PASS  
 logging.no_print       PASS  
 keys.no_denylisted     PASS  
+keys.strict            PASS  
 use-catalog            PASS  
 audit-coverage         PASS  

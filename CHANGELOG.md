@@ -31,6 +31,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog map` gains the `keys.strict` rule: a literal key that is a near miss of a declared
+  typed key, such as `Set(ctx, "orderID", v)` beside `NewKey[string]("order_id")`, is reported
+  at the `Set` call.
 - `wlog map` resolves a handler to the code that runs, across packages: a named handler in
   another package, an `http.HandlerFunc(fn)` conversion, an `echo.WrapHandler` or `gin.WrapH`
   adapter, a closure factory, and a type with `ServeHTTP`. It reads the chained mux route, the
