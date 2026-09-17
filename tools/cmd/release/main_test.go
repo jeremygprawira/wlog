@@ -102,6 +102,26 @@ func TestRelease_ReadsARequireChangeLine(t *testing.T) {
 	}
 }
 
+// TestRelease_ReadsTheRequiredVersion proves that apply can check its own work.
+// A release used to tag every module even when the require edit did not land,
+// because nothing read the file back.
+func TestRelease_ReadsTheRequiredVersion(t *testing.T) {
+	got, err := requireVersion(fixture(t), "appclean", "example.com/lib")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "v0.1.0" {
+		t.Errorf("requireVersion = %q, want v0.1.0", got)
+	}
+	got, err = requireVersion(fixture(t), "appclean", "example.com/absent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("requireVersion of an absent module = %q, want an empty string", got)
+	}
+}
+
 // TestRelease_ReadsTheLastTagOfAModule proves that a sub-module tag puts its
 // directory in front, which is the rule that the Go module proxy follows.
 func TestRelease_ReadsTheLastTagOfAModule(t *testing.T) {

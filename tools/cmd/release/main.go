@@ -16,6 +16,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -317,6 +318,33 @@ func goCommand(dir string, args ...string) ([]byte, error) {
 // "require example.com/lib v0.1.0 -> v0.2.0", and returns the module path. It
 // reports false for any other line, so a later change to the plan cannot make
 // apply edit the wrong module.
+// requireVersion reads the version that a module's go.mod requires, or an empty
+// string when the module requires no such path.
+func requireVersion(root, dir, path string) (string, error) {
+	cmd := exec.CommandContext(context.Background(), "go", "mod", "edit", "-json")
+	cmd.Dir = filepath.Join(root, dir)
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	text, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("%s: go mod edit -json: %w", dir, err)
+	}
+	var file struct {
+		Require []struct {
+			Path    string
+			Version string
+		}
+	}
+	if err := json.Unmarshal(text, &file); err != nil {
+		return "", fmt.Errorf("%s: read go.mod: %w", dir, err)
+	}
+	for _, req := range file.Require {
+		if req.Path == path {
+			return req.Version, nil
+		}
+	}
+	return "", nil
+}
+
 func requireEdit(change string) (string, bool) {
 	fields := strings.Fields(change)
 	if len(fields) != 5 || fields[0] != "require" || fields[3] != "->" {
@@ -342,6 +370,16 @@ func apply(root, version string, steps []step, out io.Writer) error {
 			cmd.Env = append(os.Environ(), "GOWORK=off")
 			if text, err := cmd.CombinedOutput(); err != nil {
 				return fmt.Errorf("%s: %w\n%s", s.module.Dir, err, text)
+			}
+			// Read the file back, so a release never tags a module whose require
+			// edit did not land.
+			got, err := requireVersion(root, s.module.Dir, req)
+			if err != nil {
+				return err
+			}
+			if got != version {
+				return fmt.Errorf("%s: require %s stayed at %q, want %q, so the release stops before it tags",
+					s.module.Dir, req, got, version)
 			}
 		}
 	}
