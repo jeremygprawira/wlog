@@ -1,16 +1,27 @@
 {
-  "version": 1,
+  "version": 2,
+  "tool_version": "dev",
+  "rules_version": 2,
   "score": 85,
   "min_score": 0,
   "pass": true,
   "grade": "B",
+  "summary": {
+    "handlers": 2,
+    "passed": 1,
+    "failed": 1,
+    "score": 85,
+    "projected_score": 100,
+    "grade": "B",
+    "min_score": 0
+  },
   "handlers": [
     {
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/nethttp_app",
       "function": "handleOrders",
       "file": "main.go",
       "line": 12,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "GET",
       "route": "/orders/{id}",
       "sensitive": false,
@@ -95,7 +106,7 @@
       "function": "main",
       "file": "main.go",
       "line": 21,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/health",
       "sensitive": false,
@@ -177,6 +188,134 @@
     }
   ],
   "top_fixes": [
-    "context.set: 20 points lost across 1 handler"
+    {
+      "rule": "context.set",
+      "points": 20,
+      "handlers": 1,
+      "fix": "set at least one business field with wlog.Set",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#contextset"
+    }
+  ],
+  "evidence": [
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 12,
+      "at": "main.go:12"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 21,
+      "at": "main.go:21"
+    }
   ]
 }

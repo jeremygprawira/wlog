@@ -307,3 +307,34 @@ func TestMap_PAR28_NoColorColumns(t *testing.T) {
 		}
 	}
 }
+
+// TestMap_CLI21_TextReportGolden proves the command's text report lists every failing handler
+// with its file:line, rule, and fix, then FIX FIRST with the projected score, and that two runs
+// print the same bytes.
+func TestMap_CLI21_TextReportGolden(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "map.json")
+	code, _, report := runMap("--out", out, "./testdata/rules_app")
+	if code != 0 {
+		t.Fatalf("exit %d, want 0", code)
+	}
+	if !strings.Contains(report, "FIX FIRST") || !strings.Contains(report, "projected score") {
+		t.Errorf("the report has no FIX FIRST section:\n%s", report)
+	}
+	if !strings.Contains(report, "main.go:") {
+		t.Errorf("the report names no file:line:\n%s", report)
+	}
+
+	golden := filepath.Join("testdata", "golden", "report_text_cli.txt")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile(golden, []byte(report), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden: %v (run UPDATE_GOLDEN=1)", err)
+	}
+	if report != string(want) {
+		t.Errorf("the report differs from %s\n--- got ---\n%s\n--- want ---\n%s", golden, report, want)
+	}
+}

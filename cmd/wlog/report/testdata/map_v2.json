@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "tool_version": "dev",
+  "rules_version": 2,
+  "score": 33,
+  "min_score": 80,
+  "pass": false,
+  "grade": "F",
+  "summary": {
+    "handlers": 1,
+    "passed": 0,
+    "failed": 1,
+    "score": 33,
+    "projected_score": 100,
+    "grade": "F",
+    "min_score": 80
+  },
+  "handlers": [
+    {
+      "package": "example.com/app/server",
+      "function": "handleOrder",
+      "file": "server/orders.go",
+      "line": 42,
+      "framework": "echo4",
+      "method": "POST",
+      "route": "/orders/{id}",
+      "sensitive": false,
+      "class": "write",
+      "checks": [
+        {
+          "id": "middleware.coverage",
+          "weight": 30,
+          "pass": false,
+          "applicable": true,
+          "detail": "no wlog middleware call found in the program"
+        },
+        {
+          "id": "context.set",
+          "weight": 20,
+          "pass": true,
+          "applicable": true,
+          "detail": ""
+        },
+        {
+          "id": "logging.no_print",
+          "weight": 10,
+          "pass": false,
+          "applicable": true,
+          "detail": "handler uses print logging"
+        }
+      ]
+    }
+  ],
+  "top_fixes": [
+    {
+      "rule": "middleware.coverage",
+      "points": 30,
+      "handlers": 1,
+      "fix": "wrap the router with the adapter's Middleware once",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#middlewarecoverage"
+    },
+    {
+      "rule": "logging.no_print",
+      "points": 10,
+      "handlers": 1,
+      "fix": "put the data on the event instead of stdout or the standard logger",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#loggingno_print"
+    }
+  ],
+  "evidence": [
+    {
+      "rule": "middleware.coverage",
+      "file": "server/orders.go",
+      "line": 42,
+      "at": "server/orders.go:42"
+    },
+    {
+      "rule": "context.set",
+      "file": "server/orders.go",
+      "line": 42,
+      "at": "server/orders.go:42"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "server/orders.go",
+      "line": 42,
+      "at": "server/orders.go:42"
+    }
+  ]
+}

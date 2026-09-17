@@ -81,12 +81,17 @@ func wrapLine(line string, width int) string {
 	for len(rest) > width {
 		cut := strings.LastIndex(rest[:width+1], " ")
 		if cut <= 0 {
-			// A single long token, such as a long path, is cut where the width ends.
+			// A single long token, such as a long path or a URL, is cut where the width ends.
 			cut = width
+		}
+		tail := strings.TrimLeft(rest[cut:], " ")
+		if strings.HasPrefix(strings.ToLower(tail), "http") {
+			// A URL stays whole: a split link is hard to copy and hard to read.
+			break
 		}
 		out.WriteString(strings.TrimRight(rest[:cut], " "))
 		out.WriteByte('\n')
-		rest = strings.TrimLeft(rest[cut:], " ")
+		rest = tail
 	}
 	out.WriteString(rest)
 	return out.String()

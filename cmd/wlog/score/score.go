@@ -54,6 +54,33 @@ func Total(points []entry.Point, byHandler [][]rules.Check) int {
 	return int(math.Round(100 * earned / applicable))
 }
 
+// Project returns the app score the run would reach if every failure of these rules passed,
+// counted on the same weighted basis as Total. It is a projection, not a promise: applying a fix
+// can reveal the next failure.
+func Project(points []entry.Point, byHandler [][]rules.Check, fixed map[string]bool) int {
+	earned, applicable := 0.0, 0.0
+	for i, checks := range byHandler {
+		weight := 1.0
+		if i < len(points) {
+			weight = classWeight(rules.Class(points[i]))
+		}
+		for _, check := range checks {
+			if !check.Applicable {
+				continue
+			}
+			scaled := weight * float64(check.Weight)
+			applicable += scaled
+			if check.Pass || fixed[check.ID] {
+				earned += scaled
+			}
+		}
+	}
+	if applicable == 0 {
+		return 100
+	}
+	return int(math.Round(100 * earned / applicable))
+}
+
 // percent divides earned by applicable and rounds to the nearest whole number.
 func percent(earned, applicable int) int {
 	if applicable == 0 {

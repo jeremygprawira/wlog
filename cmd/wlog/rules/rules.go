@@ -51,10 +51,75 @@ const (
 	middlewarePkg = wlogPath + "/middleware/"
 )
 
+// Version is the rule set's own version. It moves when a rule's meaning or weight changes, so a
+// stored map says which rules scored it.
+const Version = 2
+
 // Rule is one id and its weight.
 type Rule struct {
 	ID     string
 	Weight int
+}
+
+// Info is what a reader needs about one rule: why it exists, how to fix it, and where to read
+// more. The text report prints the fix and the link.
+type Info struct {
+	Fix string
+	// Docs is the anchor of the rule's section in docs/rules.md.
+	Docs string
+}
+
+// docsBase is where every rule's section lives.
+const docsBase = "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#"
+
+// Infos holds one entry per rule, in the fixed order.
+var Infos = map[string]Info{
+	RuleMiddleware: {Fix: "wrap the router with the adapter's Middleware once", Docs: "middlewarecoverage"},
+	RuleContext:    {Fix: "set at least one business field with wlog.Set", Docs: "contextset"},
+	RuleErrors:     {Fix: "report the error with wlog.Error before the handler returns", Docs: "errorsreach_wlog"},
+	RuleErrorGuidance: {Fix: "return an error built through a catalog registry, or fill error.why and error.fix",
+		Docs: "error-guidance"},
+	RuleSwallowedError: {Fix: "report the error with wlog.Error, or return it to the caller",
+		Docs: "swallowed-error"},
+	RuleSensitiveAudit: {Fix: "call audit.Do on the sensitive route", Docs: "sensitiveaudit"},
+	RuleNoPrint: {Fix: "put the data on the event instead of stdout or the standard logger",
+		Docs: "loggingno_print"},
+	RuleNoDenylisted: {Fix: "drop the field, or name it something the redactor does not deny",
+		Docs: "keysno_denylisted"},
+	RuleKeysStrict:    {Fix: "write the declared key, such as OrderID.Set(ctx, v)", Docs: "keysstrict"},
+	RuleUseCatalog:    {Fix: "use a catalog registry so the error carries why, fix, and link", Docs: "use-catalog"},
+	RuleAuditCoverage: {Fix: "record the action with audit.Do", Docs: "audit-coverage"},
+}
+
+// FixFor returns the fix line and the docs link for one rule.
+func FixFor(id string) (fix, docs string) {
+	info, ok := Infos[id]
+	if !ok {
+		return "see the rule documentation", docsBase
+	}
+	return info.Fix, docsBase + info.Docs
+}
+
+// FrameworkID returns the short id the map prints for a framework package path, as CLI-19 asks:
+// echo4, echo5, gin, nethttp, or mux. An unknown path keeps its last element.
+func FrameworkID(path string) string {
+	switch path {
+	case entry.Echo4Path:
+		return "echo4"
+	case entry.Echo5Path:
+		return "echo5"
+	case entry.GinPath:
+		return "gin"
+	case entry.NetHTTPPath:
+		return "nethttp"
+	case entry.MuxPath:
+		return "mux"
+	default:
+		if i := strings.LastIndex(path, "/"); i >= 0 {
+			return path[i+1:]
+		}
+		return path
+	}
 }
 
 // Order returns the fixed rule order, which is also the order of checks in the map.

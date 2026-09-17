@@ -1,16 +1,27 @@
 {
-  "version": 1,
+  "version": 2,
+  "tool_version": "dev",
+  "rules_version": 2,
   "score": 83,
   "min_score": 0,
   "pass": true,
   "grade": "B",
+  "summary": {
+    "handlers": 6,
+    "passed": 2,
+    "failed": 4,
+    "score": 83,
+    "projected_score": 99,
+    "grade": "B",
+    "min_score": 0
+  },
   "handlers": [
     {
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/rules_app",
       "function": "handleGood",
       "file": "main.go",
       "line": 14,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/good",
       "sensitive": false,
@@ -95,7 +106,7 @@
       "function": "handleNoContext",
       "file": "main.go",
       "line": 19,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/nocontext",
       "sensitive": false,
@@ -180,7 +191,7 @@
       "function": "handlePrint",
       "file": "main.go",
       "line": 23,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/print",
       "sensitive": false,
@@ -265,7 +276,7 @@
       "function": "handleDeniedKey",
       "file": "main.go",
       "line": 29,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/keys",
       "sensitive": false,
@@ -350,7 +361,7 @@
       "function": "handleSensitive",
       "file": "main.go",
       "line": 34,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/refund/{id}",
       "sensitive": true,
@@ -442,7 +453,7 @@
       "function": "handleSensitiveAudited",
       "file": "main.go",
       "line": 39,
-      "framework": "net/http",
+      "framework": "nethttp",
       "method": "",
       "route": "/refund/audit",
       "sensitive": true,
@@ -531,8 +542,400 @@
     }
   ],
   "top_fixes": [
-    "sensitive.audit: 40 points lost across 1 handler",
-    "context.set: 20 points lost across 1 handler",
-    "logging.no_print: 10 points lost across 1 handler"
+    {
+      "rule": "sensitive.audit",
+      "points": 40,
+      "handlers": 1,
+      "fix": "call audit.Do on the sensitive route",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#sensitiveaudit"
+    },
+    {
+      "rule": "context.set",
+      "points": 20,
+      "handlers": 1,
+      "fix": "set at least one business field with wlog.Set",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#contextset"
+    },
+    {
+      "rule": "logging.no_print",
+      "points": 10,
+      "handlers": 1,
+      "fix": "put the data on the event instead of stdout or the standard logger",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#loggingno_print"
+    }
+  ],
+  "evidence": [
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 14,
+      "at": "main.go:14"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 19,
+      "at": "main.go:19"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "sensitive.audit",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 34,
+      "at": "main.go:34"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "sensitive.audit",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 39,
+      "at": "main.go:39"
+    }
   ]
 }

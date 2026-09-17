@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"golang.org/x/tools/go/packages"
 
@@ -38,8 +39,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "agents" {
 		return wlogagents.Run(args[1:], stdout, stderr)
 	}
+	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
+		_, _ = fmt.Fprint(stdout, usage())
+		return 0
+	}
 	if len(args) == 0 || args[0] != "map" {
-		_, _ = fmt.Fprintln(stderr, "usage: wlog map [flags] <package patterns...>")
+		_, _ = fmt.Fprint(stderr, usage())
 		return 2
 	}
 
@@ -54,6 +59,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	jsonFlag := flags.Bool("json", false, "print the report as JSON")
 	strictFlag := flags.Bool("strict", false, "also fail on a per-rule regression")
 	if err := flags.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if *strictFlag && *baselinePath == "" {
+		// --strict compares against a baseline, so it has nothing to do without one.
+		_, _ = fmt.Fprintln(stderr, "wlog map: --strict needs --baseline")
 		return 2
 	}
 	minScoreSet := false
@@ -128,12 +138,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 			gatePass = false
 		}
 		if *strictFlag {
-			currentPoints := perRulePoints(checksByPoint)
-			baselinePoints := perRulePointsOfMap(baseline)
-			for rule, points := range currentPoints {
-				if points > baselinePoints[rule] {
-					gatePass = false
-				}
+			// Per handler AND per rule: summing per rule let one handler be fixed while another
+			// broke, which is a regression the total score hides.
+			for _, regression := range compareStrict(points, checksByPoint, baseline) {
+				_, _ = fmt.Fprintf(stderr, "wlog map: %s\n", regression)
+				gatePass = false
 			}
 		}
 	}
@@ -176,7 +185,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		_, _ = fmt.Fprint(stderr, detail)
 	default:
-		_, _ = fmt.Fprint(stderr, report.Summary(document, opts))
+		_, _ = fmt.Fprint(stderr, report.Text(document, opts))
 	}
 	if !gatePass {
 		_, _ = fmt.Fprintln(stderr, "wlog map: gate failed")
@@ -193,6 +202,57 @@ func samePath(a, b string) bool {
 		return a == b
 	}
 	return absA == absB
+}
+
+// usage lists every command and the exit codes, so a reader who types wlog --help learns both.
+func usage() string {
+	return `wlog: observability tooling for a Go service.
+
+usage: wlog <command> [flags] [arguments]
+
+commands:
+  map     score every HTTP handler against the wlog rules, and write wlog.map.json
+  init    scaffold wlog into a project
+  doctor  report on the wlog setup of a project
+  agents  write agent instructions and skills
+  help    print this text
+
+exit codes:
+  0  the run passed every gate
+  1  a gate failed: the score is below --min-score, or below --baseline
+  2  the run could not start: a bad flag, a missing pattern, an unreadable config, a load error
+`
+}
+
+// compareStrict reports each handler and rule pair that passed at the baseline and fails now.
+func compareStrict(points []entry.Point, byHandler [][]rules.Check, baseline report.Map) []string {
+	type key struct{ handler, rule string }
+	wasPassing := map[key]bool{}
+	for _, handler := range baseline.Handlers {
+		name := handler.Function + "|" + handler.Route
+		for _, check := range handler.Checks {
+			if check.Pass {
+				wasPassing[key{name, check.ID}] = true
+			}
+		}
+	}
+
+	var regressions []string
+	for i, point := range points {
+		name := point.Function + "|" + point.Route
+		for _, check := range byHandler[i] {
+			if !check.Applicable || check.Pass {
+				continue
+			}
+			if !wasPassing[key{name, check.ID}] {
+				continue
+			}
+			regressions = append(regressions, fmt.Sprintf("%s:%d %s.%s regressed on %s",
+				point.File, point.Line, point.Function, check.ID, check.ID))
+		}
+	}
+	sort.Strings(regressions)
+	return regressions
 }
 
 // perRulePoints sums the failed weight per rule across the handlers.

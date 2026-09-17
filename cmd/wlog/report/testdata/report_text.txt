@@ -1,0 +1,19 @@
+wlog map: score 33 (F)  handlers 1  passed 0  failed 1
+
+handleOrder  write  server/orders.go:42
+  route POST /orders/{id}
+  middleware.coverage  FAIL  no wlog middleware call found in the program
+    fix: wrap the router with the adapter's Middleware once
+    docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#middlewarecoverage
+  logging.no_print     FAIL  handler uses print logging
+    fix: put the data on the event instead of stdout or the standard logger
+    docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#loggingno_print
+
+FIX FIRST
+  1. middleware.coverage  30 points across 1 handler
+     fix: wrap the router with the adapter's Middleware once
+     docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#middlewarecoverage
+  2. logging.no_print  10 points across 1 handler
+     fix: put the data on the event instead of stdout or the standard logger
+     docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#loggingno_print
+  projected score with these: 100

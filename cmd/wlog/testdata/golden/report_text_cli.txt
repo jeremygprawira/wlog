@@ -1,0 +1,38 @@
+6 handlers found
+wlog map: score 83 (B)  handlers 6  passed 2  failed 4
+
+handleNoContext  read  main.go:19
+  route  /nocontext
+  context.set          FAIL  handler sets no business context
+    fix: set at least one business field with wlog.Set
+    docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#contextset
+
+handlePrint  read  main.go:23
+  route  /print
+  logging.no_print     FAIL  handler uses print logging
+    fix: put the data on the event instead of stdout or the standard logger
+    docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#loggingno_print
+
+handleDeniedKey  read  main.go:29
+  route  /keys
+  keys.no_denylisted   FAIL  denylisted key: password
+    fix: drop the field, or name it something the redactor does not deny
+    docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#keysno_denylisted
+
+handleSensitive  sensitive  main.go:34
+  route  /refund/{id}
+  sensitive.audit      FAIL  sensitive route does not call audit.Do
+    fix: call audit.Do on the sensitive route
+    docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#sensitiveaudit
+
+FIX FIRST
+  1. sensitive.audit  40 points across 1 handler
+     fix: call audit.Do on the sensitive route
+     docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#sensitiveaudit
+  2. context.set  20 points across 1 handler
+     fix: set at least one business field with wlog.Set
+     docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#contextset
+  3. logging.no_print  10 points across 1 handler
+     fix: put the data on the event instead of stdout or the standard logger
+     docs: https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#loggingno_print
+  projected score with these: 99

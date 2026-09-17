@@ -31,6 +31,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- The map JSON is version 2: it carries `tool_version`, `rules_version`, a `summary` with the
+  projected score, short framework ids, module-relative paths, `top_fixes` objects with a fix and
+  a docs link, and `evidence` with `file:line` per rule result. The text report lists each failing
+  handler with its file:line, rule, fix, and docs link, then `FIX FIRST` with the projected score,
+  and `--strict` needs `--baseline` and compares per handler and per rule. `wlog --help` lists
+  every command and the exit codes.
 - `wlog map` writes no file when its gate fails, refuses an `--out` path equal to `--baseline`,
   reads config only from `wlog.map.yaml` (never its own `wlog.map.json` output), lets a flag
   beat the config including `--min-score 0`, sends every human line to stderr with `--json`

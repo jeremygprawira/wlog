@@ -1,16 +1,27 @@
 {
-  "version": 1,
+  "version": 2,
+  "tool_version": "dev",
+  "rules_version": 2,
   "score": 75,
   "min_score": 0,
   "pass": true,
   "grade": "C",
+  "summary": {
+    "handlers": 3,
+    "passed": 0,
+    "failed": 3,
+    "score": 75,
+    "projected_score": 100,
+    "grade": "C",
+    "min_score": 0
+  },
   "handlers": [
     {
       "package": "github.com/jeremygprawira/wlog/cmd/wlog/testdata/echo_err_app",
       "function": "handleOK",
       "file": "main.go",
       "line": 15,
-      "framework": "github.com/labstack/echo/v4",
+      "framework": "echo4",
       "method": "GET",
       "route": "/ok",
       "sensitive": false,
@@ -95,7 +106,7 @@
       "function": "handleFail",
       "file": "main.go",
       "line": 23,
-      "framework": "github.com/labstack/echo/v4",
+      "framework": "echo4",
       "method": "GET",
       "route": "/fail",
       "sensitive": false,
@@ -180,7 +191,7 @@
       "function": "handleResponder",
       "file": "main.go",
       "line": 29,
-      "framework": "github.com/labstack/echo/v4",
+      "framework": "echo4",
       "method": "GET",
       "route": "/responder",
       "sensitive": false,
@@ -262,8 +273,208 @@
     }
   ],
   "top_fixes": [
-    "context.set: 40 points lost across 2 handlers",
-    "error-guidance: 15 points lost across 1 handler",
-    "errors.reach_wlog: 15 points lost across 1 handler"
+    {
+      "rule": "context.set",
+      "points": 40,
+      "handlers": 2,
+      "fix": "set at least one business field with wlog.Set",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#contextset"
+    },
+    {
+      "rule": "error-guidance",
+      "points": 15,
+      "handlers": 1,
+      "fix": "return an error built through a catalog registry, or fill error.why and error.fix",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#error-guidance"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "points": 15,
+      "handlers": 1,
+      "fix": "report the error with wlog.Error before the handler returns",
+      "docs": "https://github.com/jeremygprawira/wlog/blob/main/docs/rules.md#errorsreach_wlog"
+    }
+  ],
+  "evidence": [
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 15,
+      "at": "main.go:15"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 23,
+      "at": "main.go:23"
+    },
+    {
+      "rule": "middleware.coverage",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "context.set",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "errors.reach_wlog",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "error-guidance",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "swallowed-error",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "logging.no_print",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "keys.no_denylisted",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "keys.strict",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "use-catalog",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    },
+    {
+      "rule": "audit-coverage",
+      "file": "main.go",
+      "line": 29,
+      "at": "main.go:29"
+    }
   ]
 }

@@ -61,14 +61,67 @@ func Matrix(m Map, opts ...TextOptions) string {
 	return term.Wrap(builder.String(), textOptions(opts).Width)
 }
 
-// Summary renders the one-screen report: the score, its grade, and the top fixes.
-func Summary(m Map, opts ...TextOptions) string {
+// Text renders the report a person reads: every handler that fails a rule, with its file:line,
+// the rule, and how to fix it, then FIX FIRST with the fixes worth the most points and the score
+// the app would reach with them. Each fix line ends with a docs link.
+func Text(m Map, opts ...TextOptions) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "%swlog map: score %d (%s)%s\n", gradeColor(m, opts), m.Score, m.Grade, colorReset(opts))
-	for _, fix := range m.TopFixes {
-		fmt.Fprintf(&builder, "  fix: %s\n", fix)
+	options := textOptions(opts)
+	fmt.Fprintf(&builder, "%swlog map: score %d (%s)  handlers %d  passed %d  failed %d%s\n",
+		gradeColor(m, opts), m.Score, m.Grade, m.Summary.Handlers, m.Summary.Passed, m.Summary.Failed,
+		colorReset(opts))
+
+	for _, handler := range m.Handlers {
+		failing := failingChecks(handler)
+		if len(failing) == 0 {
+			continue
+		}
+		fmt.Fprintf(&builder, "\n%s  %s  %s:%d\n", handler.Function, handler.Class, handler.File, handler.Line)
+		if handler.Route != "" {
+			fmt.Fprintf(&builder, "  route %s %s\n", handler.Method, handler.Route)
+		}
+		for _, check := range failing {
+			mark := "FAIL"
+			if check.Suggestion {
+				// A suggestion is not a failure: it prints SUGGEST so a reader knows the
+				// difference at a glance.
+				mark = "SUGGEST"
+			}
+			fmt.Fprintf(&builder, "  %-20s %s  %s\n", check.ID, mark, check.Detail)
+			fix, docs := rules.FixFor(check.ID)
+			fmt.Fprintf(&builder, "    fix: %s\n", fix)
+			// The docs link gets a line of its own: a long URL reads worse when it is split
+			// to fit a column.
+			fmt.Fprintf(&builder, "    docs: %s\n", docs)
+		}
 	}
-	return term.Wrap(builder.String(), textOptions(opts).Width)
+
+	if len(m.TopFixes) > 0 {
+		fmt.Fprintf(&builder, "\nFIX FIRST\n")
+		for i, fix := range m.TopFixes {
+			handlerWord := "handlers"
+			if fix.Handlers == 1 {
+				handlerWord = "handler"
+			}
+			fmt.Fprintf(&builder, "  %d. %s  %d points across %d %s\n     fix: %s\n     docs: %s\n",
+				i+1, fix.Rule, fix.Points, fix.Handlers, handlerWord, fix.Fix, fix.Docs)
+		}
+		fmt.Fprintf(&builder, "  projected score with these: %d\n", m.Summary.Projected)
+	}
+	return term.Wrap(builder.String(), options.Width)
+}
+
+// failingChecks returns the checks a reader must act on: a failure or a suggestion, never a pass
+// and never an n/a.
+func failingChecks(handler Handler) []rules.Check {
+	out := make([]rules.Check, 0, len(handler.Checks))
+	for _, check := range handler.Checks {
+		if !check.Applicable || check.Pass {
+			continue
+		}
+		out = append(out, check)
+	}
+	return out
 }
 
 // gradeColor returns the ANSI code a passing or failing run starts its score line with, or ""
