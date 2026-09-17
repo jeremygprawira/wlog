@@ -93,7 +93,8 @@ func Sign(key []byte) wlog.Drain          // HMAC over the chain hash
 func Mock(t testing.TB) (*wlog.Logger, *Recorder)
 ```
 
-`Wrap` runs `fn`, sets the outcome from its error, and records once. On an error it keeps
+`Wrap` runs `fn`, sets the outcome from its error (`success`, `denied` for a 401 or 403, and
+`failure` otherwise), and records once. On an error it keeps
 the error's code in `audit.error_code`, so a denied action and a failed action stay apart
 in a query.
 

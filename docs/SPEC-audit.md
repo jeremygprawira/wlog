@@ -18,7 +18,7 @@ type Record struct {
 	Actor   Actor
 	Action  string // e.g. "invoice.refund"
 	Target  Target
-	Outcome string // "success" | "denied" | "error"
+	Outcome string // "success" | "denied" | "failure"
 	Reason  string
 }
 type Actor struct{ Type, ID, Email string }
@@ -39,6 +39,24 @@ func VerifyHead(path, head string, key ...[]byte) error // as Verify, and the la
 func VerifySigned(path string, key []byte) error // as Verify(path, key): every line must be
                                        // signed
 ```
+
+### Who acted, and which request it was
+
+Every record names one actor type: `user`, `service`, `system`, or `agent`. An agent actor
+also fills `model`, `tools`, and `prompt_id`, so a review can tell which model, which tools,
+and which prompt were behind an action. `Actor.Valid` reports whether a type is one of the
+four, and `Do` never rejects a record over it, because losing an audit fact is worse than an
+odd type.
+
+An outcome is `success`, `denied`, or `failure`. `audit.Success`, `audit.Denied`, and
+`audit.Failure` name them.
+
+`Do` fills three fields the caller may leave empty: `correlation_id` from
+`trace.request_id`, `causation_id` from `trace.parent_event_id`, and `idempotency_key`, the
+first 32 hex characters of a SHA-256 over the action, the actor id, the target type, the
+target id, and `trace.request_id`. A retried request with the same request id therefore
+records the same key, and a different request does not. A caller that passes its own value
+keeps it.
 
 ### Several records per event
 

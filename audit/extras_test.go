@@ -125,8 +125,8 @@ func TestAudit_Wrap(t *testing.T) {
 	}
 	end()
 	record := recordOf(t, rec.Last())
-	if record["outcome"] != "error" {
-		t.Errorf("error outcome = %v, want error", record["outcome"])
+	if record["outcome"] != audit.OutcomeFailure {
+		t.Errorf("error outcome = %v, want %s", record["outcome"], audit.OutcomeFailure)
 	}
 	if record["error_code"] == nil || record["error_code"] == "" {
 		t.Errorf("error_code missing from %v", record)

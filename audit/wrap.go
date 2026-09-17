@@ -10,7 +10,7 @@ import (
 // Deny records a refused action. It is Do with outcome "denied", so a denial and a
 // failure stay apart in a query.
 func Deny(ctx context.Context, r Record) {
-	r.Outcome = "denied"
+	r.Outcome = OutcomeDenied
 	Do(ctx, r)
 }
 
@@ -25,10 +25,10 @@ func Only(ctx context.Context, r Record) {
 }
 
 // Wrap runs fn and records one audit fact with the outcome fn produced. A nil error
-// records "success". Any other error records the failure on the event, keeps that
-// error's code in audit.error_code, and records the outcome "error". An error the
-// extractor marks 401 or 403, meaning a refusal, records "denied" instead, so a denial
-// and a failure stay apart in a query.
+// records OutcomeSuccess. Any other error records the failure on the event, keeps that
+// error's code in audit.error_code, and records OutcomeFailure. An error the extractor
+// marks 401 or 403, meaning a refusal, records OutcomeDenied instead, so a denial and a
+// failure stay apart in a query.
 //
 // Wrap records the error through wlog.Error, so the Logger's own extractor runs and
 // audit.error_code always agrees with error.code on the same event. A context with no
@@ -36,18 +36,18 @@ func Only(ctx context.Context, r Record) {
 func Wrap(ctx context.Context, r Record, fn func() error) error {
 	err := fn()
 	if err == nil {
-		r.Outcome = "success"
+		r.Outcome = OutcomeSuccess
 		Do(ctx, r)
 		return nil
 	}
 
-	r.Outcome = "error"
+	r.Outcome = OutcomeFailure
 	if wlog.HasEvent(ctx) {
 		wlog.Error(ctx, err)
 		if info, ok := wlog.CurrentError(ctx); ok {
 			r.ErrorCode = info.Code
 			if info.Status == http.StatusUnauthorized || info.Status == http.StatusForbidden {
-				r.Outcome = "denied"
+				r.Outcome = OutcomeDenied
 			}
 		}
 	} else {

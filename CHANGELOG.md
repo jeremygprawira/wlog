@@ -26,6 +26,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   `audit.WithOnError`. `audit.VerifyHead` catches a journal cut at the end, and
   `audit.VerifySigned` requires a signature on every line.
 - `audit.Diff` returns a nested tree and an error, instead of a flat dotted map.
+- A failed `audit.Wrap` records the outcome `failure` instead of `error`. Migration: a query
+  that filters on `outcome:error` moves to `outcome:failure`.
+- `audit.Record` gains `correlation_id` and `causation_id`, and `audit.Do` fills them from
+  the event's trace group, plus a stable `idempotency_key`. `audit.Actor` gains `model`,
+  `tools`, and `prompt_id` for the agent actor.
 - `audit.Wrap` records the code the Logger's own extractor produced, so
   `audit.error_code` agrees with `error.code`. A 401 or 403 records the outcome `denied`.
 - `audit.Mock` is silent and ignores `WLOG_LEVEL`.
