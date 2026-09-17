@@ -13,7 +13,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // config holds the resolved configuration for one Drain.

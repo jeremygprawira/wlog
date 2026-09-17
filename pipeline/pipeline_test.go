@@ -241,3 +241,33 @@ func (c *countingSender) count() int {
 	defer c.mu.Unlock()
 	return c.events
 }
+
+// TestPipeline_PAR16_MinLevelKeepsAudit proves MinLevel drops a lower event before it
+// enters the buffer, while an audit event always passes: audit is never filtered away.
+func TestPipeline_PAR16_MinLevelKeepsAudit(t *testing.T) {
+	sender := &fakeSender{}
+	w := pipeline.Wrap(sender,
+		pipeline.BatchSize(1),
+		pipeline.BatchInterval(5*time.Millisecond),
+		pipeline.MinLevel(wlog.LevelWarn),
+	)
+	ctx := context.Background()
+
+	w.Send(ctx, map[string]any{"level": "info", "n": 1})
+	w.Send(ctx, map[string]any{"level": "warn", "n": 2})
+	w.Send(ctx, map[string]any{"level": "info", "n": 3, "audit": []any{map[string]any{"action": "a"}}})
+
+	waitFor(t, time.Second, func() bool { return len(sender.allEvents()) >= 2 })
+	events := sender.allEvents()
+	if len(events) != 2 {
+		t.Fatalf("the sender saw %d events, want the warn event and the audit event", len(events))
+	}
+	var seen []any
+	for _, e := range events {
+		seen = append(seen, e["n"])
+	}
+	if seen[0] != 2 || seen[1] != 3 {
+		t.Errorf("the sender saw %v, want the warn and audit events only", seen)
+	}
+	closeDrain(t, w)
+}

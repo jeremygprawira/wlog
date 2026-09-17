@@ -4,7 +4,7 @@
 > Packages `github.com/jeremygprawira/wlog/drain/axiom`, `.../drain/loki`,
 > `.../drain/file`, `.../drain/webhook`, `.../drain/otlp`. All live in the root module, so
 > every drain uses only the standard library. Depends on `core`, `pipeline`, and
-> `internal/httpdrain`. Project-wide rules in [SPEC.md](SPEC.md) apply.
+> `pipeline/httpdrain`. Project-wide rules in [SPEC.md](SPEC.md) apply.
 > v1.2 additions to the file and memory modules: [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md).
 
 ## Objective
@@ -26,7 +26,7 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
 - `func MustNew(opts ...Option) *Drain` panics on that error, for `main`.
 - Explicit options win over env vars, the same rule core uses (SPEC.md: code wins over env).
 - Every HTTP drain sends `User-Agent: wlog/<version>` and `X-Wlog-Source: <name>` through
-  `internal/httpdrain` (`axiom`, `loki`, `webhook`, `otlp`). `file` sends nothing.
+  `pipeline/httpdrain` (`axiom`, `loki`, `webhook`, `otlp`). `file` sends nothing.
 - A drain never panics and never blocks: `pipeline.Wrap` owns retry, buffering, and `Close`.
 - Each `SendBatch` sends one request per batch. The drain returns a `*httpdrain.StatusError`
   unchanged, so `pipeline` can read `Retryable()` and `RetryAfter()`.
@@ -149,7 +149,7 @@ log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(100))))
 ## Boundaries
 
 - **Always:** an absent option falls back to env. Send identity headers through
-  `internal/httpdrain`.
+  `pipeline/httpdrain`.
 - **Ask first:** adding a vendor SDK, adding a sixth v1 drain, changing a default label set.
 - **Never:** make a real network call in a default `go test`. Never block or panic in
   `SendBatch`. Never let a drain re-encode a value the redactor removed.

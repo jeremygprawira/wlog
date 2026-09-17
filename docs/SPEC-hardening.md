@@ -141,7 +141,7 @@ HTTP-20, and phase 14 closes HTTP-21.
 12. `pipeline.MinLevel(level)` drops an event below `level` before it enters the buffer. An event
     with an `audit` array always passes. `Stats` reports queued events, which covers evlog's
     `pending`. (PIPE-4, PAR-16)
-13. `internal/httpdrain` moves to the public package `pipeline/httpdrain`. A third-party drain
+13. The old `internal/httpdrain` is now the public package `pipeline/httpdrain`. A third-party drain
     gets the same status classes, `Retry-After` rule, URL scrubbing, and identity headers.
     (PAR-17)
 14. `WithUserAgent("")` sends no `User-Agent`, and `WithIdentityHeaders(false)` sends no wlog

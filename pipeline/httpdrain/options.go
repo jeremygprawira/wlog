@@ -57,5 +57,19 @@ func WithGzip(on bool) Option { return func(c *Client) { c.gzip = on } }
 func WithSource(name string) Option { return func(c *Client) { c.source = name } }
 
 // WithUserAgent overrides the User-Agent header; an empty string omits it entirely.
-// Default "wlog/<version>".
-func WithUserAgent(ua string) Option { return func(c *Client) { c.userAgent = ua } }
+// Default "wlog/<version>". A user agent the caller sets here is the caller's own, so
+// WithIdentityHeaders(false) still sends it.
+func WithUserAgent(ua string) Option {
+	return func(c *Client) {
+		c.userAgent = ua
+		c.userAgentSet = true
+	}
+}
+
+// WithIdentityHeaders turns the headers that identify wlog off or on. On (the default) the
+// request carries User-Agent "wlog/<version>" and, with WithSource, X-Wlog-Source. Off
+// omits both, for a backend that takes no unknown header. A user agent the caller set
+// with WithUserAgent is not a wlog identity header, so it is still sent.
+func WithIdentityHeaders(on bool) Option {
+	return func(c *Client) { c.identity = on }
+}

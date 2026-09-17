@@ -11,8 +11,8 @@ import (
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/otlp"
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // defaultEndpoint is HyperDX's OTLP intake.

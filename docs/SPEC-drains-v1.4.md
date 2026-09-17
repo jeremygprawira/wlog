@@ -10,7 +10,7 @@
 ## Objective
 
 Three more backends, reached the same way the six v1 drains already are. Each one wraps
-`internal/httpdrain`, batches through `pipeline.Wrap`, and builds from environment
+`pipeline/httpdrain`, batches through `pipeline.Wrap`, and builds from environment
 variables alone. Plus the one framework example still missing, and the best-practice guide.
 
 ## Behaviour
@@ -110,7 +110,7 @@ The Lambda example tests in its own module.
 
 ## Boundaries
 
-- **Always:** reuse `internal/httpdrain` and `pipeline.Wrap`. A drain writes no retry loop
+- **Always:** reuse `pipeline/httpdrain` and `pipeline.Wrap`. A drain writes no retry loop
   of its own.
 - **Ask first:** changing a default endpoint, since a wrong one sends a customer's data to
   the wrong region.

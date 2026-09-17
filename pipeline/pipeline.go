@@ -67,6 +67,11 @@ func Wrap(next Sender, opts ...Option) wlog.Drain {
 // Send buffers event and returns immediately; it never calls next itself and never
 // blocks (gate G3). A full buffer drops the oldest queued event.
 func (w *wrapped) Send(ctx context.Context, event map[string]any) {
+	if !w.admits(event) {
+		// A filtered event is not a lost one: the caller asked for this, the same way
+		// core's own level filter works. Nothing counts it as a drop.
+		return
+	}
 	if w.closed.Load() {
 		// A closed worker never sends again, so the event is reported rather than
 		// buffered where nothing will read it.
@@ -92,6 +97,31 @@ func (w *wrapped) Send(ctx context.Context, event map[string]any) {
 		w.dropped.Add(1)
 		w.reportDrop([]map[string]any{dropped}, nil)
 	}
+}
+
+// admits reports whether an event passes MinLevel.
+//
+// An audit event always passes, because a filtered audit fact is a hole in a chain a
+// reader must be able to verify. An event with no level, or one this package does not
+// know, passes too: a filter must not hide what it cannot judge.
+func (w *wrapped) admits(event map[string]any) bool {
+	if !w.cfg.minLevelSet {
+		return true
+	}
+	if _, isAudit := event["audit"]; isAudit {
+		return true
+	}
+	rank, ok := levelRanks[wlog.Level(levelOf(event))]
+	if !ok {
+		return true
+	}
+	return rank >= w.cfg.minLevel
+}
+
+// levelOf returns an event's level as a name.
+func levelOf(event map[string]any) string {
+	level, _ := event["level"].(string)
+	return level
 }
 
 func (w *wrapped) run() {
@@ -185,7 +215,7 @@ var errClosed = errors.New("pipeline: closed")
 
 // RetryError lets a Sender's error say more than "failed": whether it is even worth
 // retrying, and how long to wait if the server said so (e.g. a 429's Retry-After).
-// internal/httpdrain's *StatusError implements this; a plain error just gets the
+// pipeline/httpdrain's *StatusError implements this; a plain error just gets the
 // normal backoff for every attempt.
 type RetryError interface {
 	error

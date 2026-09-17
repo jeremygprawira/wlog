@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // defaultURL is Axiom's public API host.

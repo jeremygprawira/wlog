@@ -31,6 +31,10 @@ type Client struct {
 	gzip       bool
 	source     string
 	userAgent  string
+	// userAgentSet records that the caller chose the user agent, and identity reports
+	// whether wlog's own identity headers go.
+	userAgentSet bool
+	identity     bool
 }
 
 // New builds a Client posting to url. Default: 10s timeout, User-Agent
@@ -43,6 +47,7 @@ func New(url string, opts ...Option) *Client {
 		timeoutSet: true,
 		headers:    map[string]string{},
 		userAgent:  version.UserAgent(),
+		identity:   true,
 	}
 	for _, o := range opts {
 		o(c)
@@ -77,10 +82,10 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 	if encoding != "" {
 		req.Header.Set("Content-Encoding", encoding)
 	}
-	if c.userAgent != "" {
+	if c.userAgent != "" && (c.identity || c.userAgentSet) {
 		req.Header.Set("User-Agent", c.userAgent)
 	}
-	if c.source != "" {
+	if c.source != "" && c.identity {
 		req.Header.Set("X-Wlog-Source", c.source)
 	}
 	for k, v := range c.headers {

@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
 	"github.com/jeremygprawira/wlog/internal/version"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // contentType is the Sentry envelope content type.

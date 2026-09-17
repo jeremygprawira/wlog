@@ -3,7 +3,7 @@
 > Module ids `drain-sentry`, `drain-clickhouse`, `drain-datadog`.
 > Packages `github.com/jeremygprawira/wlog/drain/sentry`, `.../clickhouse`, `.../datadog`.
 > All live in the root module, so every drain uses the standard library only. Depends on
-> `core`, `pipeline`, and `internal/httpdrain`. Project-wide rules in [SPEC.md](SPEC.md)
+> `core`, `pipeline`, and `pipeline/httpdrain`. Project-wide rules in [SPEC.md](SPEC.md)
 > apply. [SPEC-drains-v1.md](SPEC-drains-v1.md) still governs the shared common shape:
 > `New` returns an error, `MustNew` panics, an option wins over env, and every HTTP drain
 > sends the wlog identity headers.

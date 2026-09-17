@@ -89,7 +89,7 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | custom-enrichers | built | `wlog.EnricherFunc` |
 | custom-framework | partial | `middleware/nethttp` is the base to wrap; no adapter guide |
 | drain-pipeline | built | `pipeline.Wrap` with batching, retry, bounded buffer, `FanOut`, `Close` |
-| identity-headers | built | `internal/httpdrain` sends `User-Agent: wlog/<version>` and `X-Wlog-Source` |
+| identity-headers | built | `pipeline/httpdrain` sends `User-Agent: wlog/<version>` and `X-Wlog-Source` |
 | stream | built | `drain/memory` with `SSEHandler` |
 | plugins | built | `Plugin` plus optional `Setup`, `Enricher`, `Keeper`, `Drain`, `RequestStarter`, `RequestFinisher` |
 | tail-sampling | built | `sample` keep rules |

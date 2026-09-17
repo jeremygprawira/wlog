@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // defaultEndpoint is a local collector with the default OTLP/HTTP port.

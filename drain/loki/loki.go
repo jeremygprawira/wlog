@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // defaultURL is a local Loki, the common development setup.

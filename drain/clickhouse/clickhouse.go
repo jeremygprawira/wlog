@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // Defaults for a local ClickHouse.

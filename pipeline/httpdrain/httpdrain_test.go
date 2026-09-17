@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/internal/version"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 func TestHTTPDrain_Post_Success(t *testing.T) {
@@ -255,5 +255,52 @@ func TestHTTPDrain_PIPE24_TimeoutApplies(t *testing.T) {
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("err = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// TestHTTPDrain_PAR18_HeadersOff proves both identity knobs: an empty user agent sends
+// none, and WithIdentityHeaders(false) sends neither the wlog user agent nor the wlog
+// source header, while a user agent the caller chose itself still goes.
+func TestHTTPDrain_PAR18_HeadersOff(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	ctx := context.Background()
+
+	// An empty user agent sends none. Go's own default may still appear.
+	c := httpdrain.New(srv.URL, httpdrain.WithUserAgent(""))
+	if err := c.Post(ctx, []byte("x"), "text/plain"); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if ua := srv.Last().Headers.Get("User-Agent"); ua != "" && ua != "Go-http-client/1.1" {
+		t.Errorf("User-Agent = %q, want none", ua)
+	}
+
+	// With identity headers off, wlog sends neither of its own headers.
+	off := httpdrain.New(srv.URL, httpdrain.WithIdentityHeaders(false), httpdrain.WithSource("axiom"))
+	if err := off.Post(ctx, []byte("x"), "text/plain"); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	req := srv.Last()
+	if src := req.Headers.Get("X-Wlog-Source"); src != "" {
+		t.Errorf("X-Wlog-Source = %q, want none", src)
+	}
+	if ua := req.Headers.Get("User-Agent"); ua != "" && ua != "Go-http-client/1.1" {
+		t.Errorf("User-Agent = %q, want none", ua)
+	}
+
+	// A user agent the caller chose is not a wlog identity header, so it still goes.
+	own := httpdrain.New(srv.URL,
+		httpdrain.WithIdentityHeaders(false),
+		httpdrain.WithUserAgent("checkout-api/2.1"),
+	)
+	if err := own.Post(ctx, []byte("x"), "text/plain"); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	req = srv.Last()
+	if got := req.Headers.Get("User-Agent"); got != "checkout-api/2.1" {
+		t.Errorf("User-Agent = %q, want the caller's own value", got)
+	}
+	if src := req.Headers.Get("X-Wlog-Source"); src != "" {
+		t.Errorf("X-Wlog-Source = %q, want none", src)
 	}
 }

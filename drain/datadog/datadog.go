@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // Defaults for the Datadog US site and the wlog source tag.

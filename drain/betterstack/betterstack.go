@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // defaultHost is Better Stack's intake host.

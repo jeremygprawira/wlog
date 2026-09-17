@@ -10,9 +10,9 @@ import (
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/axiom"
-	"github.com/jeremygprawira/wlog/internal/httpdrain"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // newTestDrain points a Drain at a fake ingest server.

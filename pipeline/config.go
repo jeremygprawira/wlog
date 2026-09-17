@@ -1,6 +1,10 @@
 package pipeline
 
-import "time"
+import (
+	"time"
+
+	"github.com/jeremygprawira/wlog"
+)
 
 // BackoffKind selects how the delay between retries grows.
 type BackoffKind int
@@ -13,6 +17,8 @@ const (
 
 type config struct {
 	batchSize     int
+	minLevel      int
+	minLevelSet   bool
 	batchInterval time.Duration
 	maxAttempts   int
 	backoff       BackoffKind
@@ -57,6 +63,32 @@ func InitialDelay(d time.Duration) Option { return func(c *config) { c.initialDe
 // MaxDelay caps how long any single retry waits. Default 30s.
 func MaxDelay(d time.Duration) Option {
 	return func(c *config) { c.maxDelay = max(d, time.Millisecond) }
+}
+
+// MinLevel drops an event whose level is lower than level before it enters the buffer, so
+// a busy service sends only what it asked for. An event carrying audit records always
+// passes (SPEC.md: audit is never filtered away), and an event whose level is missing or
+// unknown passes too, so a filter never hides what it cannot judge.
+//
+// A level name that is not debug, info, warn, or error turns the option off rather than
+// guessing, so a typo can never hide every event.
+func MinLevel(level wlog.Level) Option {
+	return func(c *config) {
+		rank, ok := levelRanks[level]
+		if !ok {
+			return
+		}
+		c.minLevel = rank
+		c.minLevelSet = true
+	}
+}
+
+// levelRanks orders the four levels, lowest first.
+var levelRanks = map[wlog.Level]int{
+	wlog.LevelDebug: 0,
+	wlog.LevelInfo:  1,
+	wlog.LevelWarn:  2,
+	wlog.LevelError: 3,
 }
 
 // MaxBuffer caps how many events are queued at once, across all not-yet-flushed
