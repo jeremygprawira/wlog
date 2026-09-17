@@ -1,27 +1,18 @@
 package audit
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-
-	"github.com/jeremygprawira/wlog"
 )
 
-// Sign returns a wlog.Drain that adds audit.signature, an HMAC-SHA256 over the chain
-// hash. Register it after Chain and before the journal, so the signed bytes are what the
-// journal stores. Verify(path, key) then rejects an edit that does not carry a matching
-// signature, which raises the bar from "an edit is detectable" to "an edit needs the
-// key".
-func Sign(key []byte) wlog.Drain {
-	return wlog.DrainFunc(func(_ context.Context, event map[string]any) {
-		hash, _ := event["audit.hash"].(string)
-		if hash == "" {
-			return
-		}
-		event["audit.signature"] = signature(key, hash)
-	})
+// WithKey signs every journal line, so Verify(path, key) rejects an edit that does not
+// carry a matching signature. Without a key the chain still detects an edit, but
+// anyone who can write the file can also rebuild a valid chain. With a key the writer
+// must hold the key, which raises the bar from "an edit is detectable" to "an edit
+// needs the key".
+func WithKey(key []byte) Option {
+	return func(j *journal) { j.key = key }
 }
 
 // signature returns the hex HMAC-SHA256 of one hash string.

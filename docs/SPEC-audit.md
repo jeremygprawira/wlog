@@ -27,10 +27,11 @@ func Do(ctx context.Context, r Record) // sets the reserved "audit" field on the
                                          // (inside a Start), or emits a standalone audit event
                                          // (outside one), via wlog.Start(ctx, "audit."+r.Action)
 
-func Journal(path string) wlog.Drain // append-only NDJSON, fsync'd, mode 0600, resumes the
-                                       // hash chain from the file's last line on restart
-func Verify(path string) error       // walks a journal file, re-derives each hash, returns the
-                                       // first mismatch (line number + reason) or nil
+func Journal(path string, opts ...Option) wlog.Drain // append-only NDJSON, fsync'd, mode 0600,
+                                       // resumes the hash chain from the file's last line
+func WithKey(key []byte) Option      // signs every line, so Verify(path, key) checks the HMAC
+func Verify(path string, key ...[]byte) error // walks a journal file, re-derives each hash from
+                                       // the bytes on disk, returns the first mismatch or nil
 ```
 
 ### Never sampled
@@ -40,28 +41,36 @@ order). This module then needs no sampling override of its own. It only needs to
 
 ### Hash chain
 
-Computed at emit time, **after redaction** (so the chain covers exactly the bytes that leave the
-process, never raw secrets): `hash = sha256(prev_hash || canonical_json(redacted_audit_event))`,
-where `canonical_json` sorts object keys for a stable byte sequence. `prev_hash` and `hash` are
-added as `audit.prev_hash`/`audit.hash` on the event before it reaches sinks/drains. Chain state
-(the last hash) is kept per-`*wlog.Logger`, guarded by one mutex, so concurrent audit events get
-a strict, well-defined order.
+Computed at write time, **after redaction** (so the chain covers exactly the bytes that leave the
+process, never raw secrets). `hash = sha256(line_bytes)`, where `line_bytes` is the exact JSON
+line that `Journal` writes, with the value of `audit.hash` and, when a key is set,
+`audit.signature` replaced by zeros. The hash therefore covers every other byte on the line, so
+JSON whitespace, a reordered key, a duplicate key, and a number written in another form all fail
+`Verify`. Byte edits such as `1` to `1.0` or `9007199254740993` to `9007199254740992` change the
+covered bytes, and a CRLF ending does too.
+
+`Journal` owns the chain state (the last hash) and the write lock, so the lines land in chain
+order whatever the arrival order. `prev_hash` and `hash` are set as `audit.prev_hash` and
+`audit.hash` on the event, so a drain listed after `Journal` sees them. There is no separate
+chain drain. A keyed `Journal` adds `audit.signature`, an HMAC-SHA256 over the chain hash.
 
 ### Journal
 
 `Journal(path)` is a `wlog.Drain` (meant to run alongside the main drain via `wlog.WithDrains`,
-not instead of it): appends one NDJSON line per event it receives, `O_APPEND|O_CREATE`, fsync
-after each write. Audit logs are low-volume, so durability beats throughput here. The file mode
-is 0600. On `New` or the first `Send` after process start, it reads the file's last line to
-recover `prev_hash`. A restart then continues the same chain instead of starting a new one
-silently.
+not instead of it): it hashes the line it is about to write, appends it, and fsyncs it, all under
+one lock. One NDJSON line per event it receives, opened `O_APPEND|O_CREATE`, mode 0600. Audit
+logs are low-volume, so durability beats throughput here. On the first `Send` after process
+start, it reads the file's last line to recover the previous hash. A restart then continues the
+same chain instead of starting a new one silently.
 
 ### Verify
 
-`Verify(path)` reads the file line by line. For each line, it recomputes the `hash` from the
-stored bytes (minus the `hash` field) plus the previous line's `hash`. It then compares the two.
-A byte change, a deleted line, or a reordered line breaks the chain. The first mismatch is
-reported with its line number. A deleted line breaks the very next line's `prev_hash` reference.
+`Verify(path, key...)` reads the file line by line. For each line it recomputes the hash from the
+bytes on disk, with the chain and signature values zeroed as the writer did, and compares it with
+the stored `audit.hash`. The line's `audit.prev_hash` must also equal the previous line's hash,
+which catches a deleted or a reordered line. The first mismatch is reported with its line number.
+An empty line, a line without a valid `audit.hash`, and a malformed chain field are errors.
+`Verify` only reports; it never repairs a chain.
 
 ## Success Criteria
 

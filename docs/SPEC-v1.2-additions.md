@@ -102,9 +102,10 @@ in a query.
 agnostic. A field the redactor denies is masked by the normal pipeline, since `Diff` only
 builds a map and never writes it out itself.
 
-`Sign(key)` wraps the journal drain. It adds `audit.signature`, an HMAC-SHA256 over the
-chain hash. `Verify` then takes the key and rejects a record whose signature fails. This raises the
-bar from "an edit is detectable" to "an edit needs the key".
+`audit.Journal(path, audit.WithKey(key))` signs every line it writes. Each line carries
+`audit.signature`, an HMAC-SHA256 over the chain hash. `Verify(path, key)` then rejects a record
+whose signature fails. This raises the bar from "an edit is detectable" to "an edit needs the
+key". A `Journal` with no key writes unsigned lines, and `Verify(path)` accepts them.
 
 `audit.Catalog(reg *catalog.Registry)` reads audit metadata from a catalog entry. When an
 entry sets `ReasonRequired`, a `Do` with an empty `Reason` records `audit.reason_missing`

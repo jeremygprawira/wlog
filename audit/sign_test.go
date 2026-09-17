@@ -15,7 +15,7 @@ import (
 func TestAudit_Sign(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "journal.ndjson")
 	key := []byte("fixed-key")
-	log := wlog.New(wlog.WithDrains(audit.Chain(), audit.Sign(key), audit.Journal(path)))
+	log := wlog.New(wlog.WithDrains(audit.Journal(path, audit.WithKey(key))))
 
 	ctx := log.WithContext(context.Background())
 	ctx, end := wlog.Start(ctx, "op")

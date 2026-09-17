@@ -11,6 +11,13 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 - Nothing yet. The v0.5.0 tasks run now, and this section fills as they land.
 
+### Changed
+
+- `audit.Journal` owns the hash chain and hashes the exact bytes it writes, so one
+  changed byte fails `Verify`. The `audit.Chain` drain is gone, and signing is now
+  `audit.Journal(path, audit.WithKey(key))` instead of the `audit.Sign` drain. Migration:
+  register `audit.Journal(path)` alone, and pass the key through `WithKey`.
+
 ## [0.4.0] - 2026-09-16
 
 ### Added
