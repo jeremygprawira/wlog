@@ -20,7 +20,7 @@ Name a field in `snake_case`, under the owning group. Declare a `wlog.Key[T]` fo
 field you set often, so a wrong value type fails to compile.
 
 Never put a password, token, or card number on an event. The redactor masks a denied key,
-but the field should not be written at all.
+but the field must not be written at all.
 
 ## A complete example
 
