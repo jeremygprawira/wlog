@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -371,15 +372,35 @@ func (w *wrapped) Flush(ctx context.Context) error {
 	return nil
 }
 
-// Close stops the background goroutine after flushing every buffered event, or
-// returns ctx's error if its deadline passes first.
+// Close stops the background goroutine after flushing every buffered event, then closes
+// the Sender when it holds something the process must release, such as a file. It returns
+// ctx's error if its deadline passes first.
 func (w *wrapped) Close(ctx context.Context) error {
 	w.closed.Store(true)
 	w.closeOnce.Do(func() { close(w.closeSig) })
 	select {
 	case <-w.done:
-		return nil
+		return w.closeSender(ctx)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// closeSender releases the Sender's own resource, if it has one. Without this a file
+// drain would never sync or close its file, because the pipeline, not the caller, owns
+// the last write.
+func (w *wrapped) closeSender(ctx context.Context) error {
+	if closer, ok := w.next.(senderCloser); ok {
+		return closer.Close(ctx)
+	}
+	if closer, ok := w.next.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+// senderCloser is the optional Close a Sender may implement, so Wrap can release a file,
+// a connection, or a client pool after the last batch.
+type senderCloser interface {
+	Close(ctx context.Context) error
 }

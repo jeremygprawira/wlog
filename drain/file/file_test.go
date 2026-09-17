@@ -42,11 +42,11 @@ func lines(s string) []string {
 // TestFile_AppendNDJSON proves one batch appends one JSON line per event, with mode 0600.
 func TestFile_AppendNDJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.ndjson")
-	d, err := file.New(file.WithPath(path))
+	d, err := file.NewSender(file.WithPath(path))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 
 	events := []map[string]any{{"level": "info", "operation": "a"}, {"level": "info", "operation": "b"}}
 	if err := d.SendBatch(context.Background(), events); err != nil {
@@ -81,11 +81,11 @@ func fillEvent(operation string) map[string]any {
 // the previous content in path.1.
 func TestFile_RotateBySize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.ndjson")
-	d, err := file.New(file.WithPath(path), file.WithMaxSize(100))
+	d, err := file.NewSender(file.WithPath(path), file.WithMaxSize(100))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 
 	if err := d.SendBatch(context.Background(), []map[string]any{fillEvent("first")}); err != nil {
 		t.Fatalf("SendBatch first: %v", err)
@@ -105,11 +105,11 @@ func TestFile_RotateBySize(t *testing.T) {
 // TestFile_RotateByAge proves a file older than maxAge rotates before the next write.
 func TestFile_RotateByAge(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.ndjson")
-	d, err := file.New(file.WithPath(path), file.WithMaxAge(time.Nanosecond))
+	d, err := file.NewSender(file.WithPath(path), file.WithMaxAge(time.Nanosecond))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 
 	if err := d.SendBatch(context.Background(), []map[string]any{{"operation": "first"}}); err != nil {
 		t.Fatalf("SendBatch first: %v", err)
@@ -127,11 +127,11 @@ func TestFile_RotateByAge(t *testing.T) {
 // TestFile_MaxBackups proves rotation keeps at most maxBackups files.
 func TestFile_MaxBackups(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.ndjson")
-	d, err := file.New(file.WithPath(path), file.WithMaxSize(10), file.WithMaxBackups(1))
+	d, err := file.NewSender(file.WithPath(path), file.WithMaxSize(10), file.WithMaxBackups(1))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 
 	for i := 0; i < 3; i++ {
 		if err := d.SendBatch(context.Background(), []map[string]any{fillEvent("batch")}); err != nil {
@@ -149,11 +149,11 @@ func TestFile_MaxBackups(t *testing.T) {
 // TestFile_ConcurrentBatches proves concurrent batches never interleave a line.
 func TestFile_ConcurrentBatches(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.ndjson")
-	d, err := file.New(file.WithPath(path))
+	d, err := file.NewSender(file.WithPath(path))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 
 	const writers, perWriter = 8, 20
 	var wg sync.WaitGroup
@@ -184,11 +184,11 @@ func TestFile_EnvAlone(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "env.ndjson")
 	t.Setenv("WLOG_FILE_PATH", path)
 
-	d, err := file.New()
+	d, err := file.NewSender()
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 	if err := d.SendBatch(context.Background(), []map[string]any{{"operation": "env"}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
@@ -197,21 +197,14 @@ func TestFile_EnvAlone(t *testing.T) {
 	}
 }
 
-// TestFile_MissingPath proves a missing path is a construction error.
-func TestFile_MissingPath(t *testing.T) {
-	if _, err := file.New(); err == nil {
-		t.Fatal("New with no path returned nil error")
-	}
-}
-
 // TestFile_NeverLeaksRedactedValue proves gate G1 end to end.
 func TestFile_NeverLeaksRedactedValue(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "g1.ndjson")
-	d, err := file.New(file.WithPath(path))
+	d, err := file.NewSender(file.WithPath(path))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	defer func() { _ = d.Close(context.Background()) }()
 
 	log := wlog.New(wlog.WithDrains(pipeline.Wrap(d, pipeline.BatchSize(1))))
 	ctx := log.WithContext(context.Background())

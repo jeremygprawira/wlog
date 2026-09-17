@@ -45,7 +45,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 10-AUD-7 JSON Patch and audit-only routing
 - [x] 10-DRN-1 drain-sentry
 - [x] 10-DRN-2 drain-clickhouse and the integration stack
-- [ ] 10-DRN-3 drain-file
+- [x] 10-DRN-3 drain-file
 - [ ] 10-DRN-4 drain-loki and drain-otlp
 - [ ] 10-DRN-5 drain-datadog, drain-axiom, and drain-webhook
 - [ ] 10-DRN-6 drain-betterstack, drain-hyperdx, and drain-posthog

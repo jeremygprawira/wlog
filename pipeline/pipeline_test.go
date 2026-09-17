@@ -271,3 +271,40 @@ func TestPipeline_PAR16_MinLevelKeepsAudit(t *testing.T) {
 	}
 	closeDrain(t, w)
 }
+
+// closingSender records that the pipeline closed it, the way a file drain is released.
+type closingSender struct {
+	sends  int32
+	closed bool
+	mu     sync.Mutex
+}
+
+// SendBatch accepts every batch.
+func (c *closingSender) SendBatch(context.Context, []map[string]any) error {
+	atomic.AddInt32(&c.sends, 1)
+	return nil
+}
+
+// Close records the close.
+func (c *closingSender) Close(context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	return nil
+}
+
+// TestPipeline_PIPE12_CloseClosesSender proves Wrap releases the Sender after the last
+// batch, so a file drain is synced instead of left open.
+func TestPipeline_PIPE12_CloseClosesSender(t *testing.T) {
+	sender := &closingSender{}
+	w := pipeline.Wrap(sender, pipeline.BatchSize(1), pipeline.BatchInterval(5*time.Millisecond))
+	w.Send(context.Background(), map[string]any{"n": 1})
+
+	closeDrain(t, w)
+
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if !sender.closed {
+		t.Error("Wrap.Close did not close the Sender")
+	}
+}
