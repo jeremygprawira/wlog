@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -155,5 +156,53 @@ func TestWebhook_NeverLeaksRedactedValue(t *testing.T) {
 		if strings.Contains(string(req.Body), "hunter2") {
 			t.Errorf("raw denied value reached the drain: %s", req.Body)
 		}
+	}
+}
+
+// TestWebhook_New_WrapsWithPipelineDefaults proves New succeeds on a valid
+// configuration, returns something wlog.Logger.Close can close, and rejects a missing
+// URL the same way NewSender does.
+func TestWebhook_New_WrapsWithPipelineDefaults(t *testing.T) {
+	d, err := webhook.New(webhook.WithURL("http://example.invalid"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	var _ wlog.Drain = d
+	closer, ok := d.(interface{ Close(context.Context) error })
+	if !ok {
+		t.Fatal("New's drain does not implement Close, so Logger.Close cannot stop it")
+	}
+	if err := closer.Close(context.Background()); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+
+	t.Setenv("WLOG_WEBHOOK_URL", "")
+	if _, err := webhook.New(); err == nil {
+		t.Error("New with no URL returned nil error")
+	}
+}
+
+// TestWebhook_MustNew_PanicsOnTheSameError proves MustNew is New plus a panic, not a
+// different construction path.
+func TestWebhook_MustNew_PanicsOnTheSameError(t *testing.T) {
+	t.Setenv("WLOG_WEBHOOK_URL", "")
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("MustNew with no URL did not panic")
+			}
+		}()
+		webhook.MustNew()
+	}()
+
+	client := &http.Client{}
+	d := webhook.MustNew(webhook.WithURL("http://example.invalid"),
+		webhook.WithHTTPClient(client), webhook.WithPipeline(pipeline.BatchSize(5)))
+	closer, ok := d.(interface{ Close(context.Context) error })
+	if !ok {
+		t.Fatal("MustNew's drain does not implement Close")
+	}
+	if err := closer.Close(context.Background()); err != nil {
+		t.Errorf("Close: %v", err)
 	}
 }

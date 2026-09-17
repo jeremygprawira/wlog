@@ -296,3 +296,48 @@ func TestLoki_StatusTable(t *testing.T) {
 		}
 	}
 }
+
+// TestLoki_New_WrapsWithPipelineDefaults proves New succeeds on a valid configuration,
+// returns something wlog.Logger.Close can close, and rejects the same configuration
+// NewSender already rejects. MustNew mirrors both outcomes: it returns the same drain on
+// success, and panics with New's own error on failure.
+func TestLoki_New_WrapsWithPipelineDefaults(t *testing.T) {
+	d, err := loki.New(loki.WithURL("http://example.invalid"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	var _ wlog.Drain = d
+	closer, ok := d.(interface{ Close(context.Context) error })
+	if !ok {
+		t.Fatal("New's drain does not implement Close, so Logger.Close cannot stop it")
+	}
+	if err := closer.Close(context.Background()); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+
+	if _, err := loki.New(loki.WithURL("http://example.invalid"), loki.WithLabels("service", "user.id")); err == nil {
+		t.Error("New with a high-cardinality label returned nil error, want a rejection")
+	}
+}
+
+// TestLoki_MustNew_PanicsOnTheSameError proves MustNew is New plus a panic, not a
+// different construction path.
+func TestLoki_MustNew_PanicsOnTheSameError(t *testing.T) {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("MustNew with a high-cardinality label did not panic")
+			}
+		}()
+		loki.MustNew(loki.WithURL("http://example.invalid"), loki.WithLabels("service", "user.id"))
+	}()
+
+	d := loki.MustNew(loki.WithURL("http://example.invalid"), loki.WithPipeline(pipeline.BatchSize(5)), loki.WithGzip(true))
+	closer, ok := d.(interface{ Close(context.Context) error })
+	if !ok {
+		t.Fatal("MustNew's drain does not implement Close")
+	}
+	if err := closer.Close(context.Background()); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+}
