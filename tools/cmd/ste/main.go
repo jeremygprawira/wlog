@@ -64,7 +64,6 @@ type passage struct {
 
 // run checks every target and prints one line per hit.
 func run(root string, args []string, register ste.Register, comments bool, out io.Writer) error {
-
 	passages, err := collect(root, args, comments)
 	if err != nil {
 		return err

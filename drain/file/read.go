@@ -49,7 +49,7 @@ func Read(path string, f memory.Filter) ([]map[string]any, ParseErrors, error) {
 	lineNo := 0
 	for {
 		line, tooLong, err := readLine(reader)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return events, skipped, nil
 		}
 		if err != nil {

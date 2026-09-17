@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -267,32 +268,6 @@ func compareStrict(points []entry.Point, byHandler [][]rules.Check, baseline rep
 	return regressions
 }
 
-// perRulePoints sums the failed weight per rule across the handlers.
-func perRulePoints(byHandler [][]rules.Check) map[string]int {
-	points := map[string]int{}
-	for _, checks := range byHandler {
-		for _, check := range checks {
-			if !check.Pass && check.Weight > 0 {
-				points[check.ID] += check.Weight
-			}
-		}
-	}
-	return points
-}
-
-// perRulePointsOfMap reads the same totals from a previous map file.
-func perRulePointsOfMap(m report.Map) map[string]int {
-	points := map[string]int{}
-	for _, handler := range m.Handlers {
-		for _, check := range handler.Checks {
-			if !check.Pass && check.Weight > 0 {
-				points[check.ID] += check.Weight
-			}
-		}
-	}
-	return points
-}
-
 // loadConfig reads an explicit config file, or finds a default one in the working
 // directory.
 func loadConfig(explicit string, stderr io.Writer) (rules.Config, int) {
@@ -334,7 +309,7 @@ func readBaselineAt(spec, outPath string) (report.Map, error) {
 		return readBaseline(spec)
 	}
 	name := repoRelative(outPath)
-	out, err := exec.Command("git", "show", ref+":"+name).Output()
+	out, err := exec.CommandContext(context.Background(), "git", "show", ref+":"+name).Output()
 	if err != nil {
 		return report.Map{}, fmt.Errorf("baseline git:%s: %w", ref, err)
 	}
@@ -351,7 +326,7 @@ func repoRelative(path string) string {
 	if path == "" {
 		return "wlog.map.json"
 	}
-	root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	root, err := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return path
 	}

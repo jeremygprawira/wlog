@@ -45,8 +45,10 @@ func Tail(ctx context.Context, path string, f memory.Filter) (<-chan map[string]
 				switch {
 				case !os.SameFile(info, current):
 					// A rotation replaced the file. Read what the old one still holds
-					// before switching, so its last lines are not lost.
-					offset = drainReader(handle, offset, &pending, out, f, ctx)
+					// before switching, so its last lines are not lost. The old file's
+					// offset is thrown away right after, once the new handle opens at
+					// its own offset 0.
+					_ = drainReader(handle, offset, &pending, out, f, ctx)
 					_ = handle.Close()
 					handle, info, err = openTail(path)
 					if err != nil {

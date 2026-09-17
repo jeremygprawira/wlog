@@ -103,7 +103,7 @@ func loadPoints(dir string) ([]entry.Point, []*packages.Package, error) {
 	}
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
-			return nil, pkgs, fmt.Errorf("load %s/...: %v", dir, pkg.Errors[0])
+			return nil, pkgs, fmt.Errorf("load %s/...: %w", dir, pkg.Errors[0])
 		}
 	}
 	return entry.Find(pkgs), pkgs, nil
