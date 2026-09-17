@@ -9,6 +9,11 @@ import (
 // group is the event group every field lives under.
 const group = "llm"
 
+// maxCalls caps the two call arrays on one event, as SPEC-llm says. An entry past the cap is
+// dropped and counted in wlog.dropped_fields, so an agent loop cannot grow one event with no
+// bound and cannot lose the fact that it tried (gate G4).
+const maxCalls = 200
+
 // Set writes r onto the current event under the "llm" group. Outside a wlog.Start, it
 // does nothing, the same as wlog.Set. A zero field stays off the event.
 func Set(ctx context.Context, r Record) {
@@ -38,23 +43,40 @@ func Add(ctx context.Context, r Record) {
 	}
 
 	calls, _ := existing["calls"].([]any)
-	fields["calls"] = append(calls, callMap(r))
-
 	toolCalls, _ := existing["tool_calls"].([]any)
-	fields["tool_calls"] = append(toolCalls, toolCallMaps(r.ToolCalls)...)
+	dropped := 0
+
+	if len(calls) < maxCalls {
+		fields["calls"] = append(calls, callMap(r))
+	} else {
+		dropped++
+	}
+	for _, call := range toolCallMaps(r.ToolCalls) {
+		if len(toolCalls) >= maxCalls {
+			dropped++
+			continue
+		}
+		toolCalls = append(toolCalls, call)
+	}
+	if len(toolCalls) > 0 {
+		fields["tool_calls"] = toolCalls
+	}
 	fields["tool_call_count"] = intOf(existing["tool_call_count"]) + len(r.ToolCalls)
 	if failures := intOf(existing["tool_call_failures"]) + failedCalls(r.ToolCalls); failures > 0 {
 		fields["tool_call_failures"] = failures
 	}
 
 	if r.Cost != nil {
-		currentMicros := int64Of(existing["cost_micros"])
-		total := currentMicros + r.Cost.TotalMicros
+		// A record written by Set before Add is folded in, not replaced, so the total covers
+		// every call the request made.
+		total := int64Of(existing["cost_micros"]) + r.Cost.TotalMicros
 		fields["cost_micros"] = total
-		fields["cost_usd"] = Cost{TotalMicros: total}.USD()
 	}
 
 	wlog.SetGroup(ctx, group, fields)
+	// The count goes through core, so an entry that hit llm's own cap appears in
+	// wlog.dropped_fields beside every other capped write.
+	wlog.CountDropped(ctx, dropped)
 }
 
 // fieldsFor maps one record to the group fields. Zero values stay off.
@@ -104,8 +126,9 @@ func fieldsFor(r Record) map[string]any {
 		fields["finish_reason"] = r.FinishReason
 	}
 	if r.Cost != nil {
+		// Money stays in whole micros: a float on the event would round, and SPEC-llm says
+		// money never passes through one.
 		fields["cost_micros"] = r.Cost.TotalMicros
-		fields["cost_usd"] = r.Cost.USD()
 	}
 	return fields
 }

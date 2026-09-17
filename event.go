@@ -117,7 +117,7 @@ func Set(ctx context.Context, key string, value any) {
 	if !e.reserveTopLevelSlot(key) {
 		return
 	}
-	if !e.reserveSize(copied) {
+	if !e.chargeSize(e.fields[key], copied) {
 		return
 	}
 	e.fields[key] = copied
@@ -186,7 +186,7 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 			e.dropped++
 			continue
 		}
-		if !e.reserveSize(v) {
+		if !e.chargeSize(g[k], v) {
 			continue
 		}
 		// A group merges a nested map rather than replacing it, at every depth,
@@ -226,10 +226,11 @@ func Append(ctx context.Context, key string, value any) {
 		e.dropped++
 		return
 	}
-	if !e.reserveSize(copied) {
+	grown := append(arr, copied)
+	if !e.chargeSize(e.fields[key], grown) {
 		return
 	}
-	e.fields[key] = append(arr, copied)
+	e.fields[key] = grown
 }
 
 // arrayLimit returns the cap for one array key.
@@ -245,20 +246,48 @@ func arrayLimit(key string) int {
 	return maxArrayLen
 }
 
-// reserveSize reports whether the event has room for one more value, and counts a
-// write it has to drop.
+// chargeSize reports whether the event has room for next, where old is the value it
+// already counted at that key (nil when the key is new), and counts a write it has to
+// drop.
 //
-// Phase 11 replaces this ceiling with the full size cap of the event shape. Until
-// then it keeps gate G4: one event cannot grow without bound because a caller
-// writes a large value in a loop. Callers must hold e.mu.
-func (e *event) reserveSize(v any) bool {
-	size := valueSize(v)
-	if e.size+size > maxEventSize {
+// It charges the difference, not the whole value, so the budget tracks what the event holds
+// rather than everything ever written to it. A caller that rewrites one growing array, as
+// llm.Add does, would otherwise pay for the same entries again on every write and run out of
+// room long before the array reached its own cap (gate G4).
+//
+// Phase 11 replaces this ceiling with the full size cap of the event shape. Callers must hold
+// e.mu.
+func (e *event) chargeSize(old, next any) bool {
+	growth := valueSize(next) - valueSize(old)
+	if e.size+growth > maxEventSize {
 		e.dropped++
 		return false
 	}
-	e.size += size
+	e.size += growth
+	if e.size < 0 {
+		e.size = 0
+	}
 	return true
+}
+
+// CountDropped records that an adapter dropped n values because of a cap it applied itself,
+// so they appear in wlog.dropped_fields like every other capped write (gate G4). An adapter
+// that caps an array inside a group, such as llm.Add, reports through it.
+func CountDropped(ctx context.Context, n int) {
+	if n <= 0 {
+		return
+	}
+	e := eventFrom(ctx)
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.sealed {
+		e.recordLateWrite()
+		return
+	}
+	e.dropped += n
 }
 
 // mergeMap copies every field of src into dst, and it merges two maps that share a

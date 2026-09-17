@@ -52,7 +52,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CAT-1 Code matching and registries
 - [x] 10-CAT-2 Copies, templates, domain, and entry defaults
 - [x] 10-CAT-3 Audit catalog fields
-- [ ] 10-LLM-1 Caps and cost fields
+- [x] 10-LLM-1 Caps and cost fields
 - [ ] 10-LLM-2 Token semantics and the price table
 - [ ] 10-SMP-1 Sampling rules
 - [ ] 10-ENR-1 Enrichers

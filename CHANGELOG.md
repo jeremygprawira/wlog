@@ -31,6 +31,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `llm.calls` and `llm.tool_calls` stop at 200 entries, with the extras counted in
+  `wlog.dropped_fields`, and `llm.cost_usd` is gone: money stays in whole micros. The price
+  enricher never replaces a cost the caller set, and `wlog.CountDropped` lets an adapter
+  count a cap it applied itself. Event size accounting now charges the difference when a
+  write replaces a value, so a growing array is not charged again on every write.
 - `catalog.Audit` gains `Description`, `RequiresChanges`, and `RedactPaths`. A record that
   breaks a policy rule now carries `violations` naming each rule, and `RedactPaths` masks the
   value of a matching change operation.

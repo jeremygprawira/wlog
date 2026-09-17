@@ -77,9 +77,12 @@ func DefaultPrices() *Prices {
 	})
 }
 
-// Enricher prices every model call the handler already put on the event. It writes
-// llm.cost_micros and llm.cost_usd, and marks a call whose model the table does not
-// hold with llm.cost_unknown, so a dashboard can count what it failed to price.
+// Enricher prices every model call the handler already put on the event. It fills
+// llm.cost_micros, and marks a call whose model the table does not hold with
+// llm.cost_unknown, so a dashboard can count what it failed to price.
+//
+// It never replaces a cost the caller already set: a caller that paid a different price, or
+// that priced a model the table does not hold, keeps its own number.
 func Enricher(p *Prices) wlog.Enricher {
 	return wlog.EnricherFunc(func(_ context.Context, event map[string]any) {
 		e := enricher{prices: p}
@@ -103,14 +106,27 @@ func (e enricher) Enrich(event map[string]any) {
 	e.priceRecord(group, group)
 }
 
-// priceCalls prices every call and folds the results into the group totals.
+// priceCalls prices every call and folds the results into the group total.
+//
+// A call the caller already priced keeps its own number and is never re-priced. Add folds
+// each call's cost into the group total as it appends, so a group total that is already
+// there counts those call costs; only a hand-built event whose calls carry costs and whose
+// group total is still zero needs the sum of the calls instead.
 func (e enricher) priceCalls(group map[string]any, calls []any) {
-	var total int64
+	groupCost := int64Of(group["cost_micros"])
+	callCosts := int64(0)
+	tableCosts := int64(0)
 	hasUnknown := false
-	hasCost := false
+	hasAny := groupCost > 0
+
 	for _, entry := range calls {
 		call, _ := entry.(map[string]any)
 		if call == nil {
+			continue
+		}
+		if set := int64Of(call["cost_micros"]); set > 0 {
+			callCosts += set
+			hasAny = true
 			continue
 		}
 		cost, ok := e.prices.Cost(recordFrom(call))
@@ -121,13 +137,16 @@ func (e enricher) priceCalls(group map[string]any, calls []any) {
 			continue
 		}
 		call["cost_micros"] = cost.TotalMicros
-		call["cost_usd"] = cost.USD()
-		total += cost.TotalMicros
-		hasCost = true
+		tableCosts += cost.TotalMicros
+		hasAny = true
 	}
-	if hasCost {
+
+	if hasAny {
+		total := groupCost + tableCosts
+		if groupCost == 0 {
+			total = callCosts + tableCosts
+		}
 		group["cost_micros"] = total
-		group["cost_usd"] = Cost{TotalMicros: total}.USD()
 	}
 	if hasUnknown {
 		group["cost_unknown"] = true
@@ -139,13 +158,16 @@ func (e enricher) priceRecord(group, record map[string]any) {
 	if modelOf(record) == "" {
 		return
 	}
+	if int64Of(record["cost_micros"]) > 0 {
+		// The caller priced this call, so the table must not argue with it.
+		return
+	}
 	cost, ok := e.prices.Cost(recordFrom(record))
 	if !ok {
 		group["cost_unknown"] = true
 		return
 	}
 	group["cost_micros"] = cost.TotalMicros
-	group["cost_usd"] = cost.USD()
 }
 
 // recordFrom reads the priceable fields from one event map.

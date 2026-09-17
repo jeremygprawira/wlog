@@ -106,7 +106,7 @@ llm.input_tokens llm.output_tokens llm.cached_input_tokens llm.reasoning_tokens
 llm.total_tokens
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
 llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reason
-llm.cost_micros llm.cost_usd llm.cost_unknown
+llm.cost_micros llm.cost_unknown
 llm.calls[]  (one object per call, set by Add)
 ```
 
@@ -118,7 +118,9 @@ would be masked before it reached a drain.
 
 1. `Set` writes every non-zero field under `llm`, and leaves every zero field off.
 2. `Add` folds token counts and costs into one total, and appends each call to `llm.calls[]`,
-   capped by core's array limit (gate G4).
+   capped at 200 entries each by llm itself, with every entry past the cap counted in
+   wlog.dropped_fields (gate G4). Money stays in whole micros: an event never carries a
+   dollar float, because a float would round.
 3. `Cost` prices a record from the token counts, and prices a cached input token at the
    cached rate.
 4. `Cost` reports false for a model the table does not hold, and the enricher then sets
