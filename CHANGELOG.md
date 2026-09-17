@@ -31,6 +31,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog map` keeps the prefix of an Echo or Gin group and of a mux `PathPrefix().Subrouter()`, reads
+  the Echo `Group` and Gin `Group` shapes, gives one entry per method for a mux chain that names
+  several, reads the handler before Echo's per-route middleware, resolves a route written as a
+  constant, and credits the middleware rule for a router wrapped in another package.
 - `wlog map` gains the `keys.strict` rule: a literal key that is a near miss of a declared
   typed key, such as `Set(ctx, "orderID", v)` beside `NewKey[string]("order_id")`, is reported
   at the `Set` call.

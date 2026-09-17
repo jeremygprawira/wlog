@@ -58,7 +58,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-ENR-1 Enrichers
 - [x] 10-MEM-1 drain-memory and wlogtest
 - [x] 10-MAP-1 Handler discovery
-- [ ] 10-MAP-2 Routes and middleware coverage
+- [x] 10-MAP-2 Routes and middleware coverage
 - [ ] 10-MAP-3 Rule accuracy
 - [ ] 10-MAP-4 Gates, configuration, and streams
 - [ ] 10-MAP-5 Map JSON v2 and the text report

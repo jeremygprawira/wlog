@@ -30,7 +30,7 @@ func run(pass *analysis.Pass) (any, error) {
 		Types:     pass.Pkg,
 	}
 	for _, point := range entry.Find([]*packages.Package{pkg}) {
-		for _, check := range rules.Evaluate(pkg, point, rules.Config{}) {
+		for _, check := range rules.Evaluate(entry.Program([]*packages.Package{pkg}), pkg, point, rules.Config{}) {
 			if check.Pass {
 				continue
 			}

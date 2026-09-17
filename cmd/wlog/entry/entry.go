@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -26,6 +27,27 @@ type Point struct {
 	Route     string
 	Sensitive bool
 	Node      ast.Node `json:"-"`
+
+	// extraMethods holds the other methods a mux chain named, such as .Methods("GET", "POST").
+	// One route with two methods scores as two entries, so a write route is never read as a
+	// read route.
+	extraMethods []string
+	// routePrefix is the group prefix the registering router carries. The join happens once,
+	// after the chain has supplied the route, because a mux route names its path in the chain
+	// rather than in the registration call.
+	routePrefix string
+}
+
+// expand returns this point plus one entry per extra method the route named.
+func (p Point) expand() []Point {
+	points := []Point{p}
+	for _, method := range p.extraMethods {
+		extra := p
+		extra.Method = method
+		extra.extraMethods = nil
+		points = append(points, extra)
+	}
+	return points
 }
 
 // Load loads packages for patterns with the syntax and type information the finder
@@ -73,6 +95,11 @@ func Find(pkgs []*packages.Package) []Point {
 	return points
 }
 
+// Program returns every loaded package: the requested ones and the dependencies the loader
+// kept syntax for, walked through the import graph. A rule that must look beyond one package,
+// such as middleware coverage, searches this.
+func Program(pkgs []*packages.Package) []*packages.Package { return allPackages(pkgs) }
+
 // allPackages returns every loaded package: the requested ones and the dependencies the
 // loader kept syntax for, walked through the import graph.
 func allPackages(pkgs []*packages.Package) []*packages.Package {
@@ -102,12 +129,17 @@ type registration struct {
 	method  string // the HTTP method, when the function name is the method
 	handle  bool   // Handle(method, path, handlers): the method is the first argument
 	pathArg int
+	// handlerArg names the argument holding the handler when it is not the last one. Zero
+	// means the last argument, which is the shape net/http, mux, and Gin use. Echo puts the
+	// handler before the per-route middleware that follows it.
+	handlerArg int
 }
 
 // findInFile walks one file and returns the entry points it registers.
 func findInFile(pkgs []*packages.Package, pkg *packages.Package, file *ast.File) []Point {
 	regs := registrations()
 	byCall := map[*ast.CallExpr]*Point{}
+	prefixes := groupPrefixes(pkg, file)
 
 	// First pass: registrations, keyed by their call expression, so a chained
 	// .Methods("GET") can find them in the second pass.
@@ -125,7 +157,7 @@ func findInFile(pkgs []*packages.Package, pkg *packages.Package, file *ast.File)
 			if !ok {
 				return true
 			}
-			point, ok := pointFor(pkgs, pkg, fn, call, reg)
+			point, ok := pointFor(pkgs, pkg, fn, call, reg, prefixes)
 			if !ok {
 				return true
 			}
@@ -138,7 +170,11 @@ func findInFile(pkgs []*packages.Package, pkg *packages.Package, file *ast.File)
 
 	points := make([]Point, 0, len(byCall))
 	for _, point := range byCall {
-		points = append(points, *point)
+		// The prefix joins the route here, once both are known: the registration call may name
+		// its path, or the chain may.
+		point.Route = joinRoute(point.routePrefix, point.Route)
+		point.routePrefix = ""
+		points = append(points, point.expand()...)
 	}
 	return points
 }
@@ -169,8 +205,14 @@ func applyRouteChains(pkg *packages.Package, file *ast.File, byCall map[*ast.Cal
 			return true
 		}
 		switch {
-		case sel.Sel.Name == "Methods" && point.Method == "":
-			point.Method = stringValue(pkg, call.Args[0])
+		case sel.Sel.Name == "Methods":
+			var methods []string
+			for _, arg := range call.Args {
+				if value := stringValue(pkg, arg); value != "" {
+					methods = append(methods, value)
+				}
+			}
+			applyMethods(point, methods)
 		case sel.Sel.Name == "Path" && point.Route == "":
 			point.Route = stringValue(pkg, call.Args[0])
 		}
@@ -183,14 +225,22 @@ func applyRouteChains(pkg *packages.Package, file *ast.File, byCall map[*ast.Cal
 		if !ok {
 			continue
 		}
-		method, route := chainRoute(pkg, sel.X)
-		if method != "" && point.Method == "" {
-			point.Method = method
-		}
+		methods, route := chainRoute(pkg, sel.X)
+		applyMethods(point, methods)
 		if route != "" && point.Route == "" {
 			point.Route = route
 		}
 	}
+}
+
+// applyMethods writes the methods a chain named onto one point: the first is the point's own
+// method, and the rest become entries of their own, so one route with two methods scores twice.
+func applyMethods(point *Point, methods []string) {
+	if len(methods) == 0 || point.Method != "" {
+		return
+	}
+	point.Method = methods[0]
+	point.extraMethods = append(point.extraMethods, methods[1:]...)
 }
 
 // innermostRegistration returns the registration call a chain wraps, or nil when the chain
@@ -212,25 +262,32 @@ func innermostRegistration(expr ast.Expr, byCall map[*ast.CallExpr]*Point) *ast.
 	}
 }
 
-// chainRoute walks a mux route's receiver chain and returns the method and the path it names,
+// chainRoute walks a route's receiver chain and returns the methods and the path it names,
 // however many calls deep they sit.
-func chainRoute(pkg *packages.Package, expr ast.Expr) (method, route string) {
+func chainRoute(pkg *packages.Package, expr ast.Expr) (methods []string, route string) {
 	for {
 		call, ok := expr.(*ast.CallExpr)
 		if !ok {
-			return method, route
+			return methods, route
 		}
 		sel, ok := call.Fun.(*ast.SelectorExpr)
 		if !ok {
-			return method, route
+			return methods, route
 		}
-		if obj := Callee(pkg, call); obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == MuxPath {
-			switch sel.Sel.Name {
-			case "Methods":
-				if method == "" && len(call.Args) > 0 {
-					method = stringValue(pkg, call.Args[0])
+		if obj := Callee(pkg, call); obj != nil && obj.Pkg() != nil {
+			name := sel.Sel.Name
+			switch {
+			case obj.Pkg().Path() == MuxPath && (name == "Methods" || name == "Path"):
+				for _, arg := range call.Args {
+					if value := stringValue(pkg, arg); value != "" {
+						if name == "Methods" {
+							methods = append(methods, value)
+						} else if route == "" {
+							route = value
+						}
+					}
 				}
-			case "Path":
+			case obj.Pkg().Path() == MuxPath && name == "PathPrefix":
 				if route == "" && len(call.Args) > 0 {
 					route = stringValue(pkg, call.Args[0])
 				}
@@ -238,6 +295,104 @@ func chainRoute(pkg *packages.Package, expr ast.Expr) (method, route string) {
 		}
 		expr = sel.X
 	}
+}
+
+// groupPrefixes maps a router variable to the prefix its Group or Subrouter call added, so a
+// route registered on a group keeps /admin in front of it.
+func groupPrefixes(pkg *packages.Package, file *ast.File) map[string]string {
+	prefixes := map[string]string{}
+	ast.Inspect(file, func(node ast.Node) bool {
+		assign, ok := node.(*ast.AssignStmt)
+		if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+			return true
+		}
+		name, ok := assign.Lhs[0].(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if prefix, ok := prefixOfCall(pkg, assign.Rhs[0], prefixes); ok {
+			prefixes[name.Name] = prefix
+		}
+		return true
+	})
+	return prefixes
+}
+
+// prefixOfCall returns the prefix a Group or Subrouter call adds, joined to the prefix its
+// receiver already carried.
+func prefixOfCall(pkg *packages.Package, expr ast.Expr, prefixes map[string]string) (string, bool) {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return "", false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return "", false
+	}
+	obj := Callee(pkg, call)
+	if obj == nil || obj.Pkg() == nil {
+		return "", false
+	}
+
+	switch {
+	case obj.Name() == "Group" && (obj.Pkg().Path() == Echo4Path || obj.Pkg().Path() == Echo5Path || obj.Pkg().Path() == GinPath):
+		if len(call.Args) == 0 {
+			return "", false
+		}
+		return joinRoute(prefixOfReceiver(sel.X, prefixes), stringValue(pkg, call.Args[0])), true
+	case obj.Name() == "Subrouter" && obj.Pkg().Path() == MuxPath:
+		// router.PathPrefix("/admin").Subrouter()
+		_, route := chainRoute(pkg, sel.X)
+		return joinRoute(prefixOfReceiver(sel.X, prefixes), route), true
+	}
+	return "", false
+}
+
+// prefixOfReceiver returns the prefix a router variable already carries.
+func prefixOfReceiver(expr ast.Expr, prefixes map[string]string) string {
+	ident, ok := expr.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return prefixes[ident.Name]
+}
+
+// groupPrefixOf returns the prefix the registration's router carries.
+//
+// The router is the variable at the start of the receiver chain, which a mux route hides behind
+// its Methods and Path calls: adminRouter.Methods("GET").Path("/logs").HandlerFunc(h).
+func groupPrefixOf(pkg *packages.Package, call *ast.CallExpr, prefixes map[string]string) string {
+	if len(prefixes) == 0 {
+		return ""
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	expr := sel.X
+	for {
+		inner, ok := expr.(*ast.CallExpr)
+		if !ok {
+			break
+		}
+		innerSel, ok := inner.Fun.(*ast.SelectorExpr)
+		if !ok {
+			break
+		}
+		expr = innerSel.X
+	}
+	return prefixOfReceiver(expr, prefixes)
+}
+
+// joinRoute joins a group prefix and a route, leaving exactly one slash between them.
+func joinRoute(prefix, route string) string {
+	if prefix == "" {
+		return route
+	}
+	if route == "" {
+		return prefix
+	}
+	return strings.TrimRight(prefix, "/") + "/" + strings.TrimLeft(route, "/")
 }
 
 // matchRegistration reports whether call registers a handler, and with which rule.
@@ -276,11 +431,17 @@ func Callee(pkg *packages.Package, call *ast.CallExpr) *types.Func {
 
 // pointFor builds a Point for one registration call. It reports false when the handler
 // argument is not something this package can follow to the code that runs.
-func pointFor(pkgs []*packages.Package, pkg *packages.Package, enclosing *ast.FuncDecl, call *ast.CallExpr, reg registration) (*Point, bool) {
+func pointFor(pkgs []*packages.Package, pkg *packages.Package, enclosing *ast.FuncDecl, call *ast.CallExpr, reg registration, prefixes map[string]string) (*Point, bool) {
 	if len(call.Args) == 0 {
 		return nil, false
 	}
-	handlerArg := call.Args[len(call.Args)-1]
+	argIndex := len(call.Args) - 1
+	if reg.handlerArg > 0 && reg.handlerArg < len(call.Args) {
+		// Echo takes the handler before its per-route middleware, so the last argument may be
+		// a middleware function rather than the handler.
+		argIndex = reg.handlerArg
+	}
+	handlerArg := call.Args[argIndex]
 	target, ok := handlerTarget(pkgs, pkg, handlerArg)
 	if !ok {
 		return nil, false
@@ -300,14 +461,15 @@ func pointFor(pkgs []*packages.Package, pkg *packages.Package, enclosing *ast.Fu
 
 	method, route := routeFor(pkg, call, reg)
 	return &Point{
-		Package:   owner.PkgPath,
-		Function:  target.name,
-		File:      filepath.Base(position.Filename),
-		Line:      position.Line,
-		Framework: reg.pkgPath,
-		Method:    method,
-		Route:     route,
-		Node:      target.node,
+		Package:     owner.PkgPath,
+		Function:    target.name,
+		File:        filepath.Base(position.Filename),
+		Line:        position.Line,
+		Framework:   reg.pkgPath,
+		Method:      method,
+		Route:       route,
+		Node:        target.node,
+		routePrefix: groupPrefixOf(pkg, call, prefixes),
 	}, true
 }
 

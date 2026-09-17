@@ -158,7 +158,7 @@ func checkMiddleware(pkgs []*packages.Package, points []entry.Point) Check {
 		if pkg == nil {
 			continue
 		}
-		if check := findCheck(rules.Evaluate(pkg, point, rules.Config{}), rules.RuleMiddleware); !check.Pass {
+		if check := findCheck(rules.Evaluate(entry.Program(pkgs), pkg, point, rules.Config{}), rules.RuleMiddleware); !check.Pass {
 			uncovered++
 		}
 	}
@@ -242,7 +242,7 @@ func checkScore(points []entry.Point, pkgs []*packages.Package) Check {
 		}
 		point.Sensitive = rules.Sensitive(point.Route, nil)
 		kept = append(kept, point)
-		checks = append(checks, rules.Evaluate(pkg, point, rules.Config{}))
+		checks = append(checks, rules.Evaluate(entry.Program(pkgs), pkg, point, rules.Config{}))
 	}
 	total := score.Total(kept, checks)
 	if total < 60 {

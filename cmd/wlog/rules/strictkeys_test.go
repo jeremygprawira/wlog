@@ -21,7 +21,7 @@ func TestMap_BET22_StrictKeys(t *testing.T) {
 			if p.PkgPath != point.Package {
 				continue
 			}
-			for _, check := range rules.Evaluate(p, point, rules.Config{}) {
+			for _, check := range rules.Evaluate(pkgs, p, point, rules.Config{}) {
 				if check.ID == rules.RuleKeysStrict {
 					byFunction[point.Function] = append(byFunction[point.Function], check)
 				}

@@ -128,9 +128,11 @@ func Class(point entry.Point) string {
 }
 
 // Evaluate runs every applicable rule for one handler.
-func Evaluate(pkg *packages.Package, point entry.Point, cfg Config) []Check {
+// Evaluate runs every rule that applies to one handler. program is the whole loaded package
+// set, which a rule that must look beyond one package, such as middleware coverage, searches.
+func Evaluate(program []*packages.Package, pkg *packages.Package, point entry.Point, cfg Config) []Check {
 	checks := []Check{
-		coverage(pkg, point),
+		coverage(program, pkg, point),
 		contextSet(pkg, point),
 		errorsReachWlog(pkg, point),
 		errorGuidance(pkg, point),

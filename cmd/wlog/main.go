@@ -79,6 +79,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	points := entry.Find(pkgs)
+	program := entry.Program(pkgs)
 	byPath := map[string]*packages.Package{}
 	for _, pkg := range pkgs {
 		byPath[pkg.PkgPath] = pkg
@@ -92,7 +93,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		point.Sensitive = rules.Sensitive(point.Route, cfg.SensitivePatterns)
 		kept = append(kept, point)
-		checksByPoint = append(checksByPoint, rules.Evaluate(pkg, point, cfg))
+		checksByPoint = append(checksByPoint, rules.Evaluate(program, pkg, point, cfg))
 	}
 	points = kept
 

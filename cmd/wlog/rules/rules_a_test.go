@@ -53,14 +53,14 @@ func checkByID(t *testing.T, checks []rules.Check, id string) rules.Check {
 func TestCoverage(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 	for _, point := range points {
-		check := checkByID(t, rules.Evaluate(pkgs[0], point, rules.Config{}), rules.RuleMiddleware)
+		check := checkByID(t, rules.Evaluate(pkgs, pkgs[0], point, rules.Config{}), rules.RuleMiddleware)
 		if !check.Pass {
 			t.Errorf("%s: %s failed: %s", point.Function, rules.RuleMiddleware, check.Detail)
 		}
 	}
 
 	pkgs, points = fixture(t, "nomiddleware_app")
-	check := checkByID(t, rules.Evaluate(pkgs[0], points[0], rules.Config{}), rules.RuleMiddleware)
+	check := checkByID(t, rules.Evaluate(pkgs, pkgs[0], points[0], rules.Config{}), rules.RuleMiddleware)
 	if check.Pass {
 		t.Errorf("%s passed without a middleware call", rules.RuleMiddleware)
 	}
@@ -71,11 +71,11 @@ func TestCoverage(t *testing.T) {
 func TestContext(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 
-	good := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleGood"), rules.Config{}), rules.RuleContext)
+	good := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleGood"), rules.Config{}), rules.RuleContext)
 	if !good.Pass {
 		t.Errorf("handleGood: %s failed: %s", rules.RuleContext, good.Detail)
 	}
-	none := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleNoContext"), rules.Config{}), rules.RuleContext)
+	none := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleNoContext"), rules.Config{}), rules.RuleContext)
 	if none.Pass {
 		t.Errorf("handleNoContext passed %s with an empty body", rules.RuleContext)
 	}
@@ -86,15 +86,15 @@ func TestContext(t *testing.T) {
 func TestErrors(t *testing.T) {
 	pkgs, points := fixture(t, "echo_err_app")
 
-	ok := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleOK"), rules.Config{}), rules.RuleErrors)
+	ok := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleOK"), rules.Config{}), rules.RuleErrors)
 	if !ok.Pass {
 		t.Errorf("handleOK: %s failed: %s", rules.RuleErrors, ok.Detail)
 	}
-	bad := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleFail"), rules.Config{}), rules.RuleErrors)
+	bad := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleFail"), rules.Config{}), rules.RuleErrors)
 	if bad.Pass {
 		t.Errorf("handleFail passed %s while returning an unreported error", rules.RuleErrors)
 	}
-	responder := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleResponder"), rules.Config{}), rules.RuleErrors)
+	responder := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleResponder"), rules.Config{}), rules.RuleErrors)
 	if !responder.Pass {
 		t.Errorf("handleResponder failed %s on a c.NoContent return: %s", rules.RuleErrors, responder.Detail)
 	}
@@ -104,7 +104,7 @@ func TestErrors(t *testing.T) {
 func TestRuleOrder(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 
-	checks := rules.Evaluate(pkgs[0], pointIn(t, points, "handleGood"), rules.Config{})
+	checks := rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleGood"), rules.Config{})
 	want := []string{rules.RuleMiddleware, rules.RuleContext, rules.RuleErrors, rules.RuleErrorGuidance, rules.RuleSwallowedError, rules.RuleNoPrint, rules.RuleNoDenylisted, rules.RuleKeysStrict, rules.RuleUseCatalog, rules.RuleAuditCoverage}
 	if len(checks) != len(want) {
 		t.Fatalf("checks = %+v, want %v", checks, want)

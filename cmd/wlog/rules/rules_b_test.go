@@ -13,7 +13,7 @@ import (
 func TestSensitiveAudit(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 
-	missing := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleSensitive"), rules.Config{}), rules.RuleSensitiveAudit)
+	missing := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleSensitive"), rules.Config{}), rules.RuleSensitiveAudit)
 	if missing.Pass {
 		t.Error("handleSensitive passed without audit.Do")
 	}
@@ -21,7 +21,7 @@ func TestSensitiveAudit(t *testing.T) {
 		t.Errorf("weight = %d, want %d", missing.Weight, 2*rules.WeightSensitiveAudit)
 	}
 
-	audited := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleSensitiveAudited"), rules.Config{}), rules.RuleSensitiveAudit)
+	audited := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleSensitiveAudited"), rules.Config{}), rules.RuleSensitiveAudit)
 	if !audited.Pass {
 		t.Errorf("handleSensitiveAudited failed: %s", audited.Detail)
 	}
@@ -31,11 +31,11 @@ func TestSensitiveAudit(t *testing.T) {
 func TestNoPrint(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 
-	bad := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handlePrint"), rules.Config{}), rules.RuleNoPrint)
+	bad := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handlePrint"), rules.Config{}), rules.RuleNoPrint)
 	if bad.Pass {
 		t.Error("handlePrint passed with fmt.Println in the body")
 	}
-	good := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleGood"), rules.Config{}), rules.RuleNoPrint)
+	good := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleGood"), rules.Config{}), rules.RuleNoPrint)
 	if !good.Pass {
 		t.Errorf("handleGood failed: %s", good.Detail)
 	}
@@ -45,11 +45,11 @@ func TestNoPrint(t *testing.T) {
 func TestNoDenylisted(t *testing.T) {
 	pkgs, points := fixture(t, "rules_app")
 
-	bad := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleDeniedKey"), rules.Config{}), rules.RuleNoDenylisted)
+	bad := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleDeniedKey"), rules.Config{}), rules.RuleNoDenylisted)
 	if bad.Pass {
 		t.Error("handleDeniedKey passed with a password key")
 	}
-	good := checkByID(t, rules.Evaluate(pkgs[0], pointIn(t, points, "handleGood"), rules.Config{}), rules.RuleNoDenylisted)
+	good := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleGood"), rules.Config{}), rules.RuleNoDenylisted)
 	if !good.Pass {
 		t.Errorf("handleGood failed: %s", good.Detail)
 	}

@@ -20,14 +20,17 @@ func registrations() []registration {
 var httpMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "Any"}
 
 // httpMethodRegistrations returns one registration per HTTP verb for one framework.
-func httpMethodRegistrations(pkgPath string) []registration {
+//
+// handlerArg is the argument that holds the handler: Gin takes its handlers last, with any
+// middleware in front, while Echo takes the handler first and its per-route middleware after.
+func httpMethodRegistrations(pkgPath string, handlerArg int) []registration {
 	all := make([]registration, 0, len(httpMethods))
 	for _, name := range httpMethods {
 		method := name
 		if name == "Any" {
 			method = ""
 		}
-		all = append(all, registration{pkgPath: pkgPath, name: name, method: method, pathArg: 0})
+		all = append(all, registration{pkgPath: pkgPath, name: name, method: method, pathArg: 0, handlerArg: handlerArg})
 	}
 	return all
 }
