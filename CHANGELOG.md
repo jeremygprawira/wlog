@@ -31,6 +31,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `sample.New` returns an error and `sample.MustNew` joins it. `sample.Rate` takes a float
+  percentage, a `**` segment crosses path segments, a head decision follows
+  `trace.trace_id`, a kept event records `wlog.sample_rate`, and `KeepErrorsAndSlow` keeps
+  warn and 5xx instead of sampling a warn away. Migration: use `sample.MustNew` where the old
+  call returned a keeper, and pass `0` as `0.0` if a typed float is in hand.
 - `llm.Record` gains `CacheWriteInputTokens`, a subset of `InputTokens`, so a cache write is
   billed above the input rate. `llm.Cost` splits into `InputMicros` (uncached only),
   `CacheReadMicros`, `CacheWriteMicros`, and `OutputMicros`, and `llm.Price` gains

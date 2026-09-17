@@ -167,7 +167,7 @@ An empty line, a line without a valid `audit.hash`, and a malformed chain field 
    `actor/action/target/outcome/reason` to that event's `audit` array, up to 20 records.
    Outside one, or after the event ended, it creates its own standalone event.
 2. A sampler configured to keep 0% of events still lets every audit-flagged event through (gate
-   G5 part 1). `sample.New(sample.Rate(wlog.LevelInfo, 0))` proves it.
+   G5 part 1). `sample.MustNew(sample.Rate(wlog.LevelInfo, 0))` proves it.
 3. 100 concurrent `Do` calls on one Logger produce a chain that `Verify` accepts, under `-race`.
 4. Editing one byte in a journal file, deleting a line, or swapping two lines each make `Verify`
    fail and name the line. A cut at the end fails `VerifyHead`. An empty file fails `Verify`.

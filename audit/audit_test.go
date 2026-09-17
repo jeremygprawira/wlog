@@ -61,7 +61,7 @@ func TestAudit_Record_OutsideStart_EmitsStandaloneEvent(t *testing.T) {
 }
 
 func TestAudit_BypassesSampling(t *testing.T) {
-	log, rec := wlogtest.New(t, wlog.WithSampler(sample.New(sample.Rate(wlog.LevelInfo, 0))))
+	log, rec := wlogtest.New(t, wlog.WithSampler(sample.MustNew(sample.Rate(wlog.LevelInfo, 0))))
 	ctx := log.WithContext(context.Background())
 
 	audit.Do(ctx, testRecord())

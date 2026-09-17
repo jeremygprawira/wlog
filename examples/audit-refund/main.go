@@ -36,7 +36,7 @@ func Run(path string) error {
 	log := wlog.New(
 		wlog.WithService("audit-refund-example", "0.0.1", "local"),
 		// A sampler that keeps no ordinary event proves the audit record still lands.
-		wlog.WithSampler(sample.New(sample.Rate(wlog.LevelInfo, 0))),
+		wlog.WithSampler(sample.MustNew(sample.Rate(wlog.LevelInfo, 0))),
 		wlog.WithDrains(audit.Journal(path, audit.WithKey(journalKey))),
 	)
 	ctx := log.WithContext(context.Background())

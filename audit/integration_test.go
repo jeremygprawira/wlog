@@ -21,7 +21,7 @@ func TestAudit_RefundScenario(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.ndjson")
 	mem := memory.New(0) // stands in for "the main drain"
 	log := wlog.New(
-		wlog.WithSampler(sample.New(sample.Rate(wlog.LevelInfo, 0))), // keep 0% of events
+		wlog.WithSampler(sample.MustNew(sample.Rate(wlog.LevelInfo, 0))), // keep 0% of events
 		wlog.WithDrains(audit.Journal(path), mem),
 	)
 	ctx := log.WithContext(context.Background())

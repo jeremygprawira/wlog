@@ -63,7 +63,7 @@ wlog.WithFieldNames(wlog.FieldNames{"level": "severity"}) // one key at a time
 ## Sampling
 
 ```go
-wlog.WithSampler(sample.New(
+wlog.WithSampler(sample.MustNew(
     sample.Rate(wlog.LevelInfo, 10),                  // keep 10% of info events
     sample.KeepStatus(500),                           // always keep a 5xx
     sample.KeepDuration(time.Second),                 // always keep a slow event

@@ -49,7 +49,7 @@ slow request, then a small share of the rest. Errors are always force-kept, so a
 rate can never hide a failure.
 
 ```go
-wlog.WithSampler(sample.New(
+wlog.WithSampler(sample.MustNew(
     sample.Rate(wlog.LevelInfo, 10),
     sample.KeepDuration(time.Second),
 ))
