@@ -7,6 +7,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-17
+
 v0.5.0 lands the phase 10 fixes: an honest build and the safety findings the later rewrites do not
 replace. The section below names every audit id this release closes.
 

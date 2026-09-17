@@ -94,7 +94,10 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-INIT-2 `wlog doctor` and `wlog agents`
 - [x] 10-DOCS-1 Statuses, README, and CHANGELOG
 - [x] 10-DOCS-2 Parity page and guides
-- [ ] Review point 10, v0.5.0: human review, then ask before tagging
+- [x] Review point 10, v0.5.0: human review, then ask before tagging
+  - Approved 2026-09-17. `tools release -version v0.5.0 -dry-run` shows the tag order and names no
+    breaking change against v0.1.0. `tools requires`, `tools tidy -check`, and `tools floor` pass,
+    so every sub-module requires its siblings at v0.5.0 with a local replace.
 
 ## Phase 11, v0.6: event shape v2 and the five foundations
 
