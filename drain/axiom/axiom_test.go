@@ -16,14 +16,14 @@ import (
 )
 
 // newTestDrain points a Drain at a fake ingest server.
-func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...axiom.Option) *axiom.Drain {
+func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...axiom.Option) *axiom.Sender {
 	t.Helper()
 	all := append([]axiom.Option{
 		axiom.WithToken("secret-token"),
 		axiom.WithDataset("logs"),
 		axiom.WithURL(srv.URL),
 	}, opts...)
-	d, err := axiom.New(all...)
+	d, err := axiom.NewSender(all...)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestAxiom_EnvAlone(t *testing.T) {
 	t.Setenv("AXIOM_DATASET", "env-dataset")
 	t.Setenv("AXIOM_URL", srv.URL)
 
-	d, err := axiom.New()
+	d, err := axiom.NewSender()
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
@@ -98,10 +98,10 @@ func TestAxiom_EnvAlone(t *testing.T) {
 
 // TestAxiom_MissingConfig proves a missing token or dataset is a construction error.
 func TestAxiom_MissingConfig(t *testing.T) {
-	if _, err := axiom.New(axiom.WithToken(""), axiom.WithDataset("")); err == nil {
+	if _, err := axiom.NewSender(axiom.WithToken(""), axiom.WithDataset("")); err == nil {
 		t.Fatal("New with no token and no dataset returned nil error")
 	}
-	if _, err := axiom.New(axiom.WithToken("t"), axiom.WithDataset("")); err == nil {
+	if _, err := axiom.NewSender(axiom.WithToken("t"), axiom.WithDataset("")); err == nil {
 		t.Fatal("New with no dataset returned nil error")
 	}
 }

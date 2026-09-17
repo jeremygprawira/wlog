@@ -10,18 +10,23 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
+	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // config holds the resolved configuration for one Drain.
 type config struct {
-	url     string
-	headers map[string]string
-	ndjson  bool
-	secret  string
+	url          string
+	headers      map[string]string
+	ndjson       bool
+	secret       string
+	httpClient   *http.Client
+	pipelineOpts []pipeline.Option
 }
 
 // Option sets one config value. An option always wins over the matching env var.
@@ -45,16 +50,32 @@ func WithNDJSON(on bool) Option { return func(c *config) { c.ndjson = on } }
 // WithSecret signs every body with HMAC-SHA256 and sets X-Wlog-Signature.
 func WithSecret(secret string) Option { return func(c *config) { c.secret = secret } }
 
-// Drain posts batches to one URL. It implements pipeline.Sender, so wrap it with
-// pipeline.Wrap to get batching, retry, and a bounded buffer.
-type Drain struct {
-	client *httpdrain.Client
-	ndjson bool
+// WithHTTPClient uses a caller-supplied HTTP client, for a custom transport or
+// instrumentation. wlog never changes the client it is given.
+func WithHTTPClient(client *http.Client) Option {
+	return func(c *config) {
+		if client != nil {
+			c.httpClient = client
+		}
+	}
 }
 
-// New builds a Drain from opts and WLOG_WEBHOOK_URL. It returns an error when the URL
+// WithPipeline sets the pipeline options New wraps the sender with.
+func WithPipeline(opts ...pipeline.Option) Option {
+	return func(c *config) { c.pipelineOpts = append(c.pipelineOpts, opts...) }
+}
+
+// Sender posts batches to one URL. It implements pipeline.Sender, so wrap it with
+// pipeline.Wrap to get batching, retry, and a bounded buffer.
+type Sender struct {
+	client       *httpdrain.Client
+	ndjson       bool
+	pipelineOpts []pipeline.Option
+}
+
+// NewSender resolves one configuration from opts and the environment and WLOG_WEBHOOK_URL. It returns an error when the URL
 // is missing.
-func New(opts ...Option) (*Drain, error) {
+func NewSender(opts ...Option) (*Sender, error) {
 	c := config{
 		url:     os.Getenv("WLOG_WEBHOOK_URL"),
 		headers: map[string]string{},
@@ -73,11 +94,27 @@ func New(opts ...Option) (*Drain, error) {
 	if c.secret != "" {
 		clientOpts = append(clientOpts, httpdrain.WithHeaderFunc(signatureHeader(c.secret)))
 	}
-	return &Drain{client: httpdrain.New(c.url, clientOpts...), ndjson: c.ndjson}, nil
+	if c.httpClient != nil {
+		clientOpts = append(clientOpts, httpdrain.WithHTTPClient(c.httpClient))
+	}
+	return &Sender{
+		client:       httpdrain.New(c.url, clientOpts...),
+		ndjson:       c.ndjson,
+		pipelineOpts: c.pipelineOpts,
+	}, nil
+}
+
+// New returns the drain with the pipeline defaults, or with the options WithPipeline set.
+func New(opts ...Option) (wlog.Drain, error) {
+	s, err := NewSender(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return pipeline.Wrap(s, s.pipelineOpts...), nil
 }
 
 // MustNew is New, but panics on a configuration error. Use it in main.
-func MustNew(opts ...Option) *Drain {
+func MustNew(opts ...Option) wlog.Drain {
 	d, err := New(opts...)
 	if err != nil {
 		panic(err)
@@ -96,7 +133,7 @@ func signatureHeader(secret string) func([]byte) map[string]string {
 }
 
 // SendBatch posts the events as one JSON array, or as NDJSON when WithNDJSON is on.
-func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
+func (d *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	if d.ndjson {
 		var buf strings.Builder
 		for _, event := range events {

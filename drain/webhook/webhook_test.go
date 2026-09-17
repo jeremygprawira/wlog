@@ -15,10 +15,10 @@ import (
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
-func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...webhook.Option) *webhook.Drain {
+func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...webhook.Option) *webhook.Sender {
 	t.Helper()
 	all := append([]webhook.Option{webhook.WithURL(srv.URL)}, opts...)
-	d, err := webhook.New(all...)
+	d, err := webhook.NewSender(all...)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestWebhook_EnvAlone(t *testing.T) {
 	defer srv.Close()
 	t.Setenv("WLOG_WEBHOOK_URL", srv.URL)
 
-	d, err := webhook.New()
+	d, err := webhook.NewSender()
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestWebhook_EnvAlone(t *testing.T) {
 
 // TestWebhook_MissingURL proves a missing URL is a construction error.
 func TestWebhook_MissingURL(t *testing.T) {
-	if _, err := webhook.New(); err == nil {
+	if _, err := webhook.NewSender(); err == nil {
 		t.Fatal("New with no URL returned nil error")
 	}
 }
