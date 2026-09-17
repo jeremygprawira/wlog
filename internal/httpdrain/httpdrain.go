@@ -7,10 +7,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jeremygprawira/wlog/internal/version"
@@ -20,6 +24,8 @@ import (
 type Client struct {
 	url        string
 	httpClient *http.Client
+	timeout    time.Duration
+	timeoutSet bool
 	headers    map[string]string
 	headerFunc func(body []byte) map[string]string
 	gzip       bool
@@ -27,15 +33,14 @@ type Client struct {
 	userAgent  string
 }
 
-// Option configures a Client built by New.
-type Option func(*Client)
-
 // New builds a Client posting to url. Default: 10s timeout, User-Agent
 // "wlog/<version>", no X-Wlog-Source, no gzip.
 func New(url string, opts ...Option) *Client {
 	c := &Client{
 		url:        url,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: &http.Client{Timeout: defaultTimeout},
+		timeout:    defaultTimeout,
+		timeoutSet: true,
 		headers:    map[string]string{},
 		userAgent:  version.UserAgent(),
 	}
@@ -44,35 +49,6 @@ func New(url string, opts ...Option) *Client {
 	}
 	return c
 }
-
-// WithTimeout sets the HTTP request timeout. Default 10s.
-func WithTimeout(d time.Duration) Option {
-	return func(c *Client) { c.httpClient.Timeout = d }
-}
-
-// WithHeader sets one extra header on every request (e.g. an API key).
-func WithHeader(key, value string) Option {
-	return func(c *Client) { c.headers[key] = value }
-}
-
-// WithHeaderFunc sets a function that computes extra headers from the request body,
-// for a header that depends on the body, such as an HMAC signature. The body is the
-// uncompressed bytes, so a signature stays valid when gzip is also on. A computed
-// header overwrites a fixed one with the same name.
-func WithHeaderFunc(fn func(body []byte) map[string]string) Option {
-	return func(c *Client) { c.headerFunc = fn }
-}
-
-// WithGzip compresses the body and sets Content-Encoding: gzip when on.
-func WithGzip(on bool) Option { return func(c *Client) { c.gzip = on } }
-
-// WithSource sets X-Wlog-Source (e.g. "axiom", "loki"). Empty (the default) omits
-// the header.
-func WithSource(name string) Option { return func(c *Client) { c.source = name } }
-
-// WithUserAgent overrides the User-Agent header; an empty string omits it entirely.
-// Default "wlog/<version>".
-func WithUserAgent(ua string) Option { return func(c *Client) { c.userAgent = ua } }
 
 // Post sends body as one request. A 2xx response returns nil; anything else returns
 // a *StatusError classifying whether it is worth retrying and, for a 429/503 with a
@@ -95,7 +71,7 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("httpdrain: %w", err)
+		return fmt.Errorf("httpdrain: %w", c.scrubError(err))
 	}
 	req.Header.Set("Content-Type", contentType)
 	if encoding != "" {
@@ -116,9 +92,17 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 		}
 	}
 
-	resp, err := c.httpClient.Do(req)
+	client := c.httpClient
+	if c.timeoutSet {
+		// The timeout applies to a copy, so a client the caller shares with the
+		// rest of the app keeps its own settings.
+		cp := *c.httpClient
+		cp.Timeout = c.timeout
+		client = &cp
+	}
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("httpdrain: %w", err)
+		return fmt.Errorf("httpdrain: %w", c.scrubError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
@@ -171,4 +155,75 @@ func parseRetryAfter(v string) time.Duration {
 		}
 	}
 	return 0
+}
+
+// scrubbedError hides the credentials of a drain URL inside a transport error.
+//
+// It keeps the original error under Unwrap, so errors.Is and errors.As still work.
+type scrubbedError struct {
+	err     error
+	secrets []string
+}
+
+// Error returns the original message with every secret replaced.
+func (e *scrubbedError) Error() string {
+	msg := e.err.Error()
+	for _, s := range e.secrets {
+		msg = strings.ReplaceAll(msg, s, "REDACTED")
+	}
+	return msg
+}
+
+// Unwrap gives errors.Is and errors.As the original error.
+func (e *scrubbedError) Unwrap() error { return e.err }
+
+// scrubError removes the query string and the user info of the drain URL from a
+// transport error (gate G1).
+//
+// net/http builds its error from the full URL, so a token in a query string such as
+// ?token=... would otherwise reach OnDropped and any log of the error.
+func (c *Client) scrubError(err error) error {
+	secrets := c.secrets()
+	if len(secrets) == 0 {
+		return err
+	}
+	// A *url.Error carries the URL in its own field, so clean that too.
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		ue.URL = scrubURL(ue.URL)
+	}
+	return &scrubbedError{err: err, secrets: secrets}
+}
+
+// secrets lists the parts of the drain URL that must never appear in an error. The
+// longest comes first, so "user:pass" is replaced before "pass" alone.
+func (c *Client) secrets() []string {
+	u, err := url.Parse(c.url)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	if u.RawQuery != "" {
+		out = append(out, u.RawQuery)
+	}
+	if u.User != nil {
+		if pw, ok := u.User.Password(); ok {
+			out = append(out, pw)
+		}
+		out = append(out, u.User.String())
+	}
+	sort.Slice(out, func(i, j int) bool { return len(out[i]) > len(out[j]) })
+	return out
+}
+
+// scrubURL returns raw without its user info, query string, or fragment.
+func scrubURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.User = nil
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
 }
