@@ -31,6 +31,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `drain/memory` deep-copies an event for every subscriber and every snapshot entry, counts a
+  subscriber's drops in `Dropped()`, returns the newest N matches for `Query` with `Limit`, and
+  subscribes before it writes the SSE replay so an event cannot fall between the two.
+  `memory.Remove(name)` unregisters a named store.
+- `wlogtest.New` writes nothing at all, and `RequireField` reads a dotted path and compares a
+  slice, a map, or a number of another width by value.
 - `enrich.Geo` names one provider (`enrich.Geo("cloudfront")`) instead of trying several, so a
   header a client could have sent itself is no longer trusted; its doc states the spoofing
   risk. An enricher never replaces a non-map value at its group key, `UserAgent` and `User`

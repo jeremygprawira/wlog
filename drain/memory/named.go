@@ -27,6 +27,14 @@ func Named(name string, size int) *Memory {
 	return store
 }
 
+// Remove unregisters a store, so a later Named call with the same name builds a fresh one.
+// A test uses it to leave the registry as it found it.
+func Remove(name string) {
+	registry.Lock()
+	defer registry.Unlock()
+	delete(registry.stores, name)
+}
+
 // Stores returns every registered store name, sorted.
 func Stores() []string {
 	registry.Lock()

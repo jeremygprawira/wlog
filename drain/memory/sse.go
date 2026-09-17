@@ -6,7 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 )
+
+// sseWriteTimeout bounds one write to a subscribed client. A client that stops reading its
+// socket must not hold the handler open forever, which would leak a goroutine per stalled
+// viewer.
+const sseWriteTimeout = 10 * time.Second
 
 // SSEHandler streams every Send as a Server-Sent Event. A "?replay=N" query param
 // sends the N most recent buffered events first, then switches to live. The stream
@@ -29,6 +35,12 @@ func (m *Memory) SSEHandler() http.Handler {
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
+		// Subscribe BEFORE the replay is read, so an event sent while the replay is on the
+		// wire waits in the channel instead of falling between the snapshot and the
+		// subscription. At worst that delivers such an event twice, which a reader can
+		// handle; losing it is not recoverable.
+		ch := m.Subscribe(ctx)
+
 		if replay, ok := replayCount(r); ok && replay > 0 {
 			snap := m.Snapshot()
 			if replay < len(snap) {
@@ -42,7 +54,6 @@ func (m *Memory) SSEHandler() http.Handler {
 			flusher.Flush()
 		}
 
-		ch := m.Subscribe(ctx)
 		for {
 			select {
 			case e, ok := <-ch:
@@ -52,6 +63,10 @@ func (m *Memory) SSEHandler() http.Handler {
 				if !writeSSE(w, e) {
 					return
 				}
+				// Each write gets its own deadline, so a stalled client is dropped rather
+				// than parked forever. A ResponseWriter that cannot take a deadline is not
+				// an error: the request context still bounds the handler.
+				_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(sseWriteTimeout))
 				flusher.Flush()
 			case <-r.Context().Done():
 				return

@@ -16,16 +16,18 @@ type Filter struct {
 }
 
 // Query returns the matching events, oldest first.
+//
+// Limit keeps the NEWEST matches rather than the oldest: a caller that asks for the last ten
+// errors wants the ten most recent ones, not the first ten a process ever logged.
 func (m *Memory) Query(f Filter) []map[string]any {
 	matches := make([]map[string]any, 0)
 	for _, event := range m.Snapshot() {
-		if !matchesFilter(event, f) {
-			continue
+		if matchesFilter(event, f) {
+			matches = append(matches, event)
 		}
-		matches = append(matches, event)
-		if f.Limit > 0 && len(matches) >= f.Limit {
-			break
-		}
+	}
+	if f.Limit > 0 && len(matches) > f.Limit {
+		matches = matches[len(matches)-f.Limit:]
 	}
 	return matches
 }
