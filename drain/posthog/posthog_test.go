@@ -11,6 +11,7 @@ import (
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
+	"github.com/jeremygprawira/wlog/pipeline"
 )
 
 // flush closes a wrapped drain, which sends every buffered event.
@@ -80,7 +81,7 @@ func TestPosthog_DistinctIDFallback(t *testing.T) {
 	defer srv.Close()
 	drain, _ := posthog.NewSender(posthog.WithAPIKey("key"), posthog.WithHost(srv.URL))
 
-	if err := drain.SendBatch(context.Background(), []map[string]any{map[string]any{"trace": map[string]any{"request_id": "req-9"}}}); err != nil {
+	if err := drain.SendBatch(context.Background(), []map[string]any{{"trace": map[string]any{"request_id": "req-9"}}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
 
@@ -100,7 +101,7 @@ func TestPosthog_EnvAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
-	if err := drain.SendBatch(context.Background(), []map[string]any{map[string]any{"level": "info"}}); err != nil {
+	if err := drain.SendBatch(context.Background(), []map[string]any{{"level": "info"}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
 	if srv.Last() == nil {
@@ -226,4 +227,37 @@ func prettyJSONPostHog(t *testing.T, body []byte) string {
 		t.Fatalf("marshal: %v", err)
 	}
 	return string(pretty)
+}
+
+// TestPostHog_New_WrapsWithPipelineDefaults proves New succeeds on a valid
+// configuration, and rejects a missing API key the same way NewSender does.
+func TestPostHog_New_WrapsWithPipelineDefaults(t *testing.T) {
+	d, err := posthog.New(posthog.WithAPIKey("key"), posthog.WithHost("http://example.invalid"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	flush(t, d)
+
+	t.Setenv("POSTHOG_API_KEY", "")
+	if _, err := posthog.New(); err == nil {
+		t.Error("New with no API key returned nil error")
+	}
+}
+
+// TestPostHog_MustNew_PanicsOnTheSameError proves MustNew is New plus a panic, not a
+// different construction path.
+func TestPostHog_MustNew_PanicsOnTheSameError(t *testing.T) {
+	t.Setenv("POSTHOG_API_KEY", "")
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("MustNew with no API key did not panic")
+			}
+		}()
+		posthog.MustNew()
+	}()
+
+	d := posthog.MustNew(posthog.WithAPIKey("key"), posthog.WithHost("http://example.invalid"),
+		posthog.WithPipeline(pipeline.BatchSize(5)))
+	flush(t, d)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/hyperdx"
 
 	"github.com/jeremygprawira/wlog/internal/httpfake"
+	"github.com/jeremygprawira/wlog/pipeline"
 )
 
 // flush closes a wrapped drain, which sends every buffered event.
@@ -119,7 +120,7 @@ func TestHyperdx_EnvAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
-	if err := drain.SendBatch(context.Background(), []map[string]any{map[string]any{"level": "info", "operation": "op"}}); err != nil {
+	if err := drain.SendBatch(context.Background(), []map[string]any{{"level": "info", "operation": "op"}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
 	if srv.Last() == nil {
@@ -178,4 +179,37 @@ func TestHyperDX_PIPE16_EmptyPath(t *testing.T) {
 	if got := srv.Last().Path; got != "/custom/logs" {
 		t.Errorf("path = %q, want the caller's own path", got)
 	}
+}
+
+// TestHyperdx_New_WrapsWithPipelineDefaults proves New succeeds on a valid
+// configuration, and rejects a missing API key the same way NewSender does.
+func TestHyperdx_New_WrapsWithPipelineDefaults(t *testing.T) {
+	d, err := hyperdx.New(hyperdx.WithAPIKey("key"), hyperdx.WithEndpoint("http://example.invalid"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	flush(t, d)
+
+	t.Setenv("HYPERDX_API_KEY", "")
+	if _, err := hyperdx.New(); err == nil {
+		t.Error("New with no API key returned nil error")
+	}
+}
+
+// TestHyperdx_MustNew_PanicsOnTheSameError proves MustNew is New plus a panic, not a
+// different construction path.
+func TestHyperdx_MustNew_PanicsOnTheSameError(t *testing.T) {
+	t.Setenv("HYPERDX_API_KEY", "")
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("MustNew with no API key did not panic")
+			}
+		}()
+		hyperdx.MustNew()
+	}()
+
+	d := hyperdx.MustNew(hyperdx.WithAPIKey("key"), hyperdx.WithEndpoint("http://example.invalid"),
+		hyperdx.WithPipeline(pipeline.BatchSize(5)))
+	flush(t, d)
 }

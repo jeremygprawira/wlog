@@ -11,6 +11,7 @@ import (
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/betterstack"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
+	"github.com/jeremygprawira/wlog/pipeline"
 )
 
 // flush closes a wrapped drain, which sends every buffered event.
@@ -71,7 +72,7 @@ func TestBetterStack_EnvAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
-	if err := drain.SendBatch(context.Background(), []map[string]any{map[string]any{"level": "info"}}); err != nil {
+	if err := drain.SendBatch(context.Background(), []map[string]any{{"level": "info"}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
 	if srv.Last() == nil {
@@ -181,4 +182,37 @@ func prettyJSON(t *testing.T, body []byte) string {
 		t.Fatalf("marshal: %v", err)
 	}
 	return string(pretty)
+}
+
+// TestBetterStack_New_WrapsWithPipelineDefaults proves New succeeds on a valid
+// configuration, and rejects a missing token the same way NewSender does.
+func TestBetterStack_New_WrapsWithPipelineDefaults(t *testing.T) {
+	d, err := betterstack.New(betterstack.WithSourceToken("tok"), betterstack.WithHost("http://example.invalid"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	flush(t, d)
+
+	t.Setenv("BETTERSTACK_SOURCE_TOKEN", "")
+	if _, err := betterstack.New(); err == nil {
+		t.Error("New with no token returned nil error")
+	}
+}
+
+// TestBetterStack_MustNew_PanicsOnTheSameError proves MustNew is New plus a panic, not
+// a different construction path.
+func TestBetterStack_MustNew_PanicsOnTheSameError(t *testing.T) {
+	t.Setenv("BETTERSTACK_SOURCE_TOKEN", "")
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("MustNew with no token did not panic")
+			}
+		}()
+		betterstack.MustNew()
+	}()
+
+	d := betterstack.MustNew(betterstack.WithSourceToken("tok"), betterstack.WithHost("http://example.invalid"),
+		betterstack.WithPipeline(pipeline.BatchSize(5)))
+	flush(t, d)
 }

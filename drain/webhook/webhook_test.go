@@ -167,7 +167,6 @@ func TestWebhook_New_WrapsWithPipelineDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	var _ wlog.Drain = d
 	closer, ok := d.(interface{ Close(context.Context) error })
 	if !ok {
 		t.Fatal("New's drain does not implement Close, so Logger.Close cannot stop it")
