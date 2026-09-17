@@ -457,13 +457,16 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - Errors never hold a query string or user info. Each drain can take `WithHTTPClient`, `WithTimeout`, and `WithUserAgent`.
 - Tests: `TestHTTPDrain_PIPE19_ErrorHasNoSecrets`, `TestHTTPDrain_PIPE24_ClientOptions`.
 
-**Verify:** `go test -race -run 'TestHTTPDrain_PIPE(19|24)_' ./internal/httpdrain`.
+**Verify:** `go test -race -run 'TestHTTPDrain_PIPE(19|24)_' ./pipeline/httpdrain`.
 **Deps:** 10-PIPE-1. **Size:** S. **Closes:** PIPE-19, PIPE-24 (drain part).
 **Files:**
 
-- `internal/httpdrain/httpdrain.go`
-- `internal/httpdrain/options.go`
-- `internal/httpdrain/httpdrain_test.go`
+- `pipeline/httpdrain/httpdrain.go`
+- `pipeline/httpdrain/options.go`
+- `pipeline/httpdrain/httpdrain_test.go`
+
+10-PIPE-7 later moves this package to `pipeline/httpdrain`. The path above already
+reflects that move, so this Verify command stays runnable.
 
 ### Track: audit (after 10-CORE-5)
 
