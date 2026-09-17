@@ -31,6 +31,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog init` rewrites with `go/ast`, wraps a nil handler around the default mux and an
+  `http.Server` literal's Handler field, merges `.env.example` instead of replacing it, prints a
+  unified diff on `--dry-run`, writes every file through a temporary file and a rename, and
+  refuses an unknown `--drain` with exit 2.
 - `wlog map` honors `//wlog:ignore <rule> -- <reason>`, reports a directive with no reason under
   `ignore.reason`, takes `--baseline git:<ref>` to read the map at a revision, `--no-write` to skip
   the file, and `--format sarif` for GitHub code scanning.

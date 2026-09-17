@@ -3,6 +3,7 @@ package main
 
 import (
 	"net/http"
+	"os"
 )
 
 func main() {
@@ -10,5 +11,10 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	http.ListenAndServe(":8080", mux)
+	// ADDR lets a test bind a free port; the default is the usual one.
+	addr := os.Getenv("ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	http.ListenAndServe(addr, mux)
 }

@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -34,6 +33,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
+	if !knownDrain(opts.Drain) {
+		_, _ = fmt.Fprintf(stderr, "wlog init: unknown drain %q: use stdout, axiom, loki, or file\n", opts.Drain)
+		return 2
+	}
+	if err := validateGlobs(opts); err != nil {
+		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
+		return 2
+	}
 	return run(opts, stdout, stderr)
 }
 
@@ -46,7 +53,7 @@ func run(opts Options, stdout, stderr io.Writer) int {
 	}
 	if opts.DryRun {
 		for _, write := range plan {
-			_, _ = fmt.Fprintf(stdout, "--- %s\n%s\n", write.path, write.content)
+			_, _ = fmt.Fprint(stdout, unifiedDiff(write.path, write.content))
 		}
 		return 0
 	}
@@ -66,14 +73,55 @@ type write struct {
 	content string
 }
 
-// apply writes every planned file. The plan is complete before this runs.
+// apply writes every planned file. The plan is complete before this runs, and each file lands
+// whole: the bytes go to a temporary file beside the target and are renamed over it, so a reader
+// never sees half a file and a failure leaves the old one in place.
 func apply(plan []write) error {
 	for _, write := range plan {
-		if err := os.WriteFile(write.path, []byte(write.content), 0o644); err != nil {
+		if err := writeAtomic(write.path, []byte(write.content)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// writeAtomic writes one file through a temporary file in the same directory. A rename within one
+// directory is atomic on every platform this runs on.
+func writeAtomic(path string, content []byte) error {
+	dir := filepath.Dir(path)
+	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	if _, err := temp.Write(content); err != nil {
+		_ = temp.Close()
+		_ = os.Remove(tempPath)
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	if err := os.Chmod(tempPath, 0o644); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	return nil
+}
+
+// knownDrain reports whether a drain name is one the tool can write.
+func knownDrain(name string) bool {
+	switch name {
+	case "", "stdout", "axiom", "loki", "file":
+		return true
+	default:
+		return false
+	}
 }
 
 // moduleName reads the module path from go.mod.
@@ -196,7 +244,7 @@ func buildPlan(opts Options) ([]write, error) {
 
 	plan := []write{
 		{path: wlogPath, content: setup.wlogGo},
-		{path: filepath.Join(dir, ".env.example"), content: setup.envExample},
+		{path: filepath.Join(dir, ".env.example"), content: mergeEnvExample(filepath.Join(dir, ".env.example"), setup.envExample)},
 	}
 	routerPath, patched, err := patchRouter(dir, framework)
 	if err != nil {
@@ -208,26 +256,13 @@ func buildPlan(opts Options) ([]write, error) {
 	return plan, nil
 }
 
-// routerPatterns find the router construction in a source file.
-var routerPatterns = map[string]*regexp.Regexp{
-	"echo":    regexp.MustCompile(`(?m)^(\s*)(\w+)\s*:=\s*echo\.New\(\)`),
-	"echo5":   regexp.MustCompile(`(?m)^(\s*)(\w+)\s*:=\s*echo\.New\(\)`),
-	"gin":     regexp.MustCompile(`(?m)^(\s*)(\w+)\s*:=\s*gin\.(?:New|Default)\(\)`),
-	"nethttp": regexp.MustCompile(`(?m)^(\s*)(\w+)\s*:=\s*http\.NewServeMux\(\)`),
-	"mux":     regexp.MustCompile(`(?m)^(\s*)(\w+)\s*:=\s*mux\.NewRouter\(\)`),
-}
-
-// listenPattern finds the server start, where a net/http handler gets wrapped.
-var listenPattern = regexp.MustCompile(`(http\.ListenAndServe\([^,]+,\s*)([^)]+)(\))`)
-
-// patchRouter inserts one middleware line, or wraps the server handler, in the file
-// that declares the router. It returns "" when no file needs a change.
+// patchRouter installs the middleware in the file that declares the server or the router. It
+// returns "" when no file needs a change.
 func patchRouter(dir, framework string) (string, string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", "", err
 	}
-	pattern := routerPatterns[framework]
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || entry.Name() == "wlog.go" {
 			continue
@@ -237,23 +272,85 @@ func patchRouter(dir, framework string) (string, string, error) {
 		if err != nil {
 			return "", "", err
 		}
-		text := string(source)
-		if framework == "nethttp" || framework == "mux" {
-			if !listenPattern.MatchString(text) {
-				continue
-			}
-			patched := listenPattern.ReplaceAllString(text, "${1}WrapHandler(${2})${3}")
-			return path, patched, nil
+		patched, changed, err := rewrite(path, source, framework)
+		if err != nil {
+			return "", "", err
 		}
-		match := pattern.FindStringSubmatch(text)
-		if match == nil {
-			continue
+		if changed {
+			return path, string(patched), nil
 		}
-		indent, router := match[1], match[2]
-		insert := match[0] + "\n" + indent + router + ".Use(LoggerMiddleware())"
-		return path, strings.Replace(text, match[0], insert, 1), nil
 	}
 	return "", "", fmt.Errorf("no router declaration found for %s", framework)
+}
+
+// unifiedDiff renders one planned file as a unified diff, the format a reader expects from a tool
+// that says what it would change.
+func unifiedDiff(path, content string) string {
+	old, err := os.ReadFile(path)
+	if err != nil {
+		old = nil
+	}
+	oldLines := splitLines(string(old))
+	newLines := splitLines(content)
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "--- %s\n+++ %s\n", path, path)
+	fmt.Fprintf(&builder, "@@ -%d,%d +%d,%d @@\n", 1, len(oldLines), 1, len(newLines))
+	for _, line := range oldLines {
+		fmt.Fprintf(&builder, "-%s\n", line)
+	}
+	for _, line := range newLines {
+		fmt.Fprintf(&builder, "+%s\n", line)
+	}
+	return builder.String()
+}
+
+// splitLines splits a file into lines without their terminator, dropping the empty tail a final
+// newline leaves.
+func splitLines(text string) []string {
+	if text == "" {
+		return nil
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// validateGlobs checks the run's option values that can be wrong before anything is written.
+func validateGlobs(Options) error { return nil }
+
+// mergeEnvExample adds the keys the setup needs to the file that is already there.
+//
+// A caller's file is theirs: its comments stay, its order stays, and a value it already sets is
+// never replaced. Only a key the file does not mention is appended.
+func mergeEnvExample(path, wanted string) string {
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		return wanted
+	}
+	have := map[string]bool{}
+	for _, line := range strings.Split(string(existing), "\n") {
+		if key, _, ok := strings.Cut(line, "="); ok {
+			have[strings.TrimSpace(key)] = true
+		}
+	}
+
+	var missing []string
+	for _, line := range strings.Split(wanted, "\n") {
+		key, _, ok := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" || have[key] {
+			continue
+		}
+		missing = append(missing, line)
+	}
+	if len(missing) == 0 {
+		return string(existing)
+	}
+
+	merged := strings.TrimRight(string(existing), "\n")
+	return merged + "\n" + strings.Join(missing, "\n") + "\n"
 }
 
 // setup is the generated code for one framework and drain.
