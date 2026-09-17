@@ -3,6 +3,8 @@ package sentry_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/sentry"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // dsnFor builds a Sentry DSN pointing at a fake server.
@@ -17,11 +20,11 @@ func dsnFor(srv *httpfake.Server) string {
 	return "http://public-key@" + strings.TrimPrefix(srv.URL, "http://") + "/42"
 }
 
-// newTestDrain points a Drain at a fake ingest server.
-func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...sentry.Option) *sentry.Drain {
+// newTestDrain points a Sender at a fake ingest server.
+func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...sentry.Option) *sentry.Sender {
 	t.Helper()
 	all := append([]sentry.Option{sentry.WithDSN(dsnFor(srv))}, opts...)
-	d, err := sentry.New(all...)
+	d, err := sentry.NewSender(all...)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -204,7 +207,7 @@ func TestSentry_EnvAlone(t *testing.T) {
 	defer srv.Close()
 	t.Setenv("SENTRY_DSN", dsnFor(srv))
 
-	d, err := sentry.New()
+	d, err := sentry.NewSender()
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
@@ -218,7 +221,7 @@ func TestSentry_EnvAlone(t *testing.T) {
 
 // TestSentry_MissingDSN proves a missing DSN is a construction error.
 func TestSentry_MissingDSN(t *testing.T) {
-	if _, err := sentry.New(); err == nil {
+	if _, err := sentry.NewSender(); err == nil {
 		t.Fatal("New with no DSN returned nil error")
 	}
 }
@@ -245,6 +248,169 @@ func TestSentry_NeverLeaksRedactedValue(t *testing.T) {
 	for _, req := range srv.Requests() {
 		if strings.Contains(string(req.Body), "hunter2") {
 			t.Errorf("raw denied value reached the drain: %s", req.Body)
+		}
+	}
+}
+
+// TestSentry_PIPE7_EnvelopeEventID proves a batch of errors becomes one envelope per
+// error, and that each envelope header's event_id equals its item's id. Sentry allows one
+// event item per envelope, so a batch that carried two got a 4xx and the whole batch was
+// dropped.
+func TestSentry_PIPE7_EnvelopeEventID(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	d := newTestDrain(t, srv)
+
+	events := []map[string]any{
+		errorEvent("PAYMENT_DECLINED", "payment"),
+		errorEvent("ORDER_MISSING", "order"),
+	}
+	if err := d.SendBatch(context.Background(), events); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+
+	requests := srv.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("the sender made %d requests, want one envelope per error event", len(requests))
+	}
+	for i, req := range requests {
+		header, headers, payloads := parseEnvelope(t, req.Body)
+		if len(headers) != 1 || headers[0]["type"] != "event" {
+			t.Fatalf("envelope %d holds %v, want exactly one event item", i, headers)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(payloads[0], &payload); err != nil {
+			t.Fatalf("envelope %d payload is not JSON: %v", i, err)
+		}
+		if header["event_id"] != payload["event_id"] {
+			t.Errorf("envelope %d: header event_id %v, item event_id %v; they must match", i, header["event_id"], payload["event_id"])
+		}
+	}
+}
+
+// TestSentry_PIPE8_ErrorsNotLogs proves an error event is never also sent as a log item,
+// and that a log item holds flat typed attributes and a trace id.
+func TestSentry_PIPE8_ErrorsNotLogs(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	d := newTestDrain(t, srv, sentry.WithAllEvents(true))
+
+	events := []map[string]any{
+		errorEvent("PAYMENT_DECLINED", "payment"),
+		{
+			"level":     "info",
+			"operation": "job.run",
+			"order_id":  "ord-1",
+			"attempt":   2,
+			"trace":     map[string]any{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"},
+		},
+	}
+	if err := d.SendBatch(context.Background(), events); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+
+	var logItems []any
+	for _, req := range srv.Requests() {
+		_, headers, payloads := parseEnvelope(t, req.Body)
+		for i, header := range headers {
+			if header["type"] != "log" {
+				continue
+			}
+			var body map[string]any
+			if err := json.Unmarshal(payloads[i], &body); err != nil {
+				t.Fatalf("log payload is not JSON: %v", err)
+			}
+			items, _ := body["items"].([]any)
+			logItems = append(logItems, items...)
+		}
+	}
+	if len(logItems) != 1 {
+		t.Fatalf("the sender sent %d log items, want only the non-error event", len(logItems))
+	}
+
+	item, _ := logItems[0].(map[string]any)
+	if item["trace_id"] != "4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Errorf("log trace_id = %v, want the event's trace id", item["trace_id"])
+	}
+	attrs, _ := item["attributes"].(map[string]any)
+	orderID, _ := attrs["order_id"].(map[string]any)
+	if orderID["value"] != "ord-1" || orderID["type"] != "string" {
+		t.Errorf("order_id attribute = %v, want a typed {value, type} pair", attrs["order_id"])
+	}
+	attempt, _ := attrs["attempt"].(map[string]any)
+	if attempt["value"] != float64(2) || attempt["type"] != "integer" {
+		t.Errorf("attempt attribute = %v, want a typed integer", attrs["attempt"])
+	}
+	if _, wholeEvent := attrs["wlog"]; wholeEvent {
+		t.Error("attributes still hold the whole event as one untyped object")
+	}
+}
+
+// TestSentry_PIPE21_DSNForms proves a DSN with a path prefix, and one with no scheme, build
+// the endpoint Sentry expects.
+func TestSentry_PIPE21_DSNForms(t *testing.T) {
+	// A DSN with a path prefix keeps the prefix before /api/.
+	srv := httpfake.New()
+	defer srv.Close()
+	prefixDSN := "http://public-key@" + strings.TrimPrefix(srv.URL, "http://") + "/tenant/one/42"
+	d, err := sentry.NewSender(sentry.WithDSN(prefixDSN))
+	if err != nil {
+		t.Fatalf("New with a path prefix: %v", err)
+	}
+	if err := d.SendBatch(context.Background(), []map[string]any{errorEvent("PAYMENT_DECLINED", "payment")}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	if req := srv.Last(); req == nil || req.Path != "/tenant/one/api/42/envelope/" {
+		t.Errorf("path = %v, want /tenant/one/api/42/envelope/", req)
+	}
+
+	// A DSN without a scheme is allowed by the spec, so it must parse.
+	noScheme := "public-key@" + strings.TrimPrefix(srv.URL, "http://") + "/42"
+	if _, err := sentry.NewSender(sentry.WithDSN(noScheme)); err != nil {
+		t.Errorf("New with no scheme: %v", err)
+	}
+}
+
+// TestSentry_StatusTable proves every status class the plan names maps to the right
+// outcome, so a drain never retries a refused request forever.
+func TestSentry_StatusTable(t *testing.T) {
+	cases := []struct {
+		status    int
+		wantError bool
+		retryable bool
+	}{
+		{http.StatusOK, false, false},
+		{http.StatusBadRequest, true, false},
+		{http.StatusUnauthorized, true, false},
+		{http.StatusForbidden, true, false},
+		{http.StatusRequestEntityTooLarge, true, false},
+		{http.StatusTooManyRequests, true, true},
+		{http.StatusInternalServerError, true, true},
+	}
+	for _, tc := range cases {
+		srv := httpfake.New()
+		srv.SetStatus(tc.status)
+		d := newTestDrain(t, srv)
+		err := d.SendBatch(context.Background(), []map[string]any{errorEvent("PAYMENT_DECLINED", "payment")})
+		srv.Close()
+
+		if tc.wantError && err == nil {
+			t.Errorf("status %d: err = nil, want an error", tc.status)
+			continue
+		}
+		if !tc.wantError {
+			if err != nil {
+				t.Errorf("status %d: err = %v, want nil", tc.status, err)
+			}
+			continue
+		}
+		var statusErr *httpdrain.StatusError
+		if !errors.As(err, &statusErr) {
+			t.Errorf("status %d: err = %v, want a *StatusError", tc.status, err)
+			continue
+		}
+		if statusErr.Retryable() != tc.retryable {
+			t.Errorf("status %d: Retryable() = %v, want %v", tc.status, statusErr.Retryable(), tc.retryable)
 		}
 	}
 }

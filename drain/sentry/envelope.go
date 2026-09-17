@@ -15,61 +15,72 @@ type envelopeItem struct {
 	payload []byte
 }
 
-// buildEnvelope renders one Sentry envelope from a batch. It returns nil when the batch
-// has nothing to send.
-func buildEnvelope(events []map[string]any, allEvents bool) ([]byte, error) {
-	envelopeID, err := randomID()
+// buildEventEnvelope renders one envelope holding one error event. Sentry allows at most
+// one event item per envelope, and the envelope header carries that item's event id, so a
+// reader pairs the two.
+func buildEventEnvelope(event map[string]any) ([]byte, error) {
+	itemID, err := randomID()
 	if err != nil {
 		return nil, fmt.Errorf("sentry: %w", err)
 	}
+	payload, err := json.Marshal(errorPayload(event, itemID))
+	if err != nil {
+		return nil, fmt.Errorf("sentry: marshal event: %w", err)
+	}
+	header, err := envelopeHeader(itemID)
+	if err != nil {
+		return nil, err
+	}
+	return envelopeBytes(header, []envelopeItem{{
+		header:  map[string]any{"type": "event", "length": len(payload)},
+		payload: payload,
+	}})
+}
 
-	var items []envelopeItem
-	var logItems []map[string]any
-	for _, event := range events {
-		if isErrorEvent(event) {
-			itemID, err := randomID()
-			if err != nil {
-				return nil, fmt.Errorf("sentry: %w", err)
-			}
-			payload, err := json.Marshal(errorPayload(event, itemID))
-			if err != nil {
-				return nil, fmt.Errorf("sentry: marshal event: %w", err)
-			}
-			items = append(items, envelopeItem{
-				header:  map[string]any{"type": "event", "length": len(payload)},
-				payload: payload,
-			})
-		}
-		if allEvents {
-			logItems = append(logItems, logPayload(event))
-		}
-	}
-	if len(logItems) > 0 {
-		payload, err := json.Marshal(map[string]any{"items": logItems})
-		if err != nil {
-			return nil, fmt.Errorf("sentry: marshal logs: %w", err)
-		}
-		items = append(items, envelopeItem{
-			header: map[string]any{
-				"type":         "log",
-				"item_count":   len(logItems),
-				"content_type": "application/vnd.sentry.items.log+json",
-			},
-			payload: payload,
-		})
-	}
-	if len(items) == 0 {
+// buildLogEnvelope renders one envelope holding every event of a batch as a log item. It
+// returns nil when the batch holds nothing to log.
+func buildLogEnvelope(events []map[string]any) ([]byte, error) {
+	if len(events) == 0 {
 		return nil, nil
 	}
+	items := make([]map[string]any, 0, len(events))
+	for _, event := range events {
+		items = append(items, logPayload(event))
+	}
+	payload, err := json.Marshal(map[string]any{"items": items})
+	if err != nil {
+		return nil, fmt.Errorf("sentry: marshal logs: %w", err)
+	}
+	header, err := envelopeHeader("")
+	if err != nil {
+		return nil, err
+	}
+	return envelopeBytes(header, []envelopeItem{{
+		header: map[string]any{
+			"type":         "log",
+			"item_count":   len(items),
+			"content_type": "application/vnd.sentry.items.log+json",
+		},
+		payload: payload,
+	}})
+}
 
-	header, err := json.Marshal(map[string]any{
-		"event_id": envelopeID,
-		"sent_at":  time.Now().UTC().Format(time.RFC3339Nano),
-	})
+// envelopeHeader renders the envelope header. An envelope that holds no event item leaves
+// the event id out.
+func envelopeHeader(eventID string) ([]byte, error) {
+	header := map[string]any{"sent_at": time.Now().UTC().Format(time.RFC3339Nano)}
+	if eventID != "" {
+		header["event_id"] = eventID
+	}
+	headerBytes, err := json.Marshal(header)
 	if err != nil {
 		return nil, fmt.Errorf("sentry: marshal header: %w", err)
 	}
+	return headerBytes, nil
+}
 
+// envelopeBytes joins the header and the items into the on-wire envelope body.
+func envelopeBytes(header []byte, items []envelopeItem) ([]byte, error) {
 	var body strings.Builder
 	body.Write(header)
 	body.WriteByte('\n')
@@ -168,6 +179,10 @@ func tagsFor(event map[string]any) map[string]string {
 }
 
 // logPayload maps one event to a Sentry log item for AllEvents mode.
+//
+// Sentry wants one flat attribute map of {value, type} pairs and a trace id, so the event
+// is flattened into typed attributes and a missing trace id is generated rather than left
+// out.
 func logPayload(event map[string]any) map[string]any {
 	body := stringField(event, "operation")
 	if body == "" {
@@ -177,14 +192,65 @@ func logPayload(event map[string]any) map[string]any {
 		"timestamp":  secondsOf(event),
 		"level":      stringField(event, "level"),
 		"body":       body,
-		"attributes": map[string]any{"wlog": event},
+		"attributes": logAttributes(event),
 	}
+	traceID := ""
 	if trace, ok := event["trace"].(map[string]any); ok {
-		if traceID := stringField(trace, "trace_id"); traceID != "" {
-			item["trace_id"] = traceID
-		}
+		traceID = stringField(trace, "trace_id")
 	}
+	if traceID == "" {
+		traceID, _ = randomID()
+	}
+	item["trace_id"] = traceID
 	return item
+}
+
+// logAttributes flattens an event into the typed {value, type} pairs Sentry requires. A
+// nested object becomes dotted keys, because Sentry rejects an untyped nested object.
+func logAttributes(event map[string]any) map[string]any {
+	out := map[string]any{}
+	flattenAttributes(out, event, "")
+	return out
+}
+
+// flattenAttributes copies one level of a nested event into out, joining an inner key to
+// the path with a dot.
+func flattenAttributes(out map[string]any, value map[string]any, prefix string) {
+	for key, item := range value {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+		if nested, ok := item.(map[string]any); ok {
+			flattenAttributes(out, nested, path)
+			continue
+		}
+		out[path] = typedAttribute(item)
+	}
+}
+
+// typedAttribute wraps one value in the {value, type} pair Sentry requires.
+func typedAttribute(value any) map[string]any {
+	switch v := value.(type) {
+	case nil:
+		return map[string]any{"value": "", "type": "string"}
+	case bool:
+		return map[string]any{"value": v, "type": "boolean"}
+	case string:
+		return map[string]any{"value": v, "type": "string"}
+	case int:
+		return map[string]any{"value": int64(v), "type": "integer"}
+	case int64:
+		return map[string]any{"value": v, "type": "integer"}
+	case uint64:
+		return map[string]any{"value": v, "type": "integer"}
+	case float64:
+		return map[string]any{"value": v, "type": "double"}
+	case []any:
+		return map[string]any{"value": v, "type": "array"}
+	default:
+		return map[string]any{"value": fmt.Sprint(value), "type": "string"}
+	}
 }
 
 // secondsOf reads the event timestamp as Unix seconds with a fractional part.
