@@ -47,56 +47,69 @@ func Verify(path string, keys ...[]byte) error {
 	}
 	for i, line := range lines {
 		n := i + 1
-		if len(line) == 0 {
-			// The chain covers nothing here, so an empty line is a change to the file
-			// that must fail rather than be skipped.
-			return fmt.Errorf("audit: line %d: empty line", n)
-		}
-
-		storedHash, hashOff, err := chainValue(line, "audit.hash")
+		hash, marker, err := checkLine(line, prev, key)
 		if err != nil {
 			return fmt.Errorf("audit: line %d: %w", n, err)
 		}
-		offsets := []int{hashOff}
-		var storedSig []byte
-		if sig, sigOff, err := chainValue(line, "audit.signature"); err == nil {
-			storedSig = sig
-			offsets = append(offsets, sigOff)
-		}
-
-		sum := sha256.Sum256(coveredBytes(line, offsets...))
-		wantHash := hex.EncodeToString(sum[:])
-		if string(storedHash) != wantHash {
-			return fmt.Errorf("audit: line %d: hash mismatch", n)
-		}
-
-		var event map[string]any
-		if err := json.Unmarshal(line, &event); err != nil {
-			return fmt.Errorf("audit: line %d: invalid JSON: %w", n, err)
-		}
-		if got, _ := event["audit.prev_hash"].(string); got != prev {
-			return fmt.Errorf("audit: line %d: prev_hash %q, want %q", n, got, prev)
-		}
-
-		if key != nil {
-			if storedSig == nil {
-				return fmt.Errorf("audit: line %d: missing signature", n)
-			}
-			if !hmac.Equal([]byte(signature(key, wantHash)), storedSig) {
-				return fmt.Errorf("audit: line %d: signature mismatch", n)
-			}
-		}
-
-		if body, ok := event["audit.marker"].(map[string]any); ok {
-			if err := checkMarker(body, records, prev, key, n); err != nil {
+		if marker != nil {
+			if err := checkMarker(marker, records, prev, key, n); err != nil {
 				return err
 			}
 		} else {
 			records++
 		}
-		prev = wantHash
+		prev = hash
 	}
 	return nil
+}
+
+// checkLine reports whether one journal line is intact: its hash covers its own bytes,
+// its prev_hash names the line before it, and, with a key, its signature matches. It
+// returns the line's hash and, for a marker, the marker body. Verify and the recovery
+// path share it, so both judge a line by the same rule.
+func checkLine(line []byte, prev string, key []byte) (hash string, marker map[string]any, err error) {
+	if len(line) == 0 {
+		// The chain covers nothing here, so an empty line must fail rather than be
+		// skipped.
+		return "", nil, fmt.Errorf("empty line")
+	}
+	storedHash, hashOff, err := chainValue(line, "audit.hash")
+	if err != nil {
+		return "", nil, err
+	}
+	offsets := []int{hashOff}
+	var storedSig []byte
+	if sig, sigOff, err := chainValue(line, "audit.signature"); err == nil {
+		storedSig = sig
+		offsets = append(offsets, sigOff)
+	}
+
+	sum := sha256.Sum256(coveredBytes(line, offsets...))
+	wantHash := hex.EncodeToString(sum[:])
+	if string(storedHash) != wantHash {
+		return "", nil, fmt.Errorf("hash mismatch")
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal(line, &event); err != nil {
+		return "", nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	if got, _ := event["audit.prev_hash"].(string); got != prev {
+		return "", nil, fmt.Errorf("prev_hash %q, want %q", got, prev)
+	}
+
+	if key != nil {
+		if storedSig == nil {
+			return "", nil, fmt.Errorf("missing signature")
+		}
+		if !hmac.Equal([]byte(signature(key, wantHash)), storedSig) {
+			return "", nil, fmt.Errorf("signature mismatch")
+		}
+	}
+	if body, ok := event["audit.marker"].(map[string]any); ok {
+		return wantHash, body, nil
+	}
+	return wantHash, nil, nil
 }
 
 // VerifyHead verifies the whole journal and then checks that its last line ends the

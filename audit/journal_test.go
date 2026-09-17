@@ -14,6 +14,9 @@ import (
 	"github.com/jeremygprawira/wlog/audit"
 )
 
+// writeJournal writes n records and closes the Logger, so the journal releases its
+// file lock and writes its closing marker. A second writer on the same path needs that
+// release, because one journal file has one writer at a time.
 func writeJournal(t *testing.T, path string, n int) {
 	t.Helper()
 	log := wlog.New(wlog.WithDrains(audit.Journal(path)))
@@ -22,6 +25,9 @@ func writeJournal(t *testing.T, path string, n int) {
 		r := testRecord()
 		r.Target.ID = "inv" + strconv.Itoa(i)
 		audit.Do(ctx, r)
+	}
+	if err := log.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 }
 
@@ -41,13 +47,14 @@ func TestAudit_Journal_WritesVerifiableNDJSON(t *testing.T) {
 		t.Fatalf("Verify: %v", err)
 	}
 
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read: %v", err)
+	records := 0
+	for _, line := range journalLines(t, path) {
+		if !strings.Contains(line, `"audit.marker"`) {
+			records++
+		}
 	}
-	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("got %d lines, want 3", len(lines))
+	if records != 3 {
+		t.Fatalf("got %d record lines, want 3", records)
 	}
 }
 
@@ -60,10 +67,9 @@ func TestAudit_Journal_ResumesChainAcrossRestart(t *testing.T) {
 	if err := audit.Verify(path); err != nil {
 		t.Fatalf("Verify after resume: %v", err)
 	}
-	b, _ := os.ReadFile(path)
-	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
-	if len(lines) != 4 {
-		t.Fatalf("got %d lines, want 4 (2 before + 2 after restart)", len(lines))
+	// Four records in one file, plus each run's closing marker.
+	if lines := journalLines(t, path); len(lines) != 6 {
+		t.Fatalf("got %d lines, want 4 records and 2 markers", len(lines))
 	}
 }
 
@@ -260,8 +266,7 @@ func TestAudit_AUD3_RestartVerifies(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.ndjson")
 	writeJournal(t, path, 2)
 
-	before, _ := os.ReadFile(path)
-	firstRun := strings.Split(strings.TrimRight(string(before), "\n"), "\n")
+	firstRun := journalLines(t, path)
 
 	writeJournal(t, path, 1) // a new process appends one more line
 
@@ -269,16 +274,15 @@ func TestAudit_AUD3_RestartVerifies(t *testing.T) {
 		t.Fatalf("Verify after restart: %v", err)
 	}
 
-	after, _ := os.ReadFile(path)
-	lines := strings.Split(strings.TrimRight(string(after), "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("got %d lines, want 3", len(lines))
+	lines := journalLines(t, path)
+	if len(lines) != len(firstRun)+2 {
+		t.Fatalf("got %d lines, want %d (one record and one marker more)", len(lines), len(firstRun)+2)
 	}
 	var first, last map[string]any
-	if err := json.Unmarshal([]byte(firstRun[1]), &last); err != nil {
+	if err := json.Unmarshal([]byte(firstRun[len(firstRun)-1]), &last); err != nil {
 		t.Fatalf("decode last line of the first run: %v", err)
 	}
-	if err := json.Unmarshal([]byte(lines[2]), &first); err != nil {
+	if err := json.Unmarshal([]byte(lines[len(firstRun)]), &first); err != nil {
 		t.Fatalf("decode first line after the restart: %v", err)
 	}
 	if got, want := first["audit.prev_hash"], last["audit.hash"]; got != want {

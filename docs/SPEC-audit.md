@@ -77,9 +77,22 @@ chain drain. A keyed `Journal` adds `audit.signature`, an HMAC-SHA256 over the c
 `Journal(path)` is a `wlog.Drain` (meant to run alongside the main drain via `wlog.WithDrains`,
 not instead of it): it hashes the line it is about to write, appends it, and fsyncs it, all under
 one lock. One NDJSON line per event it receives, opened `O_APPEND|O_CREATE`, mode 0600. Audit
-logs are low-volume, so durability beats throughput here. On the first `Send` after process
-start, it reads the file's last line to recover the previous hash. A restart then continues the
-same chain instead of starting a new one silently.
+logs are low-volume, so durability beats throughput here.
+
+One journal file has one writer. On Unix, `Journal` takes an exclusive `flock` on the file, and
+a second writer is refused with a reported error. The kernel drops that lock when the process
+ends, so a crash leaves no stale lock. On Windows the lock is a sibling `<path>.lock` file,
+because the standard library exposes no file lock there. A crash can leave that file behind, and
+the error names it.
+
+On the first `Send` after start, `Journal` reads the file, counts its records, and recovers the
+chain head, so a restart continues the same chain. A partial last line, meaning an unterminated
+line that is not a valid chain link, moves to `<path>.partial` and is cut from the chain. An
+unterminated line that is complete and valid keeps its record, and `Journal` writes the missing
+newline. A terminated line that does not match the chain is an error, and `Journal` refuses to
+open rather than continue a tampered file.
+
+`Close` writes the closing marker, syncs the file, and syncs the directory that holds it.
 
 ### Verify
 

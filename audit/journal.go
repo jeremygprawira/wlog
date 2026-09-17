@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -10,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/jeremygprawira/wlog"
@@ -61,6 +61,8 @@ type journal struct {
 	key  []byte
 	// records counts the record lines this file holds, markers excluded.
 	records int
+	// unlock releases the exclusive lock this journal holds on the file.
+	unlock func()
 }
 
 // Send chains one audit event and appends it.
@@ -99,8 +101,25 @@ func (j *journal) Close(context.Context) error {
 		_ = j.appendMarker()
 	}
 	err := j.file.Close()
+	if j.unlock != nil {
+		j.unlock()
+		j.unlock = nil
+	}
 	j.file = nil
+	j.syncDir()
 	return err
+}
+
+// syncDir syncs the directory that holds the journal, so the file itself survives a
+// crash, not only its contents. Not every platform or filesystem allows it, and a
+// failure there is not worth a problem report: the write already synced the bytes.
+func (j *journal) syncDir() {
+	d, err := os.Open(filepath.Dir(j.path))
+	if err != nil {
+		return
+	}
+	defer func() { _ = d.Close() }()
+	_ = d.Sync()
 }
 
 // append chains one line for event and writes it. The caller must hold j.mu.
@@ -206,7 +225,7 @@ func coveredBytes(line []byte, offsets ...int) []byte {
 	return cp
 }
 
-// ensureOpen opens the file once and resumes the chain from its last line.
+// ensureOpen locks the file once and resumes the chain it already holds.
 func (j *journal) ensureOpen() error {
 	if j.file != nil {
 		return nil
@@ -215,52 +234,100 @@ func (j *journal) ensureOpen() error {
 	if err != nil {
 		return err
 	}
-	j.file = f
-	records, last, ok := scanFile(f)
-	j.records = records
-	if ok {
-		if h, _, err := chainValue(last, "audit.hash"); err == nil {
-			j.prev = string(h)
-		}
+	unlock, err := lockFile(f)
+	if err != nil {
+		_ = f.Close()
+		return err
 	}
+	if err := j.resume(f); err != nil {
+		unlock()
+		_ = f.Close()
+		return err
+	}
+	j.file, j.unlock = f, unlock
 	return nil
 }
 
-// scanFile returns how many record lines f holds, and its last non-empty line, read
-// from the start. Writes after this still land at end-of-file: f was opened with
-// os.O_APPEND, which repositions the offset before every write regardless of where
-// reads left it.
-func scanFile(f *os.File) (records int, last []byte, found bool) {
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return 0, nil, false
+// resume repairs a partial last line and recovers the chain head and the record count
+// this file already holds, so a process that died mid-write continues the chain rather
+// than starting a second one.
+//
+// The whole file is read into memory: audit journals are low volume, and a fixed read
+// buffer would either cut a large record or refuse it.
+func (j *journal) resume(f *os.File) error {
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return err
 	}
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), 1<<20)
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	body, tail := splitTail(data)
+	records, prev, err := replay(body, j.key)
+	if err != nil {
+		return err
+	}
+	if len(tail) > 0 {
+		if hash, _, err := checkLine(tail, prev, j.key); err == nil {
+			// Every byte of the line arrived and only the newline was lost, so keep
+			// the record instead of moving a valid line aside.
+			if _, err := f.Write(append(tail, '\n')); err != nil {
+				return err
+			}
+			records++
+			prev = hash
+		} else {
+			// The process died mid-write. Keep the half line next to the journal, so a
+			// reader can still see what it was writing, and cut it off the chain.
+			if err := appendPartial(j.path+".partial", tail); err != nil {
+				return err
+			}
+			if err := f.Truncate(int64(len(body))); err != nil {
+				return err
+			}
+		}
+	}
+	j.records, j.prev = records, prev
+	return nil
+}
+
+// splitTail separates the terminated lines of data from an unterminated tail. Journal
+// always ends a line with a newline, so bytes after the last one mean a crash mid-write
+// or a lost newline.
+func splitTail(data []byte) (body, tail []byte) {
+	i := bytes.LastIndexByte(data, '\n')
+	if i < 0 {
+		return nil, data
+	}
+	return data[:i+1], data[i+1:]
+}
+
+// replay walks the terminated lines of a journal and returns how many records it holds
+// and the head of its chain. A line that does not match the chain stops it: a journal
+// with a tampered line is refused rather than continued.
+func replay(body []byte, key []byte) (records int, prev string, err error) {
+	for _, line := range bytes.Split(body, []byte("\n")) {
 		if len(line) == 0 {
 			continue
 		}
-		last = append(last[:0], line...)
-		found = true
-		if isMarker(line) {
-			continue
+		hash, marker, err := checkLine(line, prev, key)
+		if err != nil {
+			return 0, "", fmt.Errorf("audit: existing journal: %w", err)
 		}
-		records++
+		if marker == nil {
+			records++
+		}
+		prev = hash
 	}
-	return records, last, found
+	return records, prev, nil
 }
 
-// isMarker reports whether one line holds a marker rather than a record. It parses the
-// line, so a record that merely mentions the word is still counted as a record.
-func isMarker(line []byte) bool {
-	if !bytes.Contains(line, []byte(`"audit.marker"`)) {
-		return false
+// appendPartial keeps an unterminated tail next to the journal.
+func appendPartial(path string, tail []byte) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
 	}
-	var rec map[string]any
-	if err := json.Unmarshal(line, &rec); err != nil {
-		return false
+	defer func() { _ = f.Close() }()
+	if _, err := f.Write(tail); err != nil {
+		return err
 	}
-	_, ok := rec["audit.marker"]
-	return ok
+	return f.Sync()
 }
