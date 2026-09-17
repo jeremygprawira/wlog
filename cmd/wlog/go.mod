@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.12.0
+	github.com/golangci/plugin-module-register v0.1.2
 	github.com/gorilla/mux v1.8.1
 	github.com/jeremygprawira/wlog/middleware/echo v0.1.0
 	github.com/jeremygprawira/wlog/middleware/echo5 v0.1.0

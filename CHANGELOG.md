@@ -31,6 +31,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- The map rules run as a golangci-lint v2 module plugin (`cmd/wlog/golangci`), and the analyzer
+  takes `-suggest` and `-rules`, skips test files, and reports at the offending call. Loading reads
+  dependencies as export data and only the app's own packages for real, which cuts a two-file
+  scan from 354 MB to 4 MB of heap. This adds the `github.com/golangci/plugin-module-register`
+  dependency to `cmd/wlog` alone.
 - The map JSON is version 2: it carries `tool_version`, `rules_version`, a `summary` with the
   projected score, short framework ids, module-relative paths, `top_fixes` objects with a fix and
   a docs link, and `evidence` with `file:line` per rule result. The text report lists each failing

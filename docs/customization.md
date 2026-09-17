@@ -206,14 +206,28 @@ sensitive_routes:
 min_score: 80
 ```
 
-Run the analyzer through go vet, or register it with golangci-lint:
+Run the analyzer through go vet:
+
+```bash
+go vet -vettool=$(go env GOPATH)/bin/wlogvet ./...
+```
+
+Or register it with golangci-lint v2 as a module plugin. golangci-lint builds the plugin from
+source, so the file names the module and the package that imports it:
 
 ```yaml
-# .golangci.yml
-linters-settings:
-  custom:
-    wlogmap:
-      path: $(go env GOPATH)/bin/wlogvet
-      description: wlog observability rules
-      original-url: github.com/jeremygprawira/wlog/cmd/wlog
+# .custom-gcl.yml
+version: v2.4.0
+plugins:
+  - module: github.com/jeremygprawira/wlog/cmd/wlog
+    import: github.com/jeremygprawira/wlog/cmd/wlog/golangci
+    path: .
 ```
+
+```bash
+make custom-gcl   # writes the custom-gcl binary
+./custom-gcl run  # runs every linter, including wlogmap
+```
+
+The analyzer takes `-suggest` to report suggestions, and `-rules middleware.coverage,context.set`
+to run only some rules. With no `-rules`, every rule runs.
