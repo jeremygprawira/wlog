@@ -95,8 +95,10 @@ func TestErrors(t *testing.T) {
 		t.Errorf("handleFail passed %s while returning an unreported error", rules.RuleErrors)
 	}
 	responder := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleResponder"), rules.Config{}), rules.RuleErrors)
-	if !responder.Pass {
-		t.Errorf("handleResponder failed %s on a c.NoContent return: %s", rules.RuleErrors, responder.Detail)
+	if responder.Applicable {
+		// The handler's only return is a framework responder call, so there is no error path for
+		// the rule to judge: it reports n/a rather than a pass or a failure.
+		t.Errorf("handleResponder: %s applied to a handler with no error path: %+v", rules.RuleErrors, responder)
 	}
 }
 

@@ -31,6 +31,10 @@ func run(pass *analysis.Pass) (any, error) {
 	}
 	for _, point := range entry.Find([]*packages.Package{pkg}) {
 		for _, check := range rules.Evaluate(entry.Program([]*packages.Package{pkg}), pkg, point, rules.Config{}) {
+			if !check.Applicable {
+				// A rule with nothing to check is not a finding.
+				continue
+			}
 			if check.Pass {
 				continue
 			}

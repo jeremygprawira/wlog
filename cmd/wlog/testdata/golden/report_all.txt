@@ -1,8 +1,8 @@
-score 89  grade B  handlers 6
+score 83  grade B  handlers 6
 entry                                    class     mw ctx err guide swallow audit print keys keys.s catalog audit+
-/good                                    read      ok     ok     ok     ok     ok     -      ok     ok     ok     ok     ok    
-/nocontext                               read      ok     XX     ok     ok     ok     -      ok     ok     ok     ok     ok    
-/print                                   read      ok     ok     ok     ok     ok     -      XX     ok     ok     ok     ok    
-/keys                                    read      ok     ok     ok     ok     ok     -      ok     XX     ok     ok     ok    
-/refund/{id}                             sensitive ok     ok     ok     ok     ok     XX     ok     ok     ok     ok     ??    
-/refund/audit                            sensitive ok     ok     ok     ok     ok     ok     ok     ok     ok     ok     ok    
+/good                                    read      ok     ok     n/a    n/a    n/a    -      ok     ok     ok     n/a    n/a   
+/nocontext                               read      ok     XX     n/a    n/a    n/a    -      ok     ok     ok     n/a    n/a   
+/print                                   read      ok     ok     n/a    n/a    n/a    -      XX     ok     ok     n/a    n/a   
+/keys                                    read      ok     ok     n/a    n/a    n/a    -      ok     XX     ok     n/a    n/a   
+/refund/{id}                             sensitive ok     ok     n/a    n/a    n/a    XX     ok     ok     ok     n/a    n/a   
+/refund/audit                            sensitive ok     ok     n/a    n/a    n/a    ok     ok     ok     ok     n/a    n/a   

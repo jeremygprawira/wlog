@@ -14,7 +14,9 @@ import (
 // the rule passes.
 func errorsReachWlog(pkg *packages.Package, point entry.Point) Check {
 	if !returnsNonNilError(pkg, point.Node) {
-		return pass(RuleErrors, WeightErrors)
+		// The handler cannot fail, so there is no error for wlog to reach. n/a keeps the
+		// weight out of a handler that never had the chance to earn it (CLI-7).
+		return notApplicable(RuleErrors, WeightErrors)
 	}
 	if bodyCalls(pkg, point, func(pkgPath, name string) bool {
 		return pkgPath == wlogPath && name == "Error"

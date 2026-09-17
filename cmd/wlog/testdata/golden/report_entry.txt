@@ -2,11 +2,11 @@ handleGood  read  main.go:14
 route  /good
 middleware.coverage    PASS  
 context.set            PASS  
-errors.reach_wlog      PASS  
-error-guidance         PASS  
-swallowed-error        PASS  
+errors.reach_wlog      n/a  
+error-guidance         n/a  
+swallowed-error        n/a  
 logging.no_print       PASS  
 keys.no_denylisted     PASS  
 keys.strict            PASS  
-use-catalog            PASS  
-audit-coverage         PASS  
+use-catalog            n/a  
+audit-coverage         n/a  

@@ -73,6 +73,10 @@ func Find(pkgs []*packages.Package) []Point {
 	var points []Point
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Syntax {
+			if isGenerated(pkg, file) {
+				// A generator wrote this file, so its handlers are not the app's code to score.
+				continue
+			}
 			points = append(points, findInFile(all, pkg, file)...)
 		}
 	}
@@ -120,6 +124,26 @@ func allPackages(pkgs []*packages.Package) []*packages.Package {
 		walk(pkg)
 	}
 	return out
+}
+
+// generatedMarker is the line the Go toolchain defines for a generated file.
+const generatedMarker = "Code generated "
+
+// isGenerated reports whether a file's leading comment says a generator wrote it, following the
+// convention "// Code generated ... DO NOT EDIT.".
+func isGenerated(pkg *packages.Package, file *ast.File) bool {
+	for _, group := range file.Comments {
+		if group.Pos() > file.Package {
+			break
+		}
+		for _, comment := range group.List {
+			text := comment.Text
+			if strings.Contains(text, generatedMarker) && strings.Contains(text, "DO NOT EDIT") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // registration describes one framework call that registers a handler.

@@ -36,6 +36,10 @@ func Matrix(m Map) string {
 			switch {
 			case !present:
 				fmt.Fprintf(&builder, " %-6s", "-")
+			case !check.Applicable:
+				// The rule had nothing to check on this handler, so the cell says so instead of
+				// claiming a pass or a failure.
+				fmt.Fprintf(&builder, " %-6s", "n/a")
 			case check.Pass:
 				fmt.Fprintf(&builder, " %-6s", "ok")
 			case check.Suggestion:
@@ -63,7 +67,12 @@ func Entry(m Map, name string) (string, bool) {
 		}
 		for _, check := range handler.Checks {
 			mark := "PASS"
-			if !check.Pass {
+			switch {
+			case !check.Applicable:
+				mark = "n/a"
+			case !check.Pass && check.Suggestion:
+				mark = "SUGGEST"
+			case !check.Pass:
 				mark = "FAIL"
 			}
 			fmt.Fprintf(&builder, "%-22s %s  %s\n", check.ID, mark, check.Detail)

@@ -10,7 +10,7 @@ import (
 
 // check builds a Check for a test.
 func check(id string, weight int, pass bool) rules.Check {
-	return rules.Check{ID: id, Weight: weight, Pass: pass}
+	return rules.Check{ID: id, Weight: weight, Pass: pass, Applicable: true}
 }
 
 // TestPercent proves the score is the earned share of the applicable weight, rounded,

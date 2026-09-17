@@ -2,6 +2,7 @@ package rules
 
 import (
 	"go/ast"
+	"go/types"
 
 	"github.com/jeremygprawira/wlog/redact"
 	"golang.org/x/tools/go/packages"
@@ -17,15 +18,32 @@ func noDenylisted(pkg *packages.Package, point entry.Point) Check {
 	if body == nil {
 		return pass(RuleNoDenylisted, WeightNoDenylisted)
 	}
-	denied := ""
 	redactor := redact.Default()
+	denied := declaredDeniedKey(pkg, redactor)
+	if denied != "" {
+		return fail(RuleNoDenylisted, WeightNoDenylisted, "denylisted key: "+denied)
+	}
 	ast.Inspect(body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
 		obj := entry.Callee(pkg, call)
-		if obj == nil || obj.Pkg() == nil || obj.Pkg().Path() != wlogPath || !takesKey(obj.Name()) {
+		if obj == nil || obj.Pkg() == nil || obj.Pkg().Path() != wlogPath {
+			return true
+		}
+		if obj.Name() == "NewKey" {
+			// A typed key is a field name too, and the redactor masks it either way, so a
+			// declaration is as good a place to catch it as a write (CLI-14).
+			for _, key := range newKeyNames(call) {
+				if redactor.Denies(key) {
+					denied = key
+					return false
+				}
+			}
+			return true
+		}
+		if !takesKey(obj.Name()) {
 			return true
 		}
 		for _, key := range literalKeys(call, obj.Name()) {
@@ -40,6 +58,61 @@ func noDenylisted(pkg *packages.Package, point entry.Point) Check {
 		return fail(RuleNoDenylisted, WeightNoDenylisted, "denylisted key: "+denied)
 	}
 	return pass(RuleNoDenylisted, WeightNoDenylisted)
+}
+
+// declaredDeniedKey returns a typed key the package declares whose name the redactor denies, or
+// "". The declaration usually sits outside the handler, so the whole package is searched.
+func declaredDeniedKey(pkg *packages.Package, redactor *redact.Redactor) string {
+	for _, file := range pkg.Syntax {
+		denied := ""
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || !isWlogNewKeyCall(pkg, call) {
+				return true
+			}
+			for _, key := range newKeyNames(call) {
+				if redactor.Denies(key) {
+					denied = key
+					return false
+				}
+			}
+			return true
+		})
+		if denied != "" {
+			return denied
+		}
+	}
+	return ""
+}
+
+// isWlogNewKeyCall reports whether a call is wlog.NewKey, however its type argument is written.
+func isWlogNewKeyCall(pkg *packages.Package, call *ast.CallExpr) bool {
+	obj := entry.Callee(pkg, call)
+	if obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == wlogPath && obj.Name() == "NewKey" {
+		return true
+	}
+	// A generic call's callee is an index expression, which entry.Callee cannot resolve.
+	expr := call.Fun
+	switch index := expr.(type) {
+	case *ast.IndexExpr:
+		expr = index.X
+	case *ast.IndexListExpr:
+		expr = index.X
+	}
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	obj, _ = pkg.TypesInfo.Uses[sel.Sel].(*types.Func)
+	return obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == wlogPath && obj.Name() == "NewKey"
+}
+
+// newKeyNames returns the names a wlog.NewKey call declares, if it names a literal.
+func newKeyNames(call *ast.CallExpr) []string {
+	if len(call.Args) != 1 {
+		return nil
+	}
+	return literalStrings(call.Args[0])
 }
 
 // takesKey reports whether the wlog function takes a field name.

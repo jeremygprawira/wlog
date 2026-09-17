@@ -21,6 +21,10 @@ func errorGuidance(pkg *packages.Package, point entry.Point) Check {
 	if body == nil {
 		return pass(RuleErrorGuidance, WeightErrorGuidance)
 	}
+	if !recordsError(pkg, body) {
+		// With nothing recorded there is nothing to guide, so the rule does not apply.
+		return notApplicable(RuleErrorGuidance, WeightErrorGuidance)
+	}
 	guided := true
 	ast.Inspect(body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -49,8 +53,27 @@ func errorGuidance(pkg *packages.Package, point entry.Point) Check {
 	return fail(RuleErrorGuidance, WeightErrorGuidance, "error reaches the event with no why and no fix")
 }
 
-// carriesGuidance reports whether the error expression shows repair guidance. An
-// expression the rule cannot resolve counts as guided, so it stays quiet.
+// recordsError reports whether the handler reports an error through wlog at all.
+func recordsError(pkg *packages.Package, body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		obj := entry.Callee(pkg, call)
+		if obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == wlogPath && obj.Name() == "Error" {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// carriesGuidance reports whether the error expression shows repair guidance. An expression the
+// rule cannot resolve counts as guided, so it stays quiet: a value it cannot follow, such as the
+// result of a call, is not evidence of a missing fix (CLI-7).
 func carriesGuidance(pkg *packages.Package, body *ast.BlockStmt, expr ast.Expr) bool {
 	switch value := expr.(type) {
 	case *ast.CallExpr:

@@ -77,9 +77,13 @@ func Order() []Rule {
 // Check is one rule's result for one handler. Detail explains a failure. A suggestion
 // carries weight 0 and never changes the score.
 type Check struct {
-	ID         string `json:"id"`
-	Weight     int    `json:"weight"`
-	Pass       bool   `json:"pass"`
+	ID     string `json:"id"`
+	Weight int    `json:"weight"`
+	Pass   bool   `json:"pass"`
+	// Applicable false means the rule had nothing to check on this handler, and the report
+	// shows it as n/a. An n/a rule adds no points and no weight, so it never hands a handler
+	// free points for a rule it never ran (CLI-7).
+	Applicable bool   `json:"applicable"`
 	Detail     string `json:"detail"`
 	Suggestion bool   `json:"suggestion,omitempty"`
 }
@@ -94,21 +98,72 @@ var defaultSensitivePatterns = []string{
 	"password", "admin", "checkout", "withdraw", "topup", "balance",
 }
 
-// Sensitive reports whether route matches a default or configured pattern. A pattern
-// is a case-insensitive regular expression when it compiles, and a case-insensitive
-// substring otherwise.
+// Sensitive reports whether route matches a default or configured pattern.
+//
+// A pattern that compiles as a regular expression matches the route as written. Any other
+// pattern matches a WHOLE path segment or a whole word inside one, so "auth" covers /auth/login
+// and /user/auth-token, and never /authors: a substring match marked a route that only resembles
+// a sensitive one, which made the report cry wolf (CLI-14).
 func Sensitive(route string, extra []string) bool {
 	patterns := make([]string, 0, len(defaultSensitivePatterns)+len(extra))
 	patterns = append(patterns, defaultSensitivePatterns...)
 	patterns = append(patterns, extra...)
+	segments := routeSegments(route)
 	for _, pattern := range patterns {
-		if re, err := regexp.Compile("(?i)" + pattern); err == nil {
-			if re.MatchString(route) {
+		if looksLikeRegex(pattern) {
+			if re, err := regexp.Compile("(?i)" + pattern); err == nil && re.MatchString(route) {
 				return true
 			}
 			continue
 		}
-		if strings.Contains(strings.ToLower(route), strings.ToLower(pattern)) {
+		lower := strings.ToLower(pattern)
+		for _, segment := range segments {
+			if segment == lower || containsWord(segment, lower) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// looksLikeRegex reports whether a pattern is a regular expression rather than a word. A plain
+// word is also a valid pattern, and matching it as a regex is how "auth" came to match
+// "/authors".
+func looksLikeRegex(pattern string) bool {
+	return strings.ContainsAny(pattern, `^$*+?()[]{}|\`)
+}
+
+// routeSegments splits a route into its lower-case path segments, dropping the empty ones.
+func routeSegments(route string) []string {
+	parts := strings.Split(strings.ToLower(route), "/")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+// containsWord reports whether one path segment holds word as a whole word, split on the
+// separators a route name uses.
+func containsWord(segment, word string) bool {
+	for _, part := range strings.FieldsFunc(segment, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.' || r == '{' || r == '}' || r == ':'
+	}) {
+		if part == word || isFormOf(part, word) {
+			return true
+		}
+	}
+	return false
+}
+
+// isFormOf reports whether a segment word is a plural or verb form of the pattern, so the pattern
+// "payment" covers /payments and the pattern "transfer" covers /transferred. A longer unrelated
+// word stays unmatched, which is what keeps "auth" away from /authors.
+func isFormOf(word, pattern string) bool {
+	for _, suffix := range []string{"s", "es", "ed", "ing", "d"} {
+		if word == pattern+suffix {
 			return true
 		}
 	}
@@ -153,11 +208,16 @@ func Evaluate(program []*packages.Package, pkg *packages.Package, point entry.Po
 
 // pass and fail build a Check.
 func pass(id string, weight int) Check {
-	return Check{ID: id, Weight: weight, Pass: true}
+	return Check{ID: id, Weight: weight, Pass: true, Applicable: true}
+}
+
+// notApplicable builds a Check for a rule that had nothing to check on this handler.
+func notApplicable(id string, weight int) Check {
+	return Check{ID: id, Weight: weight, Applicable: false}
 }
 
 func fail(id string, weight int, detail string) Check {
-	return Check{ID: id, Weight: weight, Detail: detail}
+	return Check{ID: id, Weight: weight, Applicable: true, Detail: detail}
 }
 
 // suggest builds a failed suggestion, which never changes the score.

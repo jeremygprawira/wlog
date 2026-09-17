@@ -16,6 +16,9 @@ import (
 func Percent(checks []rules.Check) int {
 	earned, applicable := 0, 0
 	for _, check := range checks {
+		if !check.Applicable {
+			continue
+		}
 		applicable += check.Weight
 		if check.Pass {
 			earned += check.Weight
@@ -35,6 +38,9 @@ func Total(points []entry.Point, byHandler [][]rules.Check) int {
 			weight = classWeight(rules.Class(points[i]))
 		}
 		for _, check := range checks {
+			if !check.Applicable {
+				continue
+			}
 			scaled := weight * float64(check.Weight)
 			applicable += scaled
 			if check.Pass {
@@ -71,7 +77,7 @@ func Fixes(byHandler [][]rules.Check, limit int) []Fix {
 	handlers := map[string]int{}
 	for _, checks := range byHandler {
 		for _, check := range checks {
-			if check.Pass || check.Weight == 0 {
+			if !check.Applicable || check.Pass || check.Weight == 0 {
 				continue
 			}
 			points[check.ID] += check.Weight

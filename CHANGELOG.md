@@ -31,6 +31,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog map` reports `n/a` for a rule with nothing to check, and an `n/a` rule adds no points and
+  no weight: the three error rules no longer hand every handler 45 free points. Print logging is
+  only stdout or the standard logger, so `fmt.Fprintf(w, ...)` is not a finding. `swallowed-error`
+  reads the control flow graph, skips a write to the response writer, and needs an error result.
+  A sensitive word matches a whole path segment or word, so /authors is not sensitive. A generated
+  file is not scored, `keys.no_denylisted` covers a typed key's name, and `keys.strict` is new.
 - `wlog map` keeps the prefix of an Echo or Gin group and of a mux `PathPrefix().Subrouter()`, reads
   the Echo `Group` and Gin `Group` shapes, gives one entry per method for a mux chain that names
   several, reads the handler before Echo's per-route middleware, resolves a route written as a

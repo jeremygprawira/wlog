@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "score": 89,
+  "score": 83,
   "min_score": 0,
   "pass": true,
   "grade": "B",
@@ -20,54 +20,63 @@
           "id": "middleware.coverage",
           "weight": 30,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "context.set",
           "weight": 20,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "errors.reach_wlog",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "error-guidance",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "swallowed-error",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.no_denylisted",
           "weight": 5,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.strict",
           "weight": 0,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         },
@@ -75,6 +84,7 @@
           "id": "audit-coverage",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         }
@@ -95,54 +105,63 @@
           "id": "middleware.coverage",
           "weight": 30,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "context.set",
           "weight": 20,
           "pass": false,
+          "applicable": true,
           "detail": "handler sets no business context"
         },
         {
           "id": "errors.reach_wlog",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "error-guidance",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "swallowed-error",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.no_denylisted",
           "weight": 5,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.strict",
           "weight": 0,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         },
@@ -150,6 +169,7 @@
           "id": "audit-coverage",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         }
@@ -170,54 +190,63 @@
           "id": "middleware.coverage",
           "weight": 30,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "context.set",
           "weight": 20,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "errors.reach_wlog",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "error-guidance",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "swallowed-error",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "logging.no_print",
           "weight": 10,
           "pass": false,
+          "applicable": true,
           "detail": "handler uses print logging"
         },
         {
           "id": "keys.no_denylisted",
           "weight": 5,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.strict",
           "weight": 0,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         },
@@ -225,6 +254,7 @@
           "id": "audit-coverage",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         }
@@ -245,54 +275,63 @@
           "id": "middleware.coverage",
           "weight": 30,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "context.set",
           "weight": 20,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "errors.reach_wlog",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "error-guidance",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "swallowed-error",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.no_denylisted",
           "weight": 5,
           "pass": false,
+          "applicable": true,
           "detail": "denylisted key: password"
         },
         {
           "id": "keys.strict",
           "weight": 0,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         },
@@ -300,6 +339,7 @@
           "id": "audit-coverage",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         }
@@ -320,60 +360,70 @@
           "id": "middleware.coverage",
           "weight": 30,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "context.set",
           "weight": 20,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "errors.reach_wlog",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "error-guidance",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "swallowed-error",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "sensitive.audit",
           "weight": 40,
           "pass": false,
+          "applicable": true,
           "detail": "sensitive route does not call audit.Do"
         },
         {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.no_denylisted",
           "weight": 5,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.strict",
           "weight": 0,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         },
@@ -381,6 +431,7 @@
           "id": "audit-coverage",
           "weight": 0,
           "pass": false,
+          "applicable": false,
           "detail": "write route records no audit",
           "suggestion": true
         }
@@ -401,60 +452,70 @@
           "id": "middleware.coverage",
           "weight": 30,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "context.set",
           "weight": 20,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "errors.reach_wlog",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "error-guidance",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "swallowed-error",
           "weight": 15,
-          "pass": true,
+          "pass": false,
+          "applicable": false,
           "detail": ""
         },
         {
           "id": "sensitive.audit",
           "weight": 40,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "logging.no_print",
           "weight": 10,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.no_denylisted",
           "weight": 5,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "keys.strict",
           "weight": 0,
           "pass": true,
+          "applicable": true,
           "detail": ""
         },
         {
           "id": "use-catalog",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         },
@@ -462,6 +523,7 @@
           "id": "audit-coverage",
           "weight": 0,
           "pass": true,
+          "applicable": false,
           "detail": "",
           "suggestion": true
         }

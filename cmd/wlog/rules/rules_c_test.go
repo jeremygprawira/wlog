@@ -22,7 +22,7 @@ func TestRules_ErrorGuidance(t *testing.T) {
 	}
 
 	none := checkByID(t, rules.Evaluate(pkgs, pkgs[0], pointIn(t, points, "handleNone"), rules.Config{}), rules.RuleErrorGuidance)
-	if !none.Pass {
-		t.Errorf("handleNone failed with no error report: %s", none.Detail)
+	if none.Applicable {
+		t.Errorf("handleNone: the rule applied to a handler that records no error: %+v", none)
 	}
 }

@@ -9,11 +9,11 @@ import (
 
 // failingHandler returns one handler with a single failed check of the given weight.
 func failingHandler(weight int) []rules.Check {
-	return []rules.Check{{ID: "middleware.coverage", Weight: weight, Pass: false}}
+	return []rules.Check{{ID: "middleware.coverage", Weight: weight, Pass: false, Applicable: true}}
 }
 
 func passingHandler(weight int) []rules.Check {
-	return []rules.Check{{ID: "middleware.coverage", Weight: weight, Pass: true}}
+	return []rules.Check{{ID: "middleware.coverage", Weight: weight, Pass: true, Applicable: true}}
 }
 
 // TestScore_Class proves the classes come from the method and the route.
