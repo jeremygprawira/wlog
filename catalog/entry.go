@@ -24,9 +24,9 @@ func (e Entry) Error() string { return e.Message }
 
 // Audit is the audit policy for one code. The audit module reads it.
 type Audit struct {
-	Action         string // such as "invoice.refund"
-	TargetType     string // such as "invoice"
-	Severity       string // "low", "medium", "high", or "critical"
+	Action     string // such as "invoice.refund"
+	TargetType string // such as "invoice"
+	Severity   string // "low", "medium", "high", or "critical"
 	// ReasonRequired true means an audit record with an empty Reason is marked
 	// reason_missing. The record is never dropped: an incomplete fact is worth more
 	// than a lost one.
