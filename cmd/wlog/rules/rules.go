@@ -152,6 +152,11 @@ type Check struct {
 	Detail     string `json:"detail"`
 	Suggestion bool   `json:"suggestion,omitempty"`
 
+	// Suppressed is true when a //wlog:ignore directive excused this failure. The reason the
+	// directive gave travels with it, and the report prints the count.
+	Suppressed bool   `json:"suppressed,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+
 	// Node is the code a reader must change, such as the call that names a denied key. A rule
 	// that can name it sets it, so an editor jumps to the line rather than to the handler.
 	Node ast.Node `json:"-"`
@@ -272,7 +277,9 @@ func Evaluate(program []*packages.Package, pkg *packages.Package, point entry.Po
 		useCatalog(pkg, point),
 		auditCoverage(pkg, point),
 	)
-	return checks
+	// A directive is read last, so it can excuse any rule that ran above it. A directive with no
+	// reason is itself a finding.
+	return applyIgnores(pkg, point, checks)
 }
 
 // pass and fail build a Check.

@@ -63,7 +63,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-MAP-4 Gates, configuration, and streams
 - [x] 10-MAP-5 Map JSON v2 and the text report
 - [x] 10-MAP-6 Analyzer, loading cost, and golangci-lint plugin
-- [ ] 10-MAP-7 Ignore comments, git baselines, and SARIF
+- [x] 10-MAP-7 Ignore comments, git baselines, and SARIF
 - [x] 10-MAP-8 The `keys.strict` rule
 - [ ] 10-INIT-1 `wlog init` correctness
 - [ ] 10-INIT-2 `wlog doctor` and `wlog agents`

@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 
@@ -57,6 +59,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	allFlag := flags.Bool("all", false, "print the check matrix")
 	entryFlag := flags.String("entry", "", "print the full detail for one entry point")
 	jsonFlag := flags.Bool("json", false, "print the report as JSON")
+	noWrite := flags.Bool("no-write", false, "do not write the output file")
+	format := flags.String("format", "", "output format for stdout: empty for text, or sarif")
 	strictFlag := flags.Bool("strict", false, "also fail on a per-rule regression")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
@@ -129,11 +133,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	total := score.Total(points, checksByPoint)
 	gatePass := minScore == 0 || total >= minScore
 	if *baselinePath != "" {
-		baseline, err := readBaseline(*baselinePath)
+		baseline, err := readBaselineAt(*baselinePath, *outPath)
 		if err != nil {
 			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 			return 2
 		}
+		_, _ = fmt.Fprintf(stderr, "wlog map: baseline %s scored %d\n", *baselinePath, baseline.Score)
 		if total < baseline.Score {
 			gatePass = false
 		}
@@ -147,7 +152,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	if *outPath != "" && *baselinePath != "" && samePath(*outPath, *baselinePath) {
+	if *outPath != "" && *baselinePath != "" && !strings.HasPrefix(*baselinePath, "git:") && samePath(*outPath, *baselinePath) {
 		// A failing run must never overwrite the baseline it is compared against: the first
 		// failure would rewrite the baseline and the next run would pass.
 		_, _ = fmt.Fprintln(stderr, "wlog map: --out and --baseline name the same file")
@@ -162,7 +167,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	// The file is the record of a run that cleared its gate. A failed run writes nothing, so a
 	// baseline or a checked-in map can never be overwritten by a regression.
-	if *outPath != "" && gatePass {
+	if *outPath != "" && gatePass && !*noWrite {
 		if err := os.WriteFile(*outPath, data, 0o644); err != nil {
 			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 			return 2
@@ -173,6 +178,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// every status line, goes to stderr, where the JSON cannot be corrupted by one.
 	opts := report.TextOptions{Width: term.Width(), Color: term.ColorEnabled()}
 	switch {
+	case *format == "sarif":
+		sarifData, err := report.SARIF(document)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
+			return 2
+		}
+		_, _ = stdout.Write(sarifData)
 	case *jsonFlag:
 		_, _ = stdout.Write(data)
 	case *allFlag:
@@ -312,6 +324,50 @@ func reportLoadErrors(pkgs []*packages.Package, stderr io.Writer) bool {
 }
 
 // readBaseline reads a previous wlog.map.json.
+// readBaselineAt reads the baseline a run compares against.
+//
+// A path of the form git:<ref> reads the map this run would write, at that revision, through git
+// show, so a comparison needs no copy of the file on disk and cannot be moved by the run itself.
+func readBaselineAt(spec, outPath string) (report.Map, error) {
+	ref, isGit := strings.CutPrefix(spec, "git:")
+	if !isGit {
+		return readBaseline(spec)
+	}
+	name := repoRelative(outPath)
+	out, err := exec.Command("git", "show", ref+":"+name).Output()
+	if err != nil {
+		return report.Map{}, fmt.Errorf("baseline git:%s: %w", ref, err)
+	}
+	var baseline report.Map
+	if err := json.Unmarshal(out, &baseline); err != nil {
+		return report.Map{}, fmt.Errorf("baseline git:%s:%s: %w", ref, name, err)
+	}
+	return baseline, nil
+}
+
+// repoRelative turns the output path into the path git names it by. git reads a path in
+// <ref>:<path> from the repository root, however deep in the tree the command runs.
+func repoRelative(path string) string {
+	if path == "" {
+		return "wlog.map.json"
+	}
+	root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return path
+	}
+	top := strings.TrimSpace(string(root))
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(top, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return rel
+}
+
+// readBaseline reads one baseline file from disk.
 func readBaseline(path string) (report.Map, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

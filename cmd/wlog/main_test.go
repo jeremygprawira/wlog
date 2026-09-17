@@ -251,8 +251,15 @@ func TestMap_CLI5_FailedGateNoWrite(t *testing.T) {
 // TestMap_CLI6_FlagsWin proves the config comes from wlog.map.yaml, that the tool's own
 // wlog.map.json output is never read as config, and that a flag wins over the file.
 func TestMap_CLI6_FlagsWin(t *testing.T) {
-	// The fixture directory holds a wlog.map.json with min_score 100, which is last run's
-	// output. Reading it would make the result depend on a leftover file.
+	// A wlog.map.json in the pattern's directory is last run's output. Reading it would make the
+	// result depend on a leftover file, so the test writes one, gate and all, and expects the run
+	// to ignore it.
+	leftover := filepath.Join("testdata", "config_app", "wlog.map.json")
+	if err := os.WriteFile(leftover, []byte("{\n  \"version\": 2,\n  \"score\": 100,\n  \"min_score\": 100\n}\n"), 0o644); err != nil {
+		t.Fatalf("write leftover: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(leftover) })
+
 	code, _, stderr := runMap("--out", filepath.Join(t.TempDir(), "map.json"), "./testdata/config_app")
 	if code != 0 {
 		t.Errorf("exit %d, want 0: wlog.map.json was read as config: %s", code, stderr)
@@ -336,5 +343,38 @@ func TestMap_CLI21_TextReportGolden(t *testing.T) {
 	}
 	if report != string(want) {
 		t.Errorf("the report differs from %s\n--- got ---\n%s\n--- want ---\n%s", golden, report, want)
+	}
+}
+
+// TestMap_PAR31_GitBaseline proves --baseline git:<ref> reads the map at that revision through
+// git show, and that --no-write writes no file.
+func TestMap_PAR31_GitBaseline(t *testing.T) {
+	// The fixture directory holds a committed map that claims a perfect score, so reading it at
+	// HEAD must fail the gate. The run is a normal one from the module directory, which is where
+	// the git commands run too.
+	// A tracked map at HEAD: the golden for rules_app scores higher than the echo_err_app
+	// fixture, so reading it at HEAD must fail this run's gate.
+	baseline := filepath.Join("testdata", "golden", "rules_app.json")
+
+	code, _, stderr := runMap("--out", baseline, "--no-write", "--baseline", "git:HEAD", "./testdata/echo_err_app")
+	if code != 1 {
+		t.Errorf("exit %d, want 1: the committed baseline scores higher than the app: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "git:HEAD") {
+		t.Errorf("stderr = %q, want the revision it compared against", stderr)
+	}
+
+	// A revision that does not hold the file is reported, not ignored.
+	if code, _, stderr := runMap("--out", baseline, "--no-write", "--baseline", "git:nosuchref", "./testdata/echo_err_app"); code != 2 {
+		t.Errorf("a missing revision: exit %d, want 2: %s", code, stderr)
+	}
+
+	// --no-write leaves the output file alone.
+	noWrite := filepath.Join(t.TempDir(), "untouched.json")
+	if code, _, stderr := runMap("--out", noWrite, "--no-write", "./testdata/rules_app"); code != 0 {
+		t.Errorf("--no-write run exited %d, want 0: %s", code, stderr)
+	}
+	if _, err := os.Stat(noWrite); !os.IsNotExist(err) {
+		t.Errorf("--no-write wrote %s", noWrite)
 	}
 }

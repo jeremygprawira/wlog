@@ -31,6 +31,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog map` honors `//wlog:ignore <rule> -- <reason>`, reports a directive with no reason under
+  `ignore.reason`, takes `--baseline git:<ref>` to read the map at a revision, `--no-write` to skip
+  the file, and `--format sarif` for GitHub code scanning.
 - The map rules run as a golangci-lint v2 module plugin (`cmd/wlog/golangci`), and the analyzer
   takes `-suggest` and `-rules`, skips test files, and reports at the offending call. Loading reads
   dependencies as export data and only the app's own packages for real, which cuts a two-file
