@@ -35,6 +35,7 @@ func (e Entry) clone() Entry {
 	out := e
 	if e.Audit != nil {
 		audit := *e.Audit
+		audit.RedactPaths = append([]string(nil), e.Audit.RedactPaths...)
 		out.Audit = &audit
 	}
 	out.Data = copyTree(e.Data)
@@ -80,8 +81,16 @@ type Audit struct {
 	Action     string // such as "invoice.refund"
 	TargetType string // such as "invoice"
 	Severity   string // "low", "medium", "high", or "critical"
-	// ReasonRequired true means an audit record with an empty Reason is marked
-	// reason_missing. The record is never dropped: an incomplete fact is worth more
-	// than a lost one.
+	// Description says what the action does, in one sentence, for a reader or a catalogue
+	// page. It is never part of an event.
+	Description string
+	// ReasonRequired true means a record with an empty Reason breaks a rule.
 	ReasonRequired bool
+	// RequiresChanges true means a record must carry the changes it made.
+	RequiresChanges bool
+	// RedactPaths names the paths inside a record's changes whose values must be masked,
+	// because the change itself is worth recording and the value behind it is not.
+	RedactPaths []string
+	// A record that breaks a rule is never dropped: it is kept and marked with the rule
+	// names it broke, because an incomplete fact is worth more than a lost one.
 }

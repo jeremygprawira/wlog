@@ -35,10 +35,13 @@ type Entry struct {
 
 // Audit is the audit policy for one code. The audit module reads it.
 type Audit struct {
-	Action         string // such as "invoice.refund"
-	TargetType     string // such as "invoice"
-	Severity       string // "low", "medium", "high", or "critical"
-	ReasonRequired bool   // true means audit.Do rejects an empty Reason
+	Action          string   // such as "invoice.refund"
+	TargetType      string   // such as "invoice"
+	Severity        string   // "low", "medium", "high", or "critical"
+	Description     string   // one sentence for a reader, never part of an event
+	ReasonRequired  bool     // true means a record with no reason breaks a rule
+	RequiresChanges bool     // true means a record must carry the changes it made
+	RedactPaths     []string // paths inside the changes whose values must be masked
 }
 
 type Registry struct{ /* unexported */ }
@@ -120,6 +123,18 @@ put in `attrs` wins.
 extractor filled, at the top level: a static default never replaces a real detail. Both maps
 are copies, so an event never shares a map with the registry.
 
+### The audit policy
+
+`audit.Catalog(reg)` reads the policy of the entry whose `Audit.Action` matches an audit
+record's action. It fills `target.type` when the record has none, lists every rule the record
+breaks in `record.violations`, keeps `record.reason_missing` for the older single-rule field,
+and masks the value of every change operation that `RedactPaths` names.
+
+The rule names are `reason_required` and `changes_required`. A record that breaks a rule is
+never dropped, because an incomplete fact is worth more than a lost one, and a reader that
+sees the violation knows to ask for the rest. A `RedactPaths` entry matches a change
+operation's JSON Pointer exactly or as a prefix, so `user.creds` covers `user.creds.nik`.
+
 ## Success Criteria
 
 1. `New` registers entries under one prefix, and `Codes` returns them sorted and prefixed.
@@ -139,6 +154,9 @@ are copies, so an event never shares a map with the registry.
     through what it received.
 13. `Extractor` writes `error.attrs.domain`, and merges `Data` and `Internal` defaults under
     the call-site values.
+14. `Audit` holds `Description`, `RequiresChanges`, and `RedactPaths`. A record that breaks a
+    rule is kept with `violations` naming each rule, and `RedactPaths` masks the value of a
+    matching change operation.
 6. `Registry.Err` supports `errors.Is` against its own entry and `errors.As` to reach the
    coded error, and it unwraps to a cause passed as `%w`.
 7. A template renders its params, and a missing param leaves its placeholder in place.

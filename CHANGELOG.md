@@ -31,6 +31,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `catalog.Audit` gains `Description`, `RequiresChanges`, and `RedactPaths`. A record that
+  breaks a policy rule now carries `violations` naming each rule, and `RedactPaths` masks the
+  value of a matching change operation.
 - `catalog.Entry` gains `Data` and `Internal` defaults, which the extractor merges under the
   values a per-request extractor filled, and `catalog.Extractor` writes `error.attrs.domain`.
   `Get` and `CodedError.Entry` now return deep copies, a template renders in one pass, and

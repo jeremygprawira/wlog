@@ -76,6 +76,14 @@ secret without carrying the secret.
 no audit record forwards nothing at all. Use it in front of a backend that must not receive
 the rest of the request.
 
+### The audit policy from a catalog
+
+`audit.Catalog(reg)` reads the policy of the entry whose `Audit.Action` matches a record's
+action. It fills `target.type` when the record has none, writes `violations` with the name of
+every rule the record breaks, keeps `reason_missing` for the older single-rule field, and
+masks the value of every change operation that the policy's `RedactPaths` names. A record that
+breaks a rule is never dropped.
+
 ### Several records per event
 
 `audit` is an array, so a second `Do`, `Deny`, or `Wrap` adds a record instead of replacing
