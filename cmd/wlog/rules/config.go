@@ -37,14 +37,14 @@ func LoadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
-// FindConfig looks for wlog.map.yaml and then wlog.map.json in dir. It returns "" when
-// neither exists.
+// FindConfig returns the wlog.map.yaml in dir, or "" when there is none.
+//
+// Only the yaml name is read. wlog.map.json is the tool's own output, so reading it as config
+// made a result depend on a leftover file: the next run picked up the min_score of the last one.
 func FindConfig(dir string) string {
-	for _, name := range []string{"wlog.map.yaml", "wlog.map.json"} {
-		path := filepath.Join(dir, name)
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path
-		}
+	path := filepath.Join(dir, "wlog.map.yaml")
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path
 	}
 	return ""
 }

@@ -31,6 +31,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `wlog map` writes no file when its gate fails, refuses an `--out` path equal to `--baseline`,
+  reads config only from `wlog.map.yaml` (never its own `wlog.map.json` output), lets a flag
+  beat the config including `--min-score 0`, sends every human line to stderr with `--json`
+  alone on stdout, and wraps the text report at `COLUMNS` with color following `NO_COLOR`.
 - `wlog map` reports `n/a` for a rule with nothing to check, and an `n/a` rule adds no points and
   no weight: the three error rules no longer hand every handler 45 free points. Print logging is
   only stdout or the standard logger, so `fmt.Fprintf(w, ...)` is not a finding. `swallowed-error`

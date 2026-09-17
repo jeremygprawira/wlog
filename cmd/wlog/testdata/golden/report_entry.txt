@@ -1,3 +1,4 @@
+6 handlers found
 handleGood  read  main.go:14
 route  /good
 middleware.coverage    PASS  

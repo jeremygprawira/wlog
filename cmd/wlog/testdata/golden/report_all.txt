@@ -1,8 +1,16 @@
+6 handlers found
 score 83  grade B  handlers 6
-entry                                    class     mw ctx err guide swallow audit print keys keys.s catalog audit+
-/good                                    read      ok     ok     n/a    n/a    n/a    -      ok     ok     ok     n/a    n/a   
-/nocontext                               read      ok     XX     n/a    n/a    n/a    -      ok     ok     ok     n/a    n/a   
-/print                                   read      ok     ok     n/a    n/a    n/a    -      XX     ok     ok     n/a    n/a   
-/keys                                    read      ok     ok     n/a    n/a    n/a    -      ok     XX     ok     n/a    n/a   
-/refund/{id}                             sensitive ok     ok     n/a    n/a    n/a    XX     ok     ok     ok     n/a    n/a   
-/refund/audit                            sensitive ok     ok     n/a    n/a    n/a    ok     ok     ok     ok     n/a    n/a   
+entry                                    class     mw ctx err guide swallow audit print keys keys.s
+catalog audit+
+/good                                    read      ok     ok     n/a    n/a    n/a    -      ok
+ok     ok     n/a    n/a   
+/nocontext                               read      ok     XX     n/a    n/a    n/a    -      ok
+ok     ok     n/a    n/a   
+/print                                   read      ok     ok     n/a    n/a    n/a    -      XX
+ok     ok     n/a    n/a   
+/keys                                    read      ok     ok     n/a    n/a    n/a    -      ok
+XX     ok     n/a    n/a   
+/refund/{id}                             sensitive ok     ok     n/a    n/a    n/a    XX     ok
+ok     ok     n/a    n/a   
+/refund/audit                            sensitive ok     ok     n/a    n/a    n/a    ok     ok
+ok     ok     n/a    n/a   

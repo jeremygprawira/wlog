@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/tools/go/packages"
 
@@ -15,6 +16,7 @@ import (
 	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
 	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
+	"github.com/jeremygprawira/wlog/cmd/wlog/internal/term"
 	"github.com/jeremygprawira/wlog/cmd/wlog/report"
 	"github.com/jeremygprawira/wlog/cmd/wlog/rules"
 	"github.com/jeremygprawira/wlog/cmd/wlog/score"
@@ -54,6 +56,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
 	}
+	minScoreSet := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "min-score" {
+			minScoreSet = true
+		}
+	})
 	patterns := flags.Args()
 	if len(patterns) == 0 {
 		_, _ = fmt.Fprintln(stderr, "wlog map: at least one package pattern is required")
@@ -64,8 +72,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if code != 0 {
 		return code
 	}
+	// A flag wins over the file, including --min-score 0, which turns the gate off. Only a flag
+	// the caller did not set may fall back to the config.
 	minScore := *minScoreFlag
-	if minScore == 0 {
+	if !minScoreSet {
 		minScore = cfg.MinScore
 	}
 
@@ -128,42 +138,61 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	if *outPath != "" && *baselinePath != "" && samePath(*outPath, *baselinePath) {
+		// A failing run must never overwrite the baseline it is compared against: the first
+		// failure would rewrite the baseline and the next run would pass.
+		_, _ = fmt.Fprintln(stderr, "wlog map: --out and --baseline name the same file")
+		return 2
+	}
+
 	document := report.Build(points, checksByPoint, minScore, gatePass)
 	data, err := report.Encode(document)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 		return 2
 	}
-	if *outPath != "" {
+	// The file is the record of a run that cleared its gate. A failed run writes nothing, so a
+	// baseline or a checked-in map can never be overwritten by a regression.
+	if *outPath != "" && gatePass {
 		if err := os.WriteFile(*outPath, data, 0o644); err != nil {
 			_, _ = fmt.Fprintln(stderr, "wlog map:", err)
 			return 2
 		}
 	}
 
+	// --json puts exactly one document on stdout, so a bot can parse it. Every human line, and
+	// every status line, goes to stderr, where the JSON cannot be corrupted by one.
+	opts := report.TextOptions{Width: term.Width(), Color: term.ColorEnabled()}
 	switch {
 	case *jsonFlag:
 		_, _ = stdout.Write(data)
 	case *allFlag:
-		_, _ = fmt.Fprint(stdout, report.Matrix(document))
+		_, _ = fmt.Fprint(stderr, report.Matrix(document, opts))
 	case *entryFlag != "":
-		detail, found := report.Entry(document, *entryFlag)
+		detail, found := report.Entry(document, *entryFlag, opts)
 		if !found {
 			_, _ = fmt.Fprintf(stderr, "wlog map: no entry point named %q\n", *entryFlag)
 			return 2
 		}
-		_, _ = fmt.Fprint(stdout, detail)
+		_, _ = fmt.Fprint(stderr, detail)
 	default:
-		_, _ = fmt.Fprintf(stdout, "wlog map: score %d (%s)\n", document.Score, document.Grade)
-		for _, fix := range document.TopFixes {
-			_, _ = fmt.Fprintln(stdout, "  fix:", fix)
-		}
+		_, _ = fmt.Fprint(stderr, report.Summary(document, opts))
 	}
 	if !gatePass {
-		_, _ = fmt.Fprintln(stdout, "wlog map: gate failed")
+		_, _ = fmt.Fprintln(stderr, "wlog map: gate failed")
 		return 1
 	}
 	return 0
+}
+
+// samePath reports whether two paths name the same file, resolving each one so ./x and x agree.
+func samePath(a, b string) bool {
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA != nil || errB != nil {
+		return a == b
+	}
+	return absA == absB
 }
 
 // perRulePoints sums the failed weight per rule across the handlers.

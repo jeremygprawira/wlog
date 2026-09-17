@@ -112,11 +112,21 @@ func TestReportForms(t *testing.T) {
 			args := append([]string{"--out", out}, form.args...)
 			args = append(args, "./testdata/rules_app")
 
-			code, first, stderr := runMap(args...)
+			// The human report goes to stderr, and --json to stdout, so the golden follows the
+			// stream the form actually writes.
+			code, stdout, stderr := runMap(args...)
 			if code != 0 {
 				t.Fatalf("exit %d: %s", code, stderr)
 			}
-			_, second, _ := runMap(args...)
+			first := stderr
+			if form.name == "json" {
+				first = stdout
+			}
+			_, secondOut, secondErr := runMap(args...)
+			second := secondErr
+			if form.name == "json" {
+				second = secondOut
+			}
 			if first != second {
 				t.Error("two runs printed different bytes")
 			}
@@ -204,5 +214,96 @@ func TestMap_CLI1_HandlerCount(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "2 handlers found") {
 		t.Errorf("stderr = %q, want the handler count", stderr)
+	}
+}
+
+// TestMap_CLI5_FailedGateNoWrite proves a failed gate writes no file, and that an --out path
+// equal to --baseline is refused, so a failing run can never overwrite the baseline it compares
+// against.
+func TestMap_CLI5_FailedGateNoWrite(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "map.json")
+
+	code, _, _ := runMap("--out", out, "--min-score", "100", "./testdata/config_app")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1 for a failed gate", code)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Errorf("a failed gate wrote %s", out)
+	}
+
+	baseline := filepath.Join(t.TempDir(), "baseline.json")
+	if err := os.WriteFile(baseline, []byte(`{"version":1,"score":0}`), 0o644); err != nil {
+		t.Fatalf("write baseline: %v", err)
+	}
+	code, _, stderr := runMap("--out", baseline, "--baseline", baseline, "./testdata/config_app")
+	if code != 2 {
+		t.Errorf("--out equal to --baseline: exit %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "baseline") {
+		t.Errorf("stderr = %q, want a word about the baseline", stderr)
+	}
+	after, err := os.ReadFile(baseline)
+	if err != nil || string(after) != `{"version":1,"score":0}` {
+		t.Errorf("the baseline changed: %s", after)
+	}
+}
+
+// TestMap_CLI6_FlagsWin proves the config comes from wlog.map.yaml, that the tool's own
+// wlog.map.json output is never read as config, and that a flag wins over the file.
+func TestMap_CLI6_FlagsWin(t *testing.T) {
+	// The fixture directory holds a wlog.map.json with min_score 100, which is last run's
+	// output. Reading it would make the result depend on a leftover file.
+	code, _, stderr := runMap("--out", filepath.Join(t.TempDir(), "map.json"), "./testdata/config_app")
+	if code != 0 {
+		t.Errorf("exit %d, want 0: wlog.map.json was read as config: %s", code, stderr)
+	}
+
+	// A yaml config is read, and a flag wins over it.
+	dir := t.TempDir()
+	yamlPath := filepath.Join(dir, "wlog.map.yaml")
+	if err := os.WriteFile(yamlPath, []byte("min_score: 100\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	code, _, _ = runMap("--out", filepath.Join(dir, "map.json"), "--config", yamlPath, "./testdata/config_app")
+	if code != 1 {
+		t.Errorf("exit %d, want 1 from the yaml min_score", code)
+	}
+	code, _, _ = runMap("--out", filepath.Join(dir, "map.json"), "--config", yamlPath, "--min-score", "0", "./testdata/config_app")
+	if code != 0 {
+		t.Errorf("exit %d, want 0: --min-score 0 must turn the gate off", code)
+	}
+}
+
+// TestMap_CLI12_OneJSONDocument proves --json puts exactly one JSON document on stdout, with
+// every status line on stderr.
+func TestMap_CLI12_OneJSONDocument(t *testing.T) {
+	code, stdout, stderr := runMap("--json", "--out", filepath.Join(t.TempDir(), "map.json"), "--min-score", "100", "./testdata/config_app")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	var document map[string]any
+	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+	}
+	if !strings.Contains(stderr, "gate failed") {
+		t.Errorf("stderr = %q, want the gate status", stderr)
+	}
+}
+
+// TestMap_PAR28_NoColorColumns proves NO_COLOR turns colors off and COLUMNS wraps the text
+// report.
+func TestMap_PAR28_NoColorColumns(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("COLUMNS", "40")
+
+	_, stdout, stderr := runMap("--all", "--out", filepath.Join(t.TempDir(), "map.json"), "./testdata/rules_app")
+	text := stdout + stderr
+	if strings.Contains(text, "\x1b[") {
+		t.Errorf("NO_COLOR was set and the report still carries an escape code:\n%s", text)
+	}
+	for _, line := range strings.Split(text, "\n") {
+		if len(line) > 40 {
+			t.Errorf("a line is %d characters, want at most 40:\n%s", len(line), line)
+		}
 	}
 }

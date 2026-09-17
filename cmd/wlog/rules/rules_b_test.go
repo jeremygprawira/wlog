@@ -89,7 +89,8 @@ func TestConfig_LoadYAML(t *testing.T) {
 	}
 }
 
-// TestConfig_Find proves the default lookup prefers the YAML file.
+// TestConfig_Find proves the default lookup reads only wlog.map.yaml, never the tool's own
+// wlog.map.json output.
 func TestConfig_Find(t *testing.T) {
 	dir := t.TempDir()
 	if rules.FindConfig(dir) != "" {
@@ -98,8 +99,8 @@ func TestConfig_Find(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "wlog.map.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	if got := rules.FindConfig(dir); got != filepath.Join(dir, "wlog.map.json") {
-		t.Errorf("FindConfig = %q, want the JSON file", got)
+	if got := rules.FindConfig(dir); got != "" {
+		t.Errorf("FindConfig = %q, want no config: only wlog.map.yaml is read", got)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "wlog.map.yaml"), []byte("min_score: 1\n"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
