@@ -41,16 +41,18 @@ func TestCatalog_MapsClass(t *testing.T) {
 // libraries the same way. The catalog-filled fields (kind, status, guidance) are
 // identical; the code field stays whatever the wrapped extractor produced.
 func TestCatalog_AgnosticProof(t *testing.T) {
+	// A class code is domain-qualified, so the same registry serves herr and the default
+	// extractor: herr hands over APP_NOT_FOUND, and reg.Err hands over the same full code.
 	class := herr.Define(herr.Class{
-		Code:   "NOT_FOUND",
+		Code:   "APP_NOT_FOUND",
 		Kind:   herr.KindNotFound,
 		Public: herr.Message("not found"),
 	})
 	entries := wlogherr.Catalog(class)
 	reg := catalog.New("app", entries...)
 
-	viaHerr := catalog.Extractor(wlogherr.Extractor(), reg).Extract(class.New())
-	viaDefault := catalog.Extractor(wlog.DefaultExtractor(), reg).Extract(reg.Err("NOT_FOUND"))
+	viaHerr := catalog.MustExtractor(wlogherr.Extractor(), reg).Extract(class.New())
+	viaDefault := catalog.MustExtractor(wlog.DefaultExtractor(), reg).Extract(reg.Err("NOT_FOUND"))
 
 	for _, got := range []wlog.ErrorInfo{viaHerr, viaDefault} {
 		if got.Kind != "not_found" || got.Status != 404 {

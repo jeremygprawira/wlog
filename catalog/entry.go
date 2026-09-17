@@ -8,6 +8,11 @@ package catalog
 // Entry is one code's static facts. A registry copies it, so a caller cannot change an
 // entry after New returns.
 type Entry struct {
+	// domain is the registry prefix the entry belongs to, and full is the prefixed code.
+	// New stamps both, so errors.Is can tell two entries with the same short code in
+	// different domains apart, and so a lookup by the full code is exact.
+	domain  string
+	full    string
 	Code    string // short code inside the domain, such as "not_found"
 	Kind    string // maps to wlog.ErrorInfo.Kind
 	Status  int    // HTTP status, 0 means unset

@@ -108,14 +108,22 @@ func TestCatalog_ErrTemplate(t *testing.T) {
 // TestCatalog_ErrIsAsUnwrap proves errors.Is finds the entry, errors.As reaches the
 // coded error, and a cause unwraps.
 func TestCatalog_ErrIsAsUnwrap(t *testing.T) {
-	entry := invoiceEntry()
-	reg := catalog.New("invoice", entry)
+	reg := catalog.New("invoice", invoiceEntry())
 	cause := errors.New("connection reset")
 
 	err := reg.Err("not_found", "id", 7, "cause", cause)
 
+	entry, ok := reg.Get("INVOICE_NOT_FOUND")
+	if !ok {
+		t.Fatal("Get returned no entry")
+	}
 	if !errors.Is(err, entry) {
 		t.Error("errors.Is(err, entry) = false, want true")
+	}
+	// A hand-built entry belongs to no registry, so it never matches. See
+	// TestCatalog_CAT7_IsSameRegistry.
+	if errors.Is(err, invoiceEntry()) {
+		t.Error("errors.Is matched a hand-built entry")
 	}
 	var coded catalog.CodedError
 	if !errors.As(err, &coded) {

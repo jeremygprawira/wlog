@@ -31,6 +31,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `audit.Record` gains `correlation_id`, `causation_id`, and `changes`, and `audit.Do` fills
   the first two from the event's trace group, plus a stable `idempotency_key`. `audit.Actor`
   gains `model`, `tools`, and `prompt_id` for the agent actor.
+- `catalog.Extractor` returns an error, so `MustExtractor` joins it, and it matches full
+  codes only: `Registry.AllowShortCodes()` opts one registry in. Migration: use
+  `catalog.MustExtractor(...)` where the old call discarded nothing, and declare a
+  domain-qualified herr class code so both paths agree. A code that already carries the
+  registry's prefix keeps it, and `errors.Is` matches an entry from its own registry only.
 - `audit.Patch` returns RFC 6902 operations with a denied path masked, and `audit.OnlyDrain`
   forwards the audit fact alone. `redact.Redactor` gains `DeniesPath` and `Replacement` for
   an adapter that must mask a value itself.

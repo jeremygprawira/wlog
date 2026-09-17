@@ -49,7 +49,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-DRN-4 drain-loki and drain-otlp
 - [x] 10-DRN-5 drain-datadog, drain-axiom, and drain-webhook
 - [x] 10-DRN-6 drain-betterstack, drain-hyperdx, and drain-posthog
-- [ ] 10-CAT-1 Code matching and registries
+- [x] 10-CAT-1 Code matching and registries
 - [ ] 10-CAT-2 Copies, templates, domain, and entry defaults
 - [ ] 10-CAT-3 Audit catalog fields
 - [ ] 10-LLM-1 Caps and cost fields

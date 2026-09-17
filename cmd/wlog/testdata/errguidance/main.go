@@ -30,7 +30,7 @@ func handleNone(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	logger := wlog.New(wlog.WithErrorExtractor(catalog.Extractor(wlog.DefaultExtractor(), registry)))
+	logger := wlog.New(wlog.WithErrorExtractor(catalog.MustExtractor(wlog.DefaultExtractor(), registry)))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/bad", handleBad)
 	mux.HandleFunc("/good", handleGood)

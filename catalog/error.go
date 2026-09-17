@@ -35,12 +35,16 @@ func (e *codedError) Entry() Entry { return e.entry }
 
 // Is makes errors.Is(err, entry) true for this entry, and true for another coded error
 // with the same full code.
+//
+// An Entry only matches inside its own registry: the comparison checks the domain as well
+// as the code, so an entry with the same short code in another domain, and a hand-built
+// entry that belongs to no registry, never match.
 func (e *codedError) Is(target error) bool {
 	switch t := target.(type) {
 	case *codedError:
 		return t.full == e.full
 	case Entry:
-		return fullCode(e.prefix, t.Code) == e.full
+		return t.domain != "" && t.domain == e.prefix && t.full == e.full
 	default:
 		return false
 	}

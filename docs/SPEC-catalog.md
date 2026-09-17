@@ -49,8 +49,11 @@ func (r *Registry) Err(code string, params ...any) error // builds an error for 
 
 // Extractor decorates next. It fills Kind, Status, Why, Fix, and Link from the entry
 // whose full code matches the ErrorInfo.Code that next produced. Fields next already
-// filled win, so a per-request detail is never replaced by a static default.
-func Extractor(next wlog.ErrorExtractor, registries ...*Registry) wlog.ErrorExtractor
+// filled win, so a per-request detail is never replaced by a static default. It returns
+// an error when two registries define the same full code.
+func Extractor(next wlog.ErrorExtractor, registries ...*Registry) (wlog.ErrorExtractor, error)
+func MustExtractor(next wlog.ErrorExtractor, registries ...*Registry) wlog.ErrorExtractor
+func (r *Registry) AllowShortCodes() *Registry // also resolve a short code in the extractor
 ```
 
 ### Full codes and the prefix
@@ -58,6 +61,27 @@ func Extractor(next wlog.ErrorExtractor, registries ...*Registry) wlog.ErrorExtr
 `New("invoice", Entry{Code: "not_found"})` registers the full code `INVOICE_NOT_FOUND`.
 The prefix is upper-cased, the short code is upper-cased, and a `_` joins them.
 `Get` accepts either spelling, so a caller reads `Get("not_found")` inside its own domain.
+
+A code that already starts with the registry's own prefix keeps it, so the full code is
+never doubled: `New("billing", Entry{Code: "BILLING_NOT_FOUND"})` registers
+`BILLING_NOT_FOUND` with the short code `NOT_FOUND`. An error library that hands over a
+domain-qualified code, such as a herr class code, therefore matches the same entry its short
+spelling does.
+
+### Matching, duplicates, and short codes
+
+`Extractor` matches full codes. A registry resolves a short code only after
+`AllowShortCodes`, because a short spelling is easy to hit by accident: the default
+extractor's own `INTERNAL` would otherwise pick up an entry named `internal` and attach that
+entry's status and guidance to every plain error. A nil registry is skipped.
+
+`Extractor` refuses two registries that define the same full code, because the answer would
+otherwise depend on the order of the arguments, and `MustExtractor` panics instead. Two
+registries with different prefixes never collide.
+
+`errors.Is(err, entry)` is true only inside the registry the error came from: the entry
+carries its domain, so an entry with the same short code in another domain, and a hand-built
+`Entry` that belongs to no registry, never match.
 
 ### The agnostic path
 
@@ -87,7 +111,11 @@ stays as written, so a missing value never panics and never renders an empty gap
    code matches an entry, and leaves every field the wrapped extractor already filled.
 4. `Extractor` passes an unmatched code through untouched.
 5. The same registry produces the same `ErrorInfo` through the herr extractor and through
-   the default extractor, proving the agnostic claim.
+   the default extractor, proving the agnostic claim. The herr class code is
+   domain-qualified, so both paths hand over the same full code.
+10. `Extractor` matches a full code only, `AllowShortCodes` opts one registry in, a nil
+    registry is skipped, and two registries that define one code are refused.
+11. `errors.Is` matches an entry from the error's own registry only.
 6. `Registry.Err` supports `errors.Is` against its own entry and `errors.As` to reach the
    coded error, and it unwraps to a cause passed as `%w`.
 7. A template renders its params, and a missing param leaves its placeholder in place.
