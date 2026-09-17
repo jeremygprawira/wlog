@@ -9,13 +9,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
+
+// labelNamePattern is the shape Loki accepts for a label name. A dotted path becomes a
+// name by replacing each dot with an underscore before this check.
+var labelNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // defaultURL is a local Loki, the common development setup.
 const defaultURL = "http://localhost:3100"
@@ -39,13 +46,14 @@ var highCardinalityKeys = []string{
 
 // config holds the resolved configuration for one Drain.
 type config struct {
-	url      string
-	username string
-	password string
-	tenantID string
-	labels   []string
-	labelSet bool
-	gzip     bool
+	url          string
+	username     string
+	password     string
+	tenantID     string
+	labels       []string
+	labelSet     bool
+	gzip         bool
+	pipelineOpts []pipeline.Option
 }
 
 // Option sets one config value. An option always wins over the matching env var.
@@ -68,20 +76,40 @@ func WithLabels(keys ...string) Option {
 	return func(c *config) { c.labels, c.labelSet = keys, true }
 }
 
+// WithPipeline sets the pipeline options New wraps the sender with.
+func WithPipeline(opts ...pipeline.Option) Option {
+	return func(c *config) { c.pipelineOpts = append(c.pipelineOpts, opts...) }
+}
+
 // WithGzip compresses the request body. Off by default.
 func WithGzip(on bool) Option { return func(c *config) { c.gzip = on } }
 
-// Drain sends batches to one Loki instance. It implements pipeline.Sender, so wrap it
-// with pipeline.Wrap to get batching, retry, and a bounded buffer.
-type Drain struct {
+// Sender sends batches to one Loki instance. It implements pipeline.Sender.
+type Sender struct {
 	client *httpdrain.Client
 	labels []string
 }
 
-// New builds a Drain from opts and the LOKI_* env vars. It returns an error when a
-// configured label is high-cardinality, so a bad label fails at startup instead of
-// overloading Loki later.
-func New(opts ...Option) (*Drain, error) {
+// New returns the Loki drain with the pipeline defaults, or with the options WithPipeline
+// set.
+func New(opts ...Option) (wlog.Drain, error) {
+	s, popts, err := newSender(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return pipeline.Wrap(s, popts...), nil
+}
+
+// NewSender returns the raw sender, for a caller that builds its own pipeline.
+func NewSender(opts ...Option) (*Sender, error) {
+	s, _, err := newSender(opts...)
+	return s, err
+}
+
+// newSender resolves one configuration. It returns an error when a label name is invalid
+// or high-cardinality, or when basic auth is half-set, so a bad label fails at startup
+// instead of overloading Loki later.
+func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
 		url:      os.Getenv("LOKI_URL"),
 		username: os.Getenv("LOKI_USERNAME"),
@@ -96,13 +124,20 @@ func New(opts ...Option) (*Drain, error) {
 	}
 	c.url = strings.TrimRight(c.url, "/")
 
+	if (c.username == "") != (c.password == "") {
+		return nil, nil, fmt.Errorf("loki: basic auth needs both a username and a password")
+	}
+
 	labels := c.labels
 	if !c.labelSet {
 		labels = defaultLabels
 	}
 	for _, key := range labels {
+		if name := labelName(key); !labelNamePattern.MatchString(name) {
+			return nil, nil, fmt.Errorf("loki: label %q becomes %q, which is not a valid label name", key, name)
+		}
 		if isHighCardinality(key) {
-			return nil, fmt.Errorf("loki: label %q is high-cardinality and not allowed", key)
+			return nil, nil, fmt.Errorf("loki: label %q is high-cardinality and not allowed", key)
 		}
 	}
 
@@ -110,21 +145,21 @@ func New(opts ...Option) (*Drain, error) {
 		httpdrain.WithGzip(c.gzip),
 		httpdrain.WithSource("loki"),
 	}
-	if c.username != "" || c.password != "" {
+	if c.username != "" {
 		auth := base64.StdEncoding.EncodeToString([]byte(c.username + ":" + c.password))
 		clientOpts = append(clientOpts, httpdrain.WithHeader("Authorization", "Basic "+auth))
 	}
 	if c.tenantID != "" {
 		clientOpts = append(clientOpts, httpdrain.WithHeader("X-Scope-OrgID", c.tenantID))
 	}
-	return &Drain{
+	return &Sender{
 		client: httpdrain.New(c.url+"/loki/api/v1/push", clientOpts...),
 		labels: labels,
-	}, nil
+	}, c.pipelineOpts, nil
 }
 
 // MustNew is New, but panics on a configuration error. Use it in main.
-func MustNew(opts ...Option) *Drain {
+func MustNew(opts ...Option) wlog.Drain {
 	d, err := New(opts...)
 	if err != nil {
 		panic(err)
@@ -132,14 +167,28 @@ func MustNew(opts ...Option) *Drain {
 	return d
 }
 
-// isHighCardinality reports whether key is on the denylist.
+// labelName is the label name a configured path becomes: Loki label names hold no dot.
+func labelName(key string) string { return strings.ReplaceAll(key, ".", "_") }
+
+// isHighCardinality reports whether a label path may not become a label: either the whole
+// path, or its last segment, matches the denylist or the last segment of one. So
+// request_id is refused for the same reason trace.request_id is.
 func isHighCardinality(key string) bool {
+	last := lastSegment(key)
 	for _, denied := range highCardinalityKeys {
-		if key == denied {
+		if key == denied || last == lastSegment(denied) {
 			return true
 		}
 	}
 	return false
+}
+
+// lastSegment returns the part after the final dot.
+func lastSegment(key string) string {
+	if i := strings.LastIndexByte(key, '.'); i >= 0 {
+		return key[i+1:]
+	}
+	return key
 }
 
 // stream is one Loki stream: one label set and its timestamped lines.
@@ -150,7 +199,7 @@ type stream struct {
 
 // SendBatch groups the events by label set and posts one Push API request. Events with
 // the same labels share a stream, so one batch can produce several streams.
-func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
+func (d *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	groups := map[string]*stream{}
 	for _, event := range events {
 		labels := d.labelValues(event)
@@ -188,10 +237,10 @@ func (d *Drain) SendBatch(ctx context.Context, events []map[string]any) error {
 
 // labelValues reads one value per configured label from the event. A missing value is
 // the empty string, which Loki accepts.
-func (d *Drain) labelValues(event map[string]any) map[string]string {
+func (d *Sender) labelValues(event map[string]any) map[string]string {
 	values := make(map[string]string, len(d.labels))
 	for _, key := range d.labels {
-		values[key] = labelValue(event, key)
+		values[labelName(key)] = labelValue(event, key)
 	}
 	return values
 }
@@ -211,14 +260,31 @@ func labelValue(event map[string]any, key string) string {
 		value, _ := service[field].(string)
 		return value
 	}
-	switch value := event[key].(type) {
-	case nil:
+	value, ok := labelPath(event, key)
+	if !ok || value == nil {
 		return ""
-	case string:
-		return value
-	default:
-		return fmt.Sprint(value)
 	}
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return fmt.Sprint(value)
+}
+
+// labelPath resolves a dotted path inside the event, so http.method reads the method of
+// the http group rather than a top-level key that never exists.
+func labelPath(event map[string]any, path string) (any, bool) {
+	var current any = event
+	for _, segment := range strings.Split(path, ".") {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = object[segment]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
 }
 
 // canonicalLabels makes one stable key for a label set, so the same labels always land

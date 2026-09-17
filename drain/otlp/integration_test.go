@@ -41,7 +41,7 @@ func TestIntegration_CollectorReceivesEvent(t *testing.T) {
 	os.Remove(output)
 	marker := fmt.Sprintf("wlog-marker-%d", time.Now().UnixNano())
 
-	d, err := otlp.New(otlp.WithEndpoint("http://localhost:4318"))
+	d, err := otlp.NewSender(otlp.WithEndpoint("http://localhost:4318"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

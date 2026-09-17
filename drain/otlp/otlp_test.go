@@ -3,6 +3,8 @@ package otlp_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +15,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/otlp"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // goldenEvent is the fixed event the golden file pins.
@@ -33,10 +36,10 @@ func goldenEvent() map[string]any {
 	}
 }
 
-func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...otlp.Option) *otlp.Drain {
+func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...otlp.Option) *otlp.Sender {
 	t.Helper()
 	all := append([]otlp.Option{otlp.WithEndpoint(srv.URL)}, opts...)
-	d, err := otlp.New(all...)
+	d, err := otlp.NewSender(all...)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -61,8 +64,10 @@ func prettyBody(t *testing.T, body []byte) string {
 // the build of the library.
 var scopeVersion = regexp.MustCompile(`"version": "[^"]*"`)
 
-// TestOTLP_SendBatch_Golden proves the mapping matches the pinned golden payload. Run
-// with UPDATE_GOLDEN=1 to regenerate it after a deliberate mapping change.
+// TestOTLP_SendBatch_Golden proves the mapping matches the pinned golden payload.
+//
+// The golden file is written by hand from the OTLP/HTTP JSON specification, never produced
+// by this encoder: a golden the code generates can only ever agree with the code.
 func TestOTLP_SendBatch_Golden(t *testing.T) {
 	srv := httpfake.New()
 	defer srv.Close()
@@ -87,14 +92,9 @@ func TestOTLP_SendBatch_Golden(t *testing.T) {
 
 	got := prettyBody(t, req.Body)
 	path := filepath.Join("testdata", "export.golden.json")
-	if os.Getenv("UPDATE_GOLDEN") == "1" {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatalf("write golden: %v", err)
-		}
-	}
 	want, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read golden: %v (run UPDATE_GOLDEN=1 to create it)", err)
+		t.Fatalf("read golden: %v", err)
 	}
 
 	// The scope version follows the build, so both sides carry a placeholder in
@@ -154,7 +154,7 @@ func TestOTLP_EnvHeadersAndEndpoint(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", srv.URL)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "X-Api-Key=abc,X-Other=1")
 
-	d, err := otlp.New()
+	d, err := otlp.NewSender()
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestOTLP_ExplicitOptionWins(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env.invalid")
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "X-From=env")
 
-	d, err := otlp.New(otlp.WithEndpoint(srv.URL), otlp.WithHeaders(map[string]string{"X-From": "code"}))
+	d, err := otlp.NewSender(otlp.WithEndpoint(srv.URL), otlp.WithHeaders(map[string]string{"X-From": "code"}))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -213,6 +213,121 @@ func TestOTLP_NeverLeaksRedactedValue(t *testing.T) {
 	for _, req := range srv.Requests() {
 		if strings.Contains(string(req.Body), "hunter2") {
 			t.Errorf("raw denied value reached the drain: %s", req.Body)
+		}
+	}
+}
+
+// TestOTLP_PIPE14_HeaderDecode proves a percent-encoded header value is decoded, so a
+// bearer token with a space reaches the collector instead of a 401.
+func TestOTLP_PIPE14_HeaderDecode(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", srv.URL)
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Basic%20dXNlcjpwYXNz,X%2DKey=1")
+
+	d, err := otlp.NewSender()
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := d.SendBatch(context.Background(), []map[string]any{goldenEvent()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	req := srv.Last()
+	if req == nil {
+		t.Fatal("no request reached the fake")
+	}
+	if got := req.Headers.Get("Authorization"); got != "Basic dXNlcjpwYXNz" {
+		t.Errorf("Authorization = %q, want the decoded value", got)
+	}
+	if got := req.Headers.Get("X-Key"); got != "1" {
+		t.Errorf("X-Key = %q, want 1 (the encoded key name decoded too)", got)
+	}
+}
+
+// TestOTLP_PIPE14_LogsEndpoint proves the logs endpoint env var is used as it stands.
+func TestOTLP_PIPE14_LogsEndpoint(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", srv.URL+"/custom/logs")
+
+	d, err := otlp.NewSender()
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := d.SendBatch(context.Background(), []map[string]any{goldenEvent()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	if got := srv.Last().Path; got != "/custom/logs" {
+		t.Errorf("path = %q, want the env endpoint as it stands", got)
+	}
+}
+
+// TestOTLP_PIPE14_KvlistInArray proves an object inside an array becomes a kvlistValue, so
+// errors[] and logs[] arrive with their fields instead of as empty arrays.
+func TestOTLP_PIPE14_KvlistInArray(t *testing.T) {
+	event := goldenEvent()
+	event["errors"] = []any{
+		map[string]any{"code": "PAYMENT_DECLINED", "message": "declined"},
+	}
+	body, err := otlp.Encode([]map[string]any{event})
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("body is not JSON: %v", err)
+	}
+	if !strings.Contains(string(body), `"kvlistValue"`) {
+		t.Fatalf("the object inside the array was dropped:\n%s", body)
+	}
+	if !strings.Contains(string(body), `"PAYMENT_DECLINED"`) || !strings.Contains(string(body), `"declined"`) {
+		t.Errorf("the object's fields are missing:\n%s", body)
+	}
+}
+
+// TestOTLP_StatusTable proves every status class maps to the right outcome.
+func TestOTLP_StatusTable(t *testing.T) {
+	cases := []struct {
+		status    int
+		wantError bool
+		retryable bool
+	}{
+		{http.StatusOK, false, false},
+		{http.StatusBadRequest, true, false},
+		{http.StatusUnauthorized, true, false},
+		{http.StatusForbidden, true, false},
+		{http.StatusRequestEntityTooLarge, true, false},
+		{http.StatusTooManyRequests, true, true},
+		{http.StatusInternalServerError, true, true},
+	}
+	for _, tc := range cases {
+		srv := httpfake.New()
+		srv.SetStatus(tc.status)
+		d, err := otlp.NewSender(otlp.WithEndpoint(srv.URL))
+		if err != nil {
+			t.Fatalf("NewSender: %v", err)
+		}
+		sendErr := d.SendBatch(context.Background(), []map[string]any{goldenEvent()})
+		srv.Close()
+
+		if !tc.wantError {
+			if sendErr != nil {
+				t.Errorf("status %d: err = %v, want nil", tc.status, sendErr)
+			}
+			continue
+		}
+		if sendErr == nil {
+			t.Errorf("status %d: err = nil, want an error", tc.status)
+			continue
+		}
+		var statusErr *httpdrain.StatusError
+		if !errors.As(sendErr, &statusErr) {
+			t.Errorf("status %d: err = %v, want a *StatusError", tc.status, sendErr)
+			continue
+		}
+		if statusErr.Retryable() != tc.retryable {
+			t.Errorf("status %d: Retryable() = %v, want %v", tc.status, statusErr.Retryable(), tc.retryable)
 		}
 	}
 }

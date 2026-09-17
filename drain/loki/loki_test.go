@@ -3,6 +3,8 @@ package loki_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/loki"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
 // stream is the push body's stream shape, used to read the request back.
@@ -33,10 +36,10 @@ func decodePush(t *testing.T, body []byte) pushBody {
 	return pushed
 }
 
-func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...loki.Option) *loki.Drain {
+func newTestDrain(t *testing.T, srv *httpfake.Server, opts ...loki.Option) *loki.Sender {
 	t.Helper()
 	all := append([]loki.Option{loki.WithURL(srv.URL)}, opts...)
-	d, err := loki.New(all...)
+	d, err := loki.NewSender(all...)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -125,7 +128,7 @@ func TestLoki_CustomLabels(t *testing.T) {
 // count fails fast at construction, before any event is sent.
 func TestLoki_RejectsHighCardinalityLabel(t *testing.T) {
 	for _, key := range []string{"trace.trace_id", "http.path", "user.id"} {
-		if _, err := loki.New(loki.WithURL("http://example.invalid"), loki.WithLabels("service", key)); err == nil {
+		if _, err := loki.NewSender(loki.WithURL("http://example.invalid"), loki.WithLabels("service", key)); err == nil {
 			t.Errorf("New with label %q returned nil error, want a rejection", key)
 		}
 	}
@@ -156,7 +159,7 @@ func TestLoki_EnvAlone(t *testing.T) {
 	t.Setenv("LOKI_URL", srv.URL)
 	t.Setenv("LOKI_TENANT_ID", "env-tenant")
 
-	d, err := loki.New()
+	d, err := loki.NewSender()
 	if err != nil {
 		t.Fatalf("New from env: %v", err)
 	}
@@ -189,6 +192,107 @@ func TestLoki_NeverLeaksRedactedValue(t *testing.T) {
 	for _, req := range srv.Requests() {
 		if strings.Contains(string(req.Body), "hunter2") {
 			t.Errorf("raw denied value reached the drain: %s", req.Body)
+		}
+	}
+}
+
+// TestLoki_PIPE13_DottedLabels proves a dotted label path resolves inside the event, that
+// its label name has no dot, and that an invalid label name is refused.
+func TestLoki_PIPE13_DottedLabels(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	d := newTestDrain(t, srv, loki.WithLabels("level", "http.method"))
+
+	event := map[string]any{
+		"level":   "info",
+		"http":    map[string]any{"method": "GET"},
+		"message": "hello",
+	}
+	if err := d.SendBatch(context.Background(), []map[string]any{event}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+
+	pushed := decodePush(t, srv.Last().Body)
+	if len(pushed.Streams) != 1 {
+		t.Fatalf("got %d streams, want 1", len(pushed.Streams))
+	}
+	labels := pushed.Streams[0].Stream
+	if labels["http_method"] != "GET" {
+		t.Errorf("labels = %v, want http_method=GET from the nested path", labels)
+	}
+	if _, dotted := labels["http.method"]; dotted {
+		t.Errorf("the label kept its dot, which Loki rejects: %v", labels)
+	}
+
+	// A path whose name cannot be a Loki label fails at construction.
+	if _, err := loki.NewSender(loki.WithURL(srv.URL), loki.WithLabels("http.method!")); err == nil {
+		t.Error("NewSender accepted an invalid label name")
+	}
+	// The denylist covers a path and its last segment, so the short form is refused too.
+	if _, err := loki.NewSender(loki.WithURL(srv.URL), loki.WithLabels("request_id")); err == nil {
+		t.Error("NewSender accepted request_id, which is the last segment of a denied key")
+	}
+}
+
+// TestLoki_PIPE13_BasicAuthPair proves basic auth needs both halves, so Loki never
+// receives an Authorization header that cannot work.
+func TestLoki_PIPE13_BasicAuthPair(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+
+	if _, err := loki.NewSender(loki.WithURL(srv.URL), loki.WithBasicAuth("user", "")); err == nil {
+		t.Error("NewSender accepted a username with no password")
+	}
+	if _, err := loki.NewSender(loki.WithURL(srv.URL), loki.WithBasicAuth("", "pass")); err == nil {
+		t.Error("NewSender accepted a password with no username")
+	}
+	if _, err := loki.NewSender(loki.WithURL(srv.URL), loki.WithBasicAuth("user", "pass")); err != nil {
+		t.Errorf("NewSender refused a complete pair: %v", err)
+	}
+}
+
+// TestLoki_StatusTable proves every status class maps to the right outcome.
+func TestLoki_StatusTable(t *testing.T) {
+	cases := []struct {
+		status    int
+		wantError bool
+		retryable bool
+	}{
+		{http.StatusOK, false, false},
+		{http.StatusBadRequest, true, false},
+		{http.StatusUnauthorized, true, false},
+		{http.StatusForbidden, true, false},
+		{http.StatusRequestEntityTooLarge, true, false},
+		{http.StatusTooManyRequests, true, true},
+		{http.StatusInternalServerError, true, true},
+	}
+	for _, tc := range cases {
+		srv := httpfake.New()
+		srv.SetStatus(tc.status)
+		d, err := loki.NewSender(loki.WithURL(srv.URL))
+		if err != nil {
+			t.Fatalf("NewSender: %v", err)
+		}
+		sendErr := d.SendBatch(context.Background(), []map[string]any{{"level": "info"}})
+		srv.Close()
+
+		if !tc.wantError {
+			if sendErr != nil {
+				t.Errorf("status %d: err = %v, want nil", tc.status, sendErr)
+			}
+			continue
+		}
+		if sendErr == nil {
+			t.Errorf("status %d: err = nil, want an error", tc.status)
+			continue
+		}
+		var statusErr *httpdrain.StatusError
+		if !errors.As(sendErr, &statusErr) {
+			t.Errorf("status %d: err = %v, want a *StatusError", tc.status, sendErr)
+			continue
+		}
+		if statusErr.Retryable() != tc.retryable {
+			t.Errorf("status %d: Retryable() = %v, want %v", tc.status, statusErr.Retryable(), tc.retryable)
 		}
 	}
 }

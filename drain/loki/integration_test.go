@@ -57,7 +57,7 @@ func TestIntegration_LokiReceivesEvent(t *testing.T) {
 		t.Fatalf("Loki is not ready; run make integration")
 	}
 
-	d, err := loki.New(loki.WithURL("http://localhost:3100"))
+	d, err := loki.NewSender(loki.WithURL("http://localhost:3100"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

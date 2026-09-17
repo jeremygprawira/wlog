@@ -12,15 +12,20 @@ import (
 // the same event always encodes to the same bytes.
 
 type anyValue struct {
-	StringValue *string     `json:"stringValue,omitempty"`
-	BoolValue   *bool       `json:"boolValue,omitempty"`
-	IntValue    *string     `json:"intValue,omitempty"`
-	DoubleValue *float64    `json:"doubleValue,omitempty"`
-	ArrayValue  *arrayValue `json:"arrayValue,omitempty"`
+	StringValue *string      `json:"stringValue,omitempty"`
+	BoolValue   *bool        `json:"boolValue,omitempty"`
+	IntValue    *string      `json:"intValue,omitempty"`
+	DoubleValue *float64     `json:"doubleValue,omitempty"`
+	ArrayValue  *arrayValue  `json:"arrayValue,omitempty"`
+	KvlistValue *kvlistValue `json:"kvlistValue,omitempty"`
 }
 
 type arrayValue struct {
 	Values []anyValue `json:"values"`
+}
+
+type kvlistValue struct {
+	Values []keyValue `json:"values"`
 }
 
 type keyValue struct {
@@ -200,6 +205,19 @@ func valueFor(value any) (anyValue, bool) {
 			}
 		}
 		return anyValue{ArrayValue: &arrayValue{Values: values}}, true
+	case map[string]any:
+		// OTLP carries an object as a kvlistValue, so errors[], logs[], and any other
+		// array of objects survives instead of arriving empty.
+		values := make([]keyValue, 0, len(v))
+		for key, item := range v {
+			converted, ok := valueFor(item)
+			if !ok {
+				continue
+			}
+			values = append(values, keyValue{Key: key, Value: converted})
+		}
+		sort.Slice(values, func(i, j int) bool { return values[i].Key < values[j].Key })
+		return anyValue{KvlistValue: &kvlistValue{Values: values}}, true
 	default:
 		return anyValue{}, false
 	}
@@ -219,7 +237,8 @@ func resourceFor(event map[string]any) resource {
 		attributes = append(attributes, stringAttr("service.version", version))
 	}
 	if env, ok := service["env"].(string); ok && env != "" {
-		attributes = append(attributes, stringAttr("deployment.environment", env))
+		// The current semantic conventions name the environment attribute this way.
+		attributes = append(attributes, stringAttr("deployment.environment.name", env))
 	}
 	return resource{Attributes: attributes}
 }
