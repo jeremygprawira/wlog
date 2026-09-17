@@ -83,10 +83,18 @@ vendor SDK.
 
   A missing value is the column's zero value: an empty string or 0. A wrong type is an
   empty value, never a dropped row.
-- `DDL(table string) string` returns the `CREATE TABLE IF NOT EXISTS` statement for the
-  recommended schema. The drain never creates or alters a table: a missing table is a
+- `DDL(database, table string) string` returns the `CREATE TABLE IF NOT EXISTS` statement for
+  the recommended schema, with a `String` column for the whole event, which every ClickHouse
+  version accepts. `DDLJSON(database, table)` is the same schema with a `JSON` column, for a
+  server on 25.3 or newer. The drain never creates or alters a table: a missing table is a
   ClickHouse error that `pipeline` reports.
-- Options: `WithURL`, `WithBasicAuth`, `WithDatabase`, `WithTable`.
+- The timestamp column takes `2006-01-02 15:04:05.000000000` in UTC, the `DateTime64(9)`
+  text form, not RFC 3339. A database or table name must match `^[A-Za-z_][A-Za-z0-9_]*$`,
+  so a config value can never inject SQL. `CLICKHOUSE_URL` may carry its own query, such as
+  `secure=true`, which the insert statement joins.
+- Options: `WithURL`, `WithBasicAuth`, `WithDatabase`, `WithTable`, `WithPipeline`.
+- Constructors: `New` returns the async drain, `NewSender` the raw sender, and `MustNew`
+  panics on a configuration error.
 
 ## drain-datadog
 

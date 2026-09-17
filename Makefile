@@ -83,6 +83,6 @@ map:
 # Optional: needs a running docker daemon. Not part of make test or make race.
 integration:
 	@mkdir -p .integration-out
-	docker compose -f docker-compose.integration.yml up -d
+	docker compose -f docker-compose.integration.yml up -d --wait
 	@go test -tags=integration -timeout 180s ./drain/loki ./drain/otlp ./drain/clickhouse; status=$$?; \
 		docker compose -f docker-compose.integration.yml down; exit $$status

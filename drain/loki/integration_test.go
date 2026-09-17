@@ -51,8 +51,10 @@ func lokiHasMarker(t *testing.T, marker string) bool {
 // TestIntegration_LokiReceivesEvent sends one event through the drain and waits for
 // Loki to return it from a query.
 func TestIntegration_LokiReceivesEvent(t *testing.T) {
+	// make integration starts the stack and waits for its health probes, so a
+	// service that is not ready here is a real failure, not a reason to pass quietly.
 	if !lokiReady() {
-		t.Skip("Loki is not ready on localhost:3100, start it with make integration")
+		t.Fatalf("Loki is not ready; run make integration")
 	}
 
 	d, err := loki.New(loki.WithURL("http://localhost:3100"))

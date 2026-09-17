@@ -6,6 +6,11 @@ services:
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports:
       - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.115.0
@@ -17,6 +22,9 @@ services:
           otlp:
             protocols:
               http:
+                # Every interface, because the collector runs in its own container and
+                # binds only localhost by default.
+                endpoint: 0.0.0.0:4318
         exporters:
           file:
             path: /out/logs.json
@@ -31,10 +39,17 @@ services:
       - ./.integration-out:/out
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.10
+    # 25.3 is the first release where the JSON column type is production-ready, which is
+    # what clickhouse.DDLJSON relies on.
+    image: clickhouse/clickhouse-server:25.3
     ports:
       - "8123:8123"
     ulimits:
       nofile:
         soft: 262144
         hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

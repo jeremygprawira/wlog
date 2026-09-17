@@ -17,7 +17,7 @@ import (
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
-// reachable reports whether a TCP endpoint answers quickly, so the test skips instead
+// reachable reports whether a TCP endpoint answers quickly. The test calls it to fail
 // of failing when docker is not running.
 func reachable(addr string) bool {
 	conn, err := net.DialTimeout("tcp", addr, time.Second)
@@ -31,8 +31,10 @@ func reachable(addr string) bool {
 // TestIntegration_CollectorReceivesEvent sends one event through the drain and waits
 // for the collector's file exporter to write it to the shared output directory.
 func TestIntegration_CollectorReceivesEvent(t *testing.T) {
+	// make integration starts the stack and waits for its health probes, so a service
+	// that is not ready here is a real failure, not a reason to pass quietly.
 	if !reachable("localhost:4318") {
-		t.Skip("the OTel collector is not listening on localhost:4318, start it with make integration")
+		t.Fatal("the OTel collector is not listening on localhost:4318; run make integration")
 	}
 
 	output := filepath.Join("..", "..", ".integration-out", "logs.json")

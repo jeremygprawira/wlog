@@ -59,15 +59,17 @@ func chExec(t *testing.T, query string) string {
 // TestIntegration_ClickHouseReceivesEvent creates the table with DDL, sends one event
 // through the drain, and waits for the row to appear.
 func TestIntegration_ClickHouseReceivesEvent(t *testing.T) {
+	// make integration starts the stack and waits for its health probes, so a
+	// service that is not ready here is a real failure, not a reason to pass quietly.
 	if !clickhouseReady() {
-		t.Skip("ClickHouse is not ready on localhost:8123, start it with make integration")
+		t.Fatalf("ClickHouse is not ready; run make integration")
 	}
 
-	chExec(t, clickhouse.DDL(clickhouseTable))
+	chExec(t, clickhouse.DDL("default", clickhouseTable))
 	t.Cleanup(func() { chExec(t, "DROP TABLE IF EXISTS "+clickhouseTable) })
 
 	marker := fmt.Sprintf("integration-%d", time.Now().UnixNano())
-	d, err := clickhouse.New(
+	d, err := clickhouse.NewSender(
 		clickhouse.WithURL(clickhouseURL),
 		clickhouse.WithBasicAuth("default", ""),
 		clickhouse.WithDatabase("default"),
