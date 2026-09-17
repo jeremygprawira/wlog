@@ -33,7 +33,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-PIPE-2 Flush, Close, and sends after close
 - [x] 10-PIPE-3 Retry timing
 - [x] 10-PIPE-4 Batches, clamps, timer, counters
-- [ ] 10-PIPE-5 FanOut rewrite
+- [x] 10-PIPE-5 FanOut rewrite
 - [ ] 10-PIPE-6 HTTP drain helper
 - [ ] 10-AUD-1 Journal owns the chain
 - [ ] 10-AUD-2 Marker lines and verification rules

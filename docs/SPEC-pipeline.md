@@ -76,12 +76,23 @@ background goroutine.
 
 ### FanOut
 
-`FanOut(drains...)` returns a `Drain` whose `Send` dispatches to every drain concurrently
-(one goroutine per drain) and returns immediately, without waiting for any of them — matching
-gate G3, since `FanOut` is itself just a `wlog.Drain` and core calls `Send` synchronously from
-the event pipeline. Each drain is already panic-isolated by `wlog.Logger`'s own dispatch;
-`FanOut` adds no isolation of its own. A hanging or slow drain never delays delivery to, or
-blocks, the others, or the caller.
+`FanOut(drains...)` returns a `Drain` whose `Send` queues the event for every drain and returns
+immediately, without waiting for any of them — matching gate G3, since `FanOut` is itself just a
+`wlog.Drain` and core calls `Send` synchronously from the event pipeline.
+
+Each drain gets one bounded queue of 256 events and one goroutine that reads it. A full queue
+drops the newest event for that drain instead of blocking the caller, so memory and goroutines
+stay bounded however many events arrive (G4). Every delivery runs under recover, so a panicking
+drain never climbs out of the FanOut goroutine (G3), and the drain keeps receiving later events.
+A hanging or slow drain never delays delivery to the others, or the caller.
+
+The result also implements `Flush(ctx) error` and `Close(ctx) error`. Both first wait until the
+queues hold no undelivered event, then forward the call to every drain that implements it, so a
+`Logger.Flush` or `Logger.Close` reaches a `pipeline.Wrap` inside the FanOut. `Close` then stops
+the goroutines. Both waits are bounded by `ctx`.
+
+Drains receive the event map read-only, and they run at the same time. A drain that must change
+the event copies it first, per the core drain contract (CORE-11).
 
 ## Success Criteria
 
@@ -96,7 +107,9 @@ blocks, the others, or the caller.
 5. `MaxBuffer` exceeded drops the oldest event, calls `OnDropped`, never blocks the caller —
    proven with a `Sender` whose `SendBatch` never returns, under a tight test timeout.
 6. `FanOut` delivers to every drain; one drain hanging does not prevent the others from
-   receiving the event.
+   receiving the event, and costs one queue and one goroutine, not one goroutine per event.
+   A panicking drain is recovered, and `Flush` and `Close` reach every drain that implements
+   them.
 7. Zero imports outside the standard library; passes `-race` with concurrent `Send` and `Close`.
 
 ## Testing
