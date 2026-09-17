@@ -34,12 +34,21 @@ func (r *Recorder) Events() []map[string]any {
 // Mock returns a logger that records instead of writing, plus its recorder. Use it in a
 // test that exercises a handler calling audit.Do.
 //
-// The package imports testing only for this helper, so a production binary that imports
-// audit gains the testing flags. Import the package in a test file if that matters.
+// The logger is silent, so a test prints no console line, and it is pinned to the debug
+// level, so WLOG_LEVEL in the environment of a CI job can never hide a record from the
+// test.
+//
+// Mock imports testing, so a production binary that imports audit links the testing
+// package. Split this helper into its own package if that ever matters.
 func Mock(t testing.TB) (*wlog.Logger, *Recorder) {
 	t.Helper()
 	recorder := &Recorder{}
-	return wlog.New(wlog.WithFormat(wlog.FormatJSON), wlog.WithDrains(recorder)), recorder
+	return wlog.New(
+		wlog.WithFormat(wlog.FormatJSON),
+		wlog.WithSilent(),
+		wlog.WithLevel(wlog.LevelDebug),
+		wlog.WithDrains(recorder),
+	), recorder
 }
 
 // requireAudit returns the last audit record of the last event, and fails the test when

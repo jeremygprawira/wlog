@@ -97,10 +97,12 @@ func Mock(t testing.TB) (*wlog.Logger, *Recorder)
 the error's code in `audit.error_code`, so a denied action and a failed action stay apart
 in a query.
 
-`Diff` compares two values field by field and returns only what changed, as
-`{"field": {"from": x, "to": y}}`. It walks a struct through its JSON tags, which keeps it
-agnostic. A field the redactor denies is masked by the normal pipeline, since `Diff` only
-builds a map and never writes it out itself.
+`Diff(before, after) (map[string]any, error)` compares two objects field by field and returns
+only what changed, as a nested tree of `{"field": {"from": x, "to": y}}` entries. A nested object
+stays nested, so a path denylist entry such as `changes.user.creds.nik` matches the diff, and
+the normal pipeline masks the value it names. It walks a struct through its JSON tags, which
+keeps it agnostic. It returns an error when either side is not an object, because a slice or a
+scalar has no fields to compare.
 
 `audit.Journal(path, audit.WithKey(key))` signs every line it writes. Each line carries
 `audit.signature`, an HMAC-SHA256 over the chain hash. `Verify(path, key)` then rejects a record

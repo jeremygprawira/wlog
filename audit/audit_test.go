@@ -2,6 +2,8 @@ package audit_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"path/filepath"
 	"strconv"
@@ -219,4 +221,52 @@ func auditRecords(t *testing.T, event map[string]any) []map[string]any {
 		out = append(out, m)
 	}
 	return out
+}
+
+// codedExtractor is a Logger extractor that knows the app's own error types, so the test
+// can prove Wrap asks the Logger rather than the core default.
+type codedExtractor struct{}
+
+// Extract gives the test errors their application code, and a refusal status 403.
+func (codedExtractor) Extract(err error) wlog.ErrorInfo {
+	info := wlog.ErrorInfo{Code: "PAYMENT_DECLINED", Message: err.Error()}
+	if errors.Is(err, errRefused) {
+		info.Status = 403
+	}
+	return info
+}
+
+// errRefused stands for a refusal, such as an authorization error.
+var errRefused = errors.New("refused")
+
+// TestAudit_AUD8_WrapUsesLoggerExtractor proves Wrap records the code the Logger's own
+// extractor produced, so audit.error_code and error.code agree, and that a denial is
+// recorded as denied rather than as a generic error.
+func TestAudit_AUD8_WrapUsesLoggerExtractor(t *testing.T) {
+	log, rec := wlogtest.New(t, wlog.WithErrorExtractor(codedExtractor{}))
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+
+	err := audit.Wrap(ctx, audit.Record{Action: "payment.charge"}, func() error {
+		return errors.New("card declined")
+	})
+	end()
+	if err == nil {
+		t.Fatal("Wrap returned nil for a failing fn")
+	}
+	record := recordOf(t, rec.Last())
+	if record["error_code"] != "PAYMENT_DECLINED" {
+		t.Errorf("audit.error_code = %v, want the Logger extractor's code", record["error_code"])
+	}
+	if _, ok := rec.Last()["error"]; !ok {
+		t.Error("the event carries no error, so error.code cannot agree with audit.error_code")
+	}
+
+	ctx, end = wlog.Start(log.WithContext(context.Background()), "op")
+	_ = audit.Wrap(ctx, audit.Record{Action: "invoice.refund"}, func() error {
+		return fmt.Errorf("charge: %w", errRefused)
+	})
+	end()
+	if got := recordOf(t, rec.Last())["outcome"]; got != "denied" {
+		t.Errorf("outcome = %v, want denied for a 403", got)
+	}
 }

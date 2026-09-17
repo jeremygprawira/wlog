@@ -33,7 +33,7 @@ http.response_headers http.response_body
 error                 one ErrorInfo (the error that decided the outcome)
 errors                []ErrorInfo, earlier errors, capped at 10
 logs                  []LogLine folded in by a log-*-in module, capped at 50
-audit                 one audit.Record, set only by wlog.Audit
+audit                 up to 20 audit.Records, added by audit.Do through wlog.Append
 redact.fingerprint     short hash of the active redactor (omitted if disabled)
 wlog.dropped_fields wlog.late_writes wlog.dropped_logs   overflow counters (SPEC.md G4)
 ```

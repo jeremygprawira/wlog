@@ -1,7 +1,8 @@
 # Spec: audit
 
 > Module id `audit` · package `github.com/jeremygprawira/wlog/audit` · root module ·
-> depends on: `core`, `pipeline`. Project-wide rules in [SPEC.md](SPEC.md) apply.
+> depends on: `core`, `catalog`, and `pipeline`. The test mock also imports `testing`.
+> Project-wide rules in [SPEC.md](SPEC.md) apply.
 > v1.2 additions to this module: [SPEC-v1.2-additions.md](SPEC-v1.2-additions.md).
 
 ## Objective
@@ -129,11 +130,14 @@ An empty line, a line without a valid `audit.hash`, and a malformed chain field 
 5. The Actor's `Email` is masked by the default redactor like any other field, and the stored
    hash covers the *masked* bytes (so `Verify` still passes after redaction, and the journal
    never contains the raw email).
-6. Zero imports outside the standard library plus `core` and `pipeline`.
+6. Zero imports outside the standard library plus `core`, `catalog`, and `pipeline`. The test
+   mock also imports `testing`.
 
 ## Testing
 
-Package `audit_test`, black-box. Fixtures for tampered journals under `audit/testdata/`.
+Package `audit_test`, black-box. Each tampering test builds its journal in a temp directory,
+changes the bytes it needs, and asserts on `Verify`'s error, so no fixture file can drift from
+the writer's format.
 
 ## Boundaries
 

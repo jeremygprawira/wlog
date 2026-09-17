@@ -18,7 +18,7 @@ root module (`github.com/jeremygprawira/wlog`). A package with a third-party imp
 | `enrich` | Built-in enrichers: host/pod/region, deploy version, user agent, **geo** (CDN headers), user-id lookup | core | root | 2 |
 | `drain-memory` | Ring buffer, snapshot, live subscriptions (`Subscribe`), optional SSE `http.Handler` | core | root | 2 |
 | `wlogtest` | In-memory recorder + assertion helpers for users' tests (built on `drain-memory`) | drain-memory | root | 2 |
-| `audit` | `wlog.Audit(ctx, …)` for actor, action, target, outcome, and reason. Never sampled. Hash chain, append-only journal drain, `Verify` | core, pipeline | root | 2 |
+| `audit` | `audit.Do(ctx, …)` for actor, action, target, outcome, and reason. Never sampled. Hash chain, append-only journal drain, `Verify` | core, catalog, pipeline | root | 2 |
 | `errors-herr` | `ErrorExtractor` for herr | core | own (`errors/herr`) | 2 |
 | `http-std` | net/http + gorilla/mux middleware: capture (default everything), request id, W3C traceparent, panic recovery, plugin request hooks, emit | core | root | 2 |
 | `http-echo` | Echo v4 adapter over `http-std` | http-std | own (`middleware/echo`) | 3 |

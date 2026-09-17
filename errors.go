@@ -234,6 +234,25 @@ func (e *event) safeExtract(err error) (info ErrorInfo) {
 	return e.extractor.Extract(err)
 }
 
+// CurrentError returns the error the current event holds now, or false when it holds
+// none.
+//
+// An adapter that must agree with core about an error's code, such as audit.Wrap, reads
+// the extracted info here instead of running a second extractor and disagreeing with the
+// error field on the same event.
+func CurrentError(ctx context.Context) (ErrorInfo, bool) {
+	e := eventFrom(ctx)
+	if e == nil {
+		return ErrorInfo{}, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.errInfo == nil {
+		return ErrorInfo{}, false
+	}
+	return *e.errInfo, true
+}
+
 // ErrorData returns the current event error's Data map, or nil when the current event
 // has no error. A transport uses it to decide what part of an error is safe to send
 // back to a client.

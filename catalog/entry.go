@@ -27,5 +27,8 @@ type Audit struct {
 	Action         string // such as "invoice.refund"
 	TargetType     string // such as "invoice"
 	Severity       string // "low", "medium", "high", or "critical"
-	ReasonRequired bool   // true means audit.Do rejects an empty Reason
+	// ReasonRequired true means an audit record with an empty Reason is marked
+	// reason_missing. The record is never dropped: an incomplete fact is worth more
+	// than a lost one.
+	ReasonRequired bool
 }
