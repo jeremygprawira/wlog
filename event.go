@@ -38,10 +38,12 @@ type event struct {
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
 // counted in wlog.dropped_fields on the emitted event, rather than growing unbounded.
 const (
-	maxKeys        = 200       // top-level fields, including group and array field names
-	maxGroupFields = 50        // fields inside one SetGroup group
-	maxArrayLen    = 200       // elements in one Append array
-	maxEventSize   = 256 << 10 // bytes of field values one event may hold (CORE-25)
+	maxKeys         = 200       // top-level fields, including group and array field names
+	maxAuditRecords = 20        // elements in the reserved audit array (SPEC.md caps)
+	auditField      = "audit"   // the one reserved key an event always has room for
+	maxGroupFields  = 50        // fields inside one SetGroup group
+	maxArrayLen     = 200       // elements in one Append array
+	maxEventSize    = 256 << 10 // bytes of field values one event may hold (CORE-25)
 )
 
 type eventCtxKey struct{}
@@ -55,11 +57,19 @@ func eventFrom(ctx context.Context) *event {
 	return e
 }
 
-// HasEvent reports whether ctx carries a wide event from an active Start. Callers that
-// build on top of Start/Set (like package audit) use it to tell "inside a request" from
-// "standalone", since Set alone cannot: it silently no-ops either way.
+// HasEvent reports whether ctx carries a wide event that still accepts writes, which
+// means one from a Start whose end has not run. Callers that build on top of Start/Set
+// (like package audit) use it to tell "inside a request" from "standalone": a sealed
+// event counts as standalone, because Set alone cannot tell them apart, it silently
+// no-ops either way.
 func HasEvent(ctx context.Context) bool {
-	return eventFrom(ctx) != nil
+	e := eventFrom(ctx)
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return !e.sealed
 }
 
 // Start begins one wide event. It reads the *Logger attached to ctx (see
@@ -212,7 +222,7 @@ func Append(ctx context.Context, key string, value any) {
 			return
 		}
 	}
-	if len(arr) >= maxArrayLen {
+	if len(arr) >= arrayLimit(key) {
 		e.dropped++
 		return
 	}
@@ -220,6 +230,19 @@ func Append(ctx context.Context, key string, value any) {
 		return
 	}
 	e.fields[key] = append(arr, copied)
+}
+
+// arrayLimit returns the cap for one array key.
+//
+// The reserved audit array holds fewer elements than a user array, per the caps in
+// SPEC.md. The count is capped for the same reason every other cap exists: one event
+// cannot be made to grow without bound (gate G4). A record past the cap counts as a
+// dropped field, so it is never lost silently.
+func arrayLimit(key string) int {
+	if key == auditField {
+		return maxAuditRecords
+	}
+	return maxArrayLen
 }
 
 // reserveSize reports whether the event has room for one more value, and counts a
@@ -257,6 +280,11 @@ func mergeMap(dst, src map[string]any) {
 // Otherwise it counts the rejection and returns false. Callers must hold e.mu.
 func (e *event) reserveTopLevelSlot(key string) bool {
 	if _, exists := e.fields[key]; exists {
+		return true
+	}
+	if key == auditField {
+		// The audit array always has room, even on an event holding every other key:
+		// losing an audit record to a key cap would be a hole in the chain (G5).
 		return true
 	}
 	if len(e.fields) >= maxKeys {
@@ -334,7 +362,7 @@ func (l *Logger) emit(e *event) {
 	errInfo := e.errInfo
 	errList := e.errList
 	level := e.level
-	audit := e.fields["audit"] != nil
+	audit := e.fields[auditField] != nil
 	ctx := e.ctx
 	e.sealed = true
 	e.mu.Unlock()

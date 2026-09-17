@@ -38,7 +38,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-AUD-1 Journal owns the chain
 - [x] 10-AUD-2 Marker lines and verification rules
 - [x] 10-AUD-3 File lock and crash recovery
-- [ ] 10-AUD-4 Several records and no silent loss
+- [x] 10-AUD-4 Several records and no silent loss
 - [ ] 10-AUD-5 Diff, Wrap, Mock, tests, and docs
 - [ ] 10-PIPE-7 MinLevel, a public HTTP drain helper, and identity headers
 - [ ] 10-AUD-6 Actor types, outcomes, and correlation ids

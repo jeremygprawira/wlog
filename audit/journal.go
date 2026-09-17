@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -50,6 +51,18 @@ func Journal(path string, opts ...Option) wlog.Drain {
 // Option configures a Journal.
 type Option func(*journal)
 
+// WithOnError sets the hook that hears about a journal failure: a file that cannot be
+// opened or written, or a line that cannot be encoded. A drain cannot return an error,
+// so without a hook a dropped line is a silent hole in the chain (gate G5). The hook
+// runs outside the journal lock, so it may write to the journal it reports about.
+func WithOnError(fn func(err error)) Option {
+	return func(j *journal) { j.onError = fn }
+}
+
+// maxSanitizeDepth is how deep Journal walks an event to find a non-finite float. It
+// matches the nesting cap of the event shape, so the walk is bounded (gate G4).
+const maxSanitizeDepth = 16
+
 // journal owns one journal file and its chain state.
 type journal struct {
 	// mu serializes hashing, writing, and the chain state, so the bytes on disk are
@@ -63,42 +76,72 @@ type journal struct {
 	records int
 	// unlock releases the exclusive lock this journal holds on the file.
 	unlock func()
+	// onError hears about every failure, because a drain cannot return one.
+	onError func(err error)
 }
 
 // Send chains one audit event and appends it.
+//
+// A journal is best-effort per gate G3: it never blocks or panics the caller, and it
+// never returns an error, because a wlog.Drain cannot. Every failure therefore goes to
+// the WithOnError hook.
 func (j *journal) Send(_ context.Context, event map[string]any) {
 	if _, ok := event["audit"]; !ok {
 		return
 	}
+	if err := j.send(event); err != nil {
+		j.report(err)
+	}
+}
 
+// send chains one event under the journal lock, and returns the first failure.
+func (j *journal) send(event map[string]any) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	// ponytail: a journal is best-effort per gate G3 (never block or panic the
-	// caller) — any failure below just drops this line rather than propagating.
 	if err := j.ensureOpen(); err != nil {
-		return
+		return err
 	}
-
+	sanitizeNonFinite(event, 0)
 	if err := j.append(event); err != nil {
-		return
+		return err
 	}
 	j.records++
 	if j.records%markerEvery == 0 {
-		_ = j.appendMarker()
+		return j.appendMarker()
 	}
+	return nil
+}
+
+// report hands a failure to the error hook, if one is set, outside the journal lock so
+// the hook may use the journal. A panicking hook never reaches the caller.
+func (j *journal) report(err error) {
+	if err == nil || j.onError == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	j.onError(err)
 }
 
 // Close writes a final marker and closes the file, so a reader learns how many records
 // the file holds. A journal that never received a record writes nothing.
 func (j *journal) Close(context.Context) error {
 	j.mu.Lock()
-	defer j.mu.Unlock()
+	err := j.closeFile()
+	j.mu.Unlock()
+	j.report(err)
+	return err
+}
+
+// closeFile writes the closing marker and releases the file. Callers must hold j.mu.
+func (j *journal) closeFile() error {
 	if j.file == nil {
 		return nil
 	}
 	if j.records > 0 {
-		_ = j.appendMarker()
+		if err := j.appendMarker(); err != nil {
+			j.report(err)
+		}
 	}
 	err := j.file.Close()
 	if j.unlock != nil {
@@ -108,6 +151,60 @@ func (j *journal) Close(context.Context) error {
 	j.file = nil
 	j.syncDir()
 	return err
+}
+
+// sanitizeNonFinite replaces a NaN or an infinity in event with its name as a string.
+//
+// json.Marshal refuses those values, so without this one unrelated NaN field would cost
+// the whole audit record, and a record lost to anything but the cap is a hole in the
+// chain (gate G5). Core already does this for a value written through Set or Append;
+// Journal covers a value an enricher or a caller put in the map directly.
+func sanitizeNonFinite(v any, depth int) {
+	if depth > maxSanitizeDepth {
+		return
+	}
+	switch node := v.(type) {
+	case map[string]any:
+		for key, value := range node {
+			if replaced, ok := nonFiniteName(value); ok {
+				node[key] = replaced
+				continue
+			}
+			sanitizeNonFinite(value, depth+1)
+		}
+	case []any:
+		for i, value := range node {
+			if replaced, ok := nonFiniteName(value); ok {
+				node[i] = replaced
+				continue
+			}
+			sanitizeNonFinite(value, depth+1)
+		}
+	}
+}
+
+// nonFiniteName reports whether v is a non-finite float, and names it as core does.
+func nonFiniteName(v any) (string, bool) {
+	switch f := v.(type) {
+	case float64:
+		return nonFiniteString(f)
+	case float32:
+		return nonFiniteString(float64(f))
+	}
+	return "", false
+}
+
+// nonFiniteString names one non-finite float, the same way core names it in an event.
+func nonFiniteString(f float64) (string, bool) {
+	switch {
+	case math.IsNaN(f):
+		return "NaN", true
+	case math.IsInf(f, 1):
+		return "+Inf", true
+	case math.IsInf(f, -1):
+		return "-Inf", true
+	}
+	return "", false
 }
 
 // syncDir syncs the directory that holds the journal, so the file itself survives a

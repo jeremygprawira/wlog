@@ -23,9 +23,10 @@ type Record struct {
 type Actor struct{ Type, ID, Email string }
 type Target struct{ Type, ID string }
 
-func Do(ctx context.Context, r Record) // sets the reserved "audit" field on the current event
-                                         // (inside a Start), or emits a standalone audit event
-                                         // (outside one), via wlog.Start(ctx, "audit."+r.Action)
+func Do(ctx context.Context, r Record) // adds r to the reserved "audit" array on the current
+                                         // event (inside a Start), or emits a standalone audit
+                                         // event (outside one, or after its end ran), via
+                                         // wlog.Start(ctx, "audit."+r.Action)
 
 func Journal(path string, opts ...Option) wlog.Drain // append-only NDJSON, fsync'd, mode 0600,
                                        // resumes the hash chain from the file's last line
@@ -37,6 +38,18 @@ func VerifyHead(path, head string, key ...[]byte) error // as Verify, and the la
 func VerifySigned(path string, key []byte) error // as Verify(path, key): every line must be
                                        // signed
 ```
+
+### Several records per event
+
+`audit` is an array, so a second `Do`, `Deny`, or `Wrap` adds a record instead of replacing
+the first. One event holds at most 20 records, per the caps in [SPEC.md](SPEC.md); a record past
+the cap counts as a dropped field rather than disappearing quietly. The `audit` array always has
+room on its event, even when the event already holds the full set of top-level keys, so the key
+cap can never drop an audit record (gate G5).
+
+`Do` writes to the open event when `ctx` carries one that is still accepting writes. After the
+event's `end` ran, and outside a `Start` altogether, `Do` opens and closes its own event, so a
+late call records the fact instead of writing into a sealed event where it would be lost.
 
 ### Never sampled
 
@@ -105,8 +118,9 @@ An empty line, a line without a valid `audit.hash`, and a malformed chain field 
 
 ## Success Criteria
 
-1. `Do(ctx, Record{...})` inside a `Start`'d event sets `audit.actor/action/target/outcome/
-   reason` on that event. Outside one, it creates its own standalone event.
+1. `Do(ctx, Record{...})` inside a `Start`'d event adds a record holding
+   `actor/action/target/outcome/reason` to that event's `audit` array, up to 20 records.
+   Outside one, or after the event ended, it creates its own standalone event.
 2. A sampler configured to keep 0% of events still lets every audit-flagged event through (gate
    G5 part 1). `sample.New(sample.Rate(wlog.LevelInfo, 0))` proves it.
 3. 100 concurrent `Do` calls on one Logger produce a chain that `Verify` accepts, under `-race`.

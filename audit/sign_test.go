@@ -50,9 +50,13 @@ func TestAudit_Catalog_Reason(t *testing.T) {
 	audit.Do(ctx, audit.Record{Action: "invoice.refund", Target: audit.Target{ID: "inv-1"}})
 	end()
 
-	record, ok := rec.Last()["audit"].(map[string]any)
-	if !ok {
+	records, ok := rec.Last()["audit"].([]any)
+	if !ok || len(records) == 0 {
 		t.Fatalf("no audit record in %v", rec.Last())
+	}
+	record, ok := records[len(records)-1].(map[string]any)
+	if !ok {
+		t.Fatalf("audit record is not a map: %v", records[len(records)-1])
 	}
 	if record["reason_missing"] != true {
 		t.Errorf("reason_missing = %v, want true", record["reason_missing"])

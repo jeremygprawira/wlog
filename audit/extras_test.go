@@ -10,18 +10,22 @@ import (
 	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
-// recordOf returns event["audit"] as a map.
+// recordOf returns an event's last audit record.
 func recordOf(t *testing.T, event map[string]any) map[string]any {
 	t.Helper()
-	record, ok := event["audit"].(map[string]any)
+	records, ok := event["audit"].([]any)
+	if !ok || len(records) == 0 {
+		t.Fatalf("no audit record in %v", event)
+	}
+	record, ok := records[len(records)-1].(map[string]any)
 	if !ok {
-		t.Fatalf("no audit field in %v", event)
+		t.Fatalf("audit record is not a map: %v", records[len(records)-1])
 	}
 	return record
 }
 
 // TestAudit_Extras proves the new record fields reach the event, and that Version
-// defaults to 1. One event holds one audit record, so each case uses its own event.
+// defaults to 1.
 func TestAudit_Extras(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
@@ -100,7 +104,6 @@ func TestAudit_Only(t *testing.T) {
 }
 
 // TestAudit_Wrap proves Wrap records the outcome from fn, and keeps the error's code.
-// Each case uses its own event, because one event holds one audit record.
 func TestAudit_Wrap(t *testing.T) {
 	log, rec := wlogtest.New(t)
 

@@ -16,31 +16,48 @@ import (
 // an incomplete one.
 func Catalog(reg *catalog.Registry) wlog.Enricher {
 	return wlog.EnricherFunc(func(_ context.Context, event map[string]any) {
-		record, ok := event["audit"].(map[string]any)
+		records, ok := event[auditKey].([]any)
 		if !ok {
 			return
 		}
-		action, _ := record["action"].(string)
-		auditPolicy := policyFor(reg, action)
-		if auditPolicy == nil {
-			return
-		}
-		if auditPolicy.TargetType != "" {
-			target, _ := record["target"].(map[string]any)
-			if target == nil {
-				target = map[string]any{}
-				record["target"] = target
+		// Every record on the event gets the policy, not only the last one.
+		for _, raw := range records {
+			record, ok := raw.(map[string]any)
+			if !ok {
+				continue
 			}
-			if target["type"] == nil || target["type"] == "" {
-				target["type"] = auditPolicy.TargetType
-			}
-		}
-		if auditPolicy.ReasonRequired {
-			if reason, _ := record["reason"].(string); reason == "" {
-				record["reason_missing"] = true
-			}
+			applyPolicy(record, policyFor(reg, actionOf(record)))
 		}
 	})
+}
+
+// actionOf returns one record's action.
+func actionOf(record map[string]any) string {
+	action, _ := record["action"].(string)
+	return action
+}
+
+// applyPolicy fills target.type from the policy and marks a record that is missing a
+// reason the policy requires. A nil policy leaves the record alone.
+func applyPolicy(record map[string]any, auditPolicy *catalog.Audit) {
+	if auditPolicy == nil {
+		return
+	}
+	if auditPolicy.TargetType != "" {
+		target, _ := record["target"].(map[string]any)
+		if target == nil {
+			target = map[string]any{}
+			record["target"] = target
+		}
+		if target["type"] == nil || target["type"] == "" {
+			target["type"] = auditPolicy.TargetType
+		}
+	}
+	if auditPolicy.ReasonRequired {
+		if reason, _ := record["reason"].(string); reason == "" {
+			record["reason_missing"] = true
+		}
+	}
 }
 
 // policyFor returns the audit policy of the entry whose action matches, or nil.

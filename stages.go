@@ -49,7 +49,7 @@ func WithEnrichers(enrichers ...Enricher) Option {
 // configured Keeper decides, panic-isolated, falling back to "keep" so a broken
 // sampler can never silently drop every event.
 func (l *Logger) shouldKeep(ctx context.Context, event map[string]any) bool {
-	if _, isAudit := event["audit"]; isAudit {
+	if _, isAudit := event[auditField]; isAudit {
 		return true
 	}
 	if len(l.samplers) == 0 {

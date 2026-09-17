@@ -20,7 +20,7 @@ func Only(ctx context.Context, r Record) {
 	r.Version = versionOf(r)
 	ctx, end := wlog.Start(ctx, "audit."+r.Action)
 	defer end()
-	wlog.Set(ctx, "audit", r)
+	wlog.Append(ctx, auditKey, r)
 }
 
 // Wrap runs fn and records one audit fact with the outcome fn produced. A nil error

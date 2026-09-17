@@ -13,6 +13,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ### Changed
 
+- The event's `audit` field is now an array of up to 20 records, so a second `audit.Do`
+  adds a record instead of replacing the first. A `Do` after the event ended emits its own
+  event. Migration: read `event["audit"].([]any)` and take the last element, or the whole
+  list, where the code read a single object.
 - `audit.Journal` owns the hash chain and hashes the exact bytes it writes, so one
   changed byte fails `Verify`. The `audit.Chain` drain is gone, and signing is now
   `audit.Journal(path, audit.WithKey(key))` instead of the `audit.Sign` drain. Migration:

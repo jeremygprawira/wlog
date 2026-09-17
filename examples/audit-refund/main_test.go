@@ -22,9 +22,13 @@ func TestAuditRefund_RecordsFact(t *testing.T) {
 	if last["order_id"] != "ord-1" {
 		t.Errorf("order_id = %v, want ord-1", last["order_id"])
 	}
-	record, _ := last["audit"].(map[string]any)
-	if record == nil {
+	records, _ := last["audit"].([]any)
+	if len(records) == 0 {
 		t.Fatalf("no audit record: %v", last)
+	}
+	record, _ := records[len(records)-1].(map[string]any)
+	if record == nil {
+		t.Fatalf("audit record is not a map: %v", records[len(records)-1])
 	}
 	if record["action"] != "refund.create" || record["outcome"] != "success" {
 		t.Errorf("audit action/outcome = %v/%v, want refund.create/success", record["action"], record["outcome"])

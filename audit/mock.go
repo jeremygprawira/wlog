@@ -42,17 +42,21 @@ func Mock(t testing.TB) (*wlog.Logger, *Recorder) {
 	return wlog.New(wlog.WithFormat(wlog.FormatJSON), wlog.WithDrains(recorder)), recorder
 }
 
-// requireAudit returns the last event's audit record, and fails the test when there is
-// none.
+// requireAudit returns the last audit record of the last event, and fails the test when
+// there is none.
 func (r *Recorder) requireAudit(t testing.TB) map[string]any {
 	t.Helper()
 	events := r.Events()
 	if len(events) == 0 {
 		t.Fatal("audit: no event recorded")
 	}
-	record, ok := events[len(events)-1]["audit"].(map[string]any)
-	if !ok {
+	records, ok := events[len(events)-1][auditKey].([]any)
+	if !ok || len(records) == 0 {
 		t.Fatalf("audit: last event has no audit record: %v", events[len(events)-1])
+	}
+	record, ok := records[len(records)-1].(map[string]any)
+	if !ok {
+		t.Fatalf("audit: last audit record is not a map: %v", records[len(records)-1])
 	}
 	return record
 }
@@ -89,7 +93,7 @@ func (r *Recorder) RequireNoAudit(t testing.TB) {
 	if len(events) == 0 {
 		t.Fatal("audit: no event recorded")
 	}
-	if _, ok := events[len(events)-1]["audit"]; ok {
+	if _, ok := events[len(events)-1][auditKey]; ok {
 		t.Fatalf("audit: last event carries an audit record: %v", events[len(events)-1])
 	}
 }
