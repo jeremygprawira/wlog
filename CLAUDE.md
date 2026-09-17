@@ -38,8 +38,7 @@ acceptance criterion names a test, and the test name says what it protects, such
 A golden file comes from a real system or from a hand, and never from the code under test.
 
 The `wlog.SetDefault` pointer is the one allowed piece of package-level state. A package
-function reads the Logger on the context, and falls back to that pointer when the context holds
-none. Nothing else holds mutable package state. Two tests in one process then share it.
+function reads the Logger on the context. An empty context falls back to that pointer. Nothing else holds mutable package state. Two tests in one process then share it.
 
 ## Commands
 

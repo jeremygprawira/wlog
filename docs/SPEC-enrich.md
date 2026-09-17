@@ -24,15 +24,16 @@ func Overwrite(on bool) HostOption // and the equivalent on every other enricher
 // default false: an enricher never overwrites a field the request/handler already set
 ```
 
-`Host` reads `os.Hostname()`, `os.Getpid()`, and Kubernetes downward-API env vars (`POD_NAME`,
-`POD_NAMESPACE`, `NODE_NAME`) when present. `Deployment` reads `REGION`, `GIT_COMMIT`/
+`Host` reads `os.Hostname()`, `os.Getpid()`, and three Kubernetes downward-API env vars:
+`POD_NAME`, `POD_NAMESPACE`, and `NODE_NAME`. It reads only a variable that holds a value. `Deployment` reads `REGION`, `GIT_COMMIT`/
 `COMMIT_SHA`, and falls back to the Logger's own `service.version`. `UserAgent` parses
 `http.user_agent` (set by `http-std`) with a small stdlib-only matcher recognizing Chrome, Edge,
 Firefox, Safari, common HTTP clients (curl, Go-http-client), and major bots. IOS/Android/Windows/
-macOS/Linux. Mobile/desktop/bot device class. `Geo` reads, in order, Cloudflare (`CF-IPCountry`
-country only), CloudFront (`CloudFront-Viewer-Country/Region/City/Latitude/Longitude`), Vercel
-(`X-Vercel-IP-Country/Country-Region/City/Latitude/Longitude`) headers found on
-`http.request_headers`, or a caller-supplied header map via `GeoHeaders`.
+macOS/Linux. Mobile/desktop/bot device class. `Geo` reads the headers of one named provider from `http.request_headers`. The providers are
+Cloudflare (`CF-IPCountry`, country only), CloudFront
+(`CloudFront-Viewer-Country/Region/City/Latitude/Longitude`), and Vercel
+(`X-Vercel-IP-Country/Country-Region/City/Latitude/Longitude`). `GeoHeaders` supplies a
+caller's own header map instead.
 
 ## Success Criteria
 
@@ -41,8 +42,8 @@ country only), CloudFront (`CloudFront-Viewer-Country/Region/City/Latitude/Longi
    classes listed above. An unrecognized UA sets only `http.user_agent_parsed.raw`.
 3. `Geo()` extracts full country/region/city/lat/lon from CloudFront and Vercel headers, and
    country-only from Cloudflare's single header.
-4. `Overwrite(false)` (default) never replaces a field the event already has; `Overwrite(true)`
-   does.
+4. `Overwrite(false)` (default) never replaces a field the event already has. `Overwrite(true)`
+   replaces it.
 5. `User(fn)` panicking is isolated by core's existing enricher panic-recovery, no extra
    isolation code needed in this module (reuses `wlog.Logger.runEnrichers`'s guarantee).
 6. Zero imports outside the standard library.

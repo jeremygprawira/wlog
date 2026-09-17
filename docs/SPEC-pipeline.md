@@ -5,11 +5,11 @@
 
 ## Objective
 
-Wrap a batch-sending backend with batching, retry, and a bounded buffer, so a real drain
-(Axiom, Loki, a file) never slows down or blocks the request that logged through it (gate G3),
-and never grows memory without bound (gate G4). `wlog.Drain.Send` has no error return, so retry
-needs a slightly richer interface than core's, `pipeline` defines it and hands back a plain
-`wlog.Drain` that any `wlog.Logger` can use.
+Wrap a batch-sending backend with batching, retry, and a bounded buffer. A real drain
+(Axiom, Loki, a file) then never slows down or blocks the request that logged through it
+(gate G3). It also never grows memory without bound (gate G4). `wlog.Drain.Send` has no error
+return, and retry needs a slightly richer interface than core's, so `pipeline` defines that
+interface. It hands back a plain `wlog.Drain` that any `wlog.Logger` uses.
 
 ## Behaviour
 
@@ -50,46 +50,46 @@ first `Send`, stopped by `Close`) reads that channel and manages batching.
 
 ### Batching
 
-A batch flushes when it reaches `BatchSize` events or `BatchInterval` has passed since the
-first event currently in it, whichever comes first. A full or timed-out batch is sent as one
+A batch flushes on `BatchSize` events. It also flushes after `BatchInterval`, counted from the
+first event in it. A full or timed-out batch is sent as one
 `next.SendBatch(ctx, batch)` call.
 
 ### Retry
 
-A `SendBatch` error is retried up to `MaxAttempts` total tries, waiting between tries per
-`Backoff`/`InitialDelay`/`MaxDelay` (`Exponential`: 1s, 2s, 4s, ... capped at `MaxDelay`;
-`Linear`: 1s, 2s, 3s, ...; `Fixed`: `InitialDelay` every time), with jitter of up to 20% to
-avoid a thundering herd. Attempts exhausted: the batch is dropped and `OnDropped(batch, err)`
-is called if set.
+A `SendBatch` error is retried up to `MaxAttempts` total tries. The wait between tries follows
+`Backoff`, `InitialDelay`, and `MaxDelay`. `Exponential` waits 1s, then 2s, then 4s, capped at
+`MaxDelay`. `Linear` waits 1s, then 2s, then 3s. `Fixed` waits `InitialDelay` every time. Jitter
+of up to 20% avoids a thundering herd. When the attempts run out, the batch is dropped.
+A caller that set `OnDropped` then receives the batch and the error.
 
 ### Buffer and overflow
 
-`MaxBuffer` events are queued at once (across the channel and any batch awaiting retry). A
-`Send` that would exceed it drops the **oldest** buffered event, increments a dropped counter,
-and calls `OnDropped([]map[string]any{dropped}, nil)` if set. Never blocks, never panics (G3,
-G4).
+`MaxBuffer` events are queued at once, across the channel and any batch awaiting retry. A `Send`
+past that limit drops the **oldest** buffered event. It increments a dropped counter, and it
+calls `OnDropped([]map[string]any{dropped}, nil)` for a caller that set one. A `Send` never blocks and
+never panics (G3, G4).
 
 ### Close
 
-The returned `Drain`'s `Close(ctx context.Context) error` flushes every buffered event (one
-final `SendBatch`, retried per the usual policy but bounded by `ctx`'s deadline) and stops the
-background goroutine.
+The returned `Drain`'s `Close(ctx context.Context) error` flushes every buffered event as one
+final `SendBatch`. The retry policy applies, and `ctx`'s deadline bounds it. `Close` then stops
+the background goroutine.
 
 ### FanOut
 
-`FanOut(drains...)` returns a `Drain` whose `Send` queues the event for every drain and returns
-immediately, without waiting for any of them, matching gate G3, since `FanOut` is itself just a
-`wlog.Drain` and core calls `Send` synchronously from the event pipeline.
+`FanOut(drains...)` returns a `Drain` whose `Send` queues the event for every drain. It returns
+immediately, without waiting for any of them. That matches gate G3, because `FanOut` is itself
+just a `wlog.Drain`. Core calls `Send` synchronously from the event pipeline.
 
-Each drain gets one bounded queue of 256 events and one goroutine that reads it. A full queue
-drops the newest event for that drain instead of blocking the caller, so memory and goroutines
-stay bounded however many events arrive (G4). Every delivery runs under recover, so a panicking
+Each drain gets one bounded queue of 256 events. One goroutine reads that queue. A full queue
+drops the newest event for that drain, instead of blocking the caller. Memory and goroutines
+therefore stay bounded, however many events arrive (G4). Every delivery runs under recover, so a panicking
 drain never climbs out of the FanOut goroutine (G3), and the drain keeps receiving later events.
 A hanging or slow drain never delays delivery to the others, or the caller.
 
 The result also implements `Flush(ctx) error` and `Close(ctx) error`. Both first wait until the
-queues hold no undelivered event, then forward the call to every drain that implements it, so a
-`Logger.Flush` or `Logger.Close` reaches a `pipeline.Wrap` inside the FanOut. `Close` then stops
+queues hold no undelivered event. They then forward the call to every drain that implements it. A
+`Logger.Flush` or `Logger.Close` therefore reaches a `pipeline.Wrap` inside the FanOut. `Close` then stops
 the goroutines. Both waits are bounded by `ctx`.
 
 Drains receive the event map read-only, and they run at the same time. A drain that must change
@@ -105,8 +105,8 @@ the event copies it first, per the core drain contract (CORE-11).
    `OnDropped` once with the whole batch.
 4. `Close(ctx)` flushes every pending event through one last `SendBatch` and returns only after
    it settles or `ctx`'s deadline passes.
-5. `MaxBuffer` exceeded drops the oldest event, calls `OnDropped`, never blocks the caller —
-   proven with a `Sender` whose `SendBatch` never returns, under a tight test timeout.
+5. A `MaxBuffer` that overflows drops the oldest event, calls `OnDropped`, and never blocks the
+   caller. A `Sender` whose `SendBatch` never returns proves that, under a tight test timeout.
 6. `FanOut` delivers to every drain. One drain hanging does not prevent the others from
    receiving the event, and costs one queue and one goroutine, not one goroutine per event.
    A panicking drain is recovered, and `Flush` and `Close` reach every drain that implements

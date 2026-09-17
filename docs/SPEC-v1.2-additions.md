@@ -45,8 +45,8 @@ the build-then-record pair that every handler writes today.
 uses it to fold a running total. The value is returned as stored, so a caller must not mutate
 it.
 
-The package's default extractor also reads an error's `Code() string` method, when the error
-has one. An error from a catalog, or from a library such as herr, then keeps its own code with
+The package's default extractor also reads an error's `Code() string` method, for an error
+that has one. An error from a catalog, or from a library such as herr, then keeps its own code with
 no extra extractor. A plain error still gets `INTERNAL`. `DefaultExtractor()` returns that
 same extractor, so a decorator such as `catalog.Extractor` can wrap it.
 
@@ -107,8 +107,8 @@ in a query.
 only what changed, as a nested tree of `{"field": {"from": x, "to": y}}` entries. A nested object
 stays nested, so a path denylist entry such as `changes.user.creds.nik` matches the diff, and
 the normal pipeline masks the value it names. It walks a struct through its JSON tags, which
-keeps it agnostic. It returns an error when either side is not an object, because a slice or a
-scalar has no fields to compare.
+keeps it agnostic. For a slice or a scalar, which has no fields to compare, it returns an
+error.
 
 `audit.Journal(path, audit.WithKey(key))` signs every line it writes. Each line carries
 `audit.signature`, an HMAC-SHA256 over the chain hash. `Verify(path, key)` then rejects a record

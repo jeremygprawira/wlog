@@ -68,7 +68,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-INIT-1 `wlog init` correctness
 - [x] 10-INIT-2 `wlog doctor` and `wlog agents`
 - [x] 10-DOCS-1 Statuses, README, and CHANGELOG
-- [ ] 10-DOCS-2 Parity page and guides
+- [x] 10-DOCS-2 Parity page and guides
 - [ ] Review point 10, v0.5.0: human review, then ask before tagging
 
 ## Phase 11, v0.6: event shape v2 and the five foundations

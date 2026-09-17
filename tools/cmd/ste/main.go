@@ -3,7 +3,7 @@
 //
 // The rules and their names live in tools/internal/ste. This command finds the
 // text to check, prints one line per hit as path:line: code: message, and exits
-// 1 on any hit. A path listed in tools/ste-known-bad.txt is skipped, which keeps
+// 1 on any hit.
 // the older specs from blocking CI while the documentation tasks rewrite them.
 //
 // Without arguments the command checks the markdown files of the repository.
@@ -28,9 +28,6 @@ import (
 	"github.com/jeremygprawira/wlog/tools/internal/ste"
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
-
-// knownBadPath is the list of files that the command skips.
-const knownBadPath = "tools/ste-known-bad.txt"
 
 // main finds the workspace root and exits 1 when any file fails.
 func main() {
@@ -67,10 +64,6 @@ type passage struct {
 
 // run checks every target and prints one line per hit.
 func run(root string, args []string, register ste.Register, comments bool, out io.Writer) error {
-	skip, err := readKnownBad(root)
-	if err != nil {
-		return err
-	}
 
 	passages, err := collect(root, args, comments)
 	if err != nil {
@@ -80,9 +73,6 @@ func run(root string, args []string, register ste.Register, comments bool, out i
 	var problems []string
 	bad := 0
 	for _, p := range passages {
-		if skip[p.file] {
-			continue
-		}
 		for _, hit := range ste.Lint(p.text, register).Hits {
 			bad++
 			problems = append(problems, fmt.Sprintf("%s:%d: %s: %s",
@@ -99,27 +89,6 @@ func run(root string, args []string, register ste.Register, comments bool, out i
 		return fmt.Errorf("%d hit(s) in %s text", bad, register)
 	}
 	return nil
-}
-
-// readKnownBad reads the list of files to skip. A missing list is not an error,
-// because the list shrinks to nothing as the documentation tasks land.
-func readKnownBad(root string) (map[string]bool, error) {
-	data, err := os.ReadFile(filepath.Join(root, knownBadPath))
-	if os.IsNotExist(err) {
-		return map[string]bool{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	skip := map[string]bool{}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(strings.SplitN(line, "#", 2)[0])
-		if line == "" {
-			continue
-		}
-		skip[line] = true
-	}
-	return skip, nil
 }
 
 // collect returns every passage to check. With arguments it reads those paths,

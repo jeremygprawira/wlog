@@ -118,3 +118,44 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestSte_LineSurvivesCodeBlock proves a hit reports the line a reader must open, even when a
+// code block sits above it: the stripped body keeps one newline for every line of code.
+func TestSte_LineSurvivesCodeBlock(t *testing.T) {
+	text := "# Title\n\n" +
+		"```go\nfunc one() {}\nfunc two() {}\nfunc three() {}\nfunc four() {}\n```\n\n" +
+		"The sentence below this code block runs well past the descriptive limit of twenty-five words, because it keeps going and going and going until it is plainly too long.\n"
+
+	report := ste.Lint(text, ste.Descriptive)
+	if len(report.Hits) != 1 {
+		t.Fatalf("hits = %+v, want one", report.Hits)
+	}
+	if got, want := report.Hits[0].Line, 10; got != want {
+		t.Errorf("hit line = %d, want %d: a code block must not shift the lines below it", got, want)
+	}
+}
+
+// TestSte_RepeatedSentenceKeepsItsOwnLine proves two identical sentences report two lines, so a
+// reader can fix both.
+func TestSte_RepeatedSentenceKeepsItsOwnLine(t *testing.T) {
+	sentence := "This sentence is repeated on two separate lines in this file and it runs well past the descriptive limit of twenty-five words, so a checker must report both copies with their own line numbers."
+	text := sentence + "\n\n" + sentence + "\n"
+
+	report := ste.Lint(text, ste.Descriptive)
+	if len(report.Hits) != 2 {
+		t.Fatalf("hits = %+v, want two", report.Hits)
+	}
+	if report.Hits[0].Line != 1 || report.Hits[1].Line != 3 {
+		t.Errorf("lines = %d, %d; want 1 and 3", report.Hits[0].Line, report.Hits[1].Line)
+	}
+}
+
+// TestSte_IgnoresTheSketchMarker proves a block marker is not prose: it is invisible in a
+// rendered document, so it never counts as a sentence.
+func TestSte_IgnoresTheSketchMarker(t *testing.T) {
+	text := "# Title\n\n<!-- snippet:sketch -->\n```go\nwlog.Start(ctx, \"x\")\n```\n"
+
+	if got := ste.Lint(text, ste.Descriptive).Total(); got != 0 {
+		t.Errorf("hits = %d, want none: the marker is not prose", got)
+	}
+}

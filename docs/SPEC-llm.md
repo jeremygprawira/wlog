@@ -115,7 +115,7 @@ llm.calls[]  (one object per call, set by Add)
 
 The stream timing field avoids the word "token" on purpose. The default redactor
 denies any key whose tokens include "token", so a name such as `time_to_first_token_ms`
-would be masked before it reached a drain.
+is masked before a drain sees it.
 
 ## Success Criteria
 
@@ -123,7 +123,7 @@ would be masked before it reached a drain.
 2. `Add` folds token counts and costs into one total, and appends each call to `llm.calls[]`,
    capped at 200 entries each by llm itself, with every entry past the cap counted in
    wlog.dropped_fields (gate G4). Money stays in whole micros: an event never carries a
-   dollar float, because a float would round.
+   dollar float, because a float rounds.
 3. `Cost` prices a record from the token counts, and prices a cached input token at the
    cached rate.
 4. `Cost` reports false for a model the table does not hold, and the enricher then sets

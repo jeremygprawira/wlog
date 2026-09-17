@@ -55,12 +55,15 @@ var (
 	trailingCond = regexp.MustCompile(`(?i)\s(if|when)\s`)
 	conditionLed = regexp.MustCompile(`(?i)^(if|when)\b`)
 	fencedCode   = regexp.MustCompile("(?s)```.*?```|~~~.*?~~~")
-	codeSpan     = regexp.MustCompile("`[^`\n]+`")
-	heading      = regexp.MustCompile(`(?m)^#+\s.*$`)
-	url          = regexp.MustCompile(`https?://\S+`)
-	tableSep     = regexp.MustCompile(`(?m)^\s*\|[\s:|-]+\|\s*$`)
-	tableRow     = regexp.MustCompile(`(?m)^\s*\|.*\|\s*$`)
-	listItem     = regexp.MustCompile(`(?m)^\s*(?:[-*+]|\d+[.)])\s+.*$`)
+	// htmlComment covers a marker such as <!-- snippet:sketch -->, which is invisible in a
+	// rendered document and obeys no prose rule.
+	htmlComment = regexp.MustCompile("(?s)<!--.*?-->")
+	codeSpan    = regexp.MustCompile("`[^`\n]+`")
+	heading     = regexp.MustCompile(`(?m)^#+\s.*$`)
+	url         = regexp.MustCompile(`https?://\S+`)
+	tableSep    = regexp.MustCompile(`(?m)^\s*\|[\s:|-]+\|\s*$`)
+	tableRow    = regexp.MustCompile(`(?m)^\s*\|.*\|\s*$`)
+	listItem    = regexp.MustCompile(`(?m)^\s*(?:[-*+]|\d+[.)])\s+.*$`)
 
 	// One term, one meaning: a document that names one thing two ways is
 	// harder to read, so the second name counts as a rotation.
@@ -138,8 +141,17 @@ func Lint(text string, register Register) Report {
 	sentences := splitSentences(body)
 	var hits []Hit
 
+	// A sentence may appear twice in one file, so the search walks forward: each copy keeps its
+	// own line number.
+	cursor := 0
 	for _, sentence := range sentences {
-		at := strings.Index(body, sentence)
+		at := strings.Index(body[cursor:], sentence)
+		if at < 0 {
+			at = 0
+		} else {
+			at += cursor
+			cursor = at + len(sentence)
+		}
 		if len(strings.Fields(sentence)) > limit {
 			hits = append(hits, Hit{"sentence_over_limit", clip(sentence), lineOf(body, at)})
 		}
@@ -275,7 +287,14 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 // inline code, headings, and URLs. Every newline stays, so a line number in the
 // stripped body is the same line number in the original text.
 func stripCode(text string) string {
-	body := fencedCode.ReplaceAllString(text, " ")
+	// A fenced block becomes as many line breaks as it held, so a hit below a block still names
+	// the line a reader must open.
+	body := fencedCode.ReplaceAllStringFunc(text, func(block string) string {
+		return strings.Repeat("\n", strings.Count(block, "\n"))
+	})
+	body = htmlComment.ReplaceAllStringFunc(body, func(comment string) string {
+		return strings.Repeat("\n", strings.Count(comment, "\n"))
+	})
 	body = codeSpan.ReplaceAllString(body, " CODESPAN ")
 	body = heading.ReplaceAllString(body, " ")
 	body = url.ReplaceAllString(body, " URL ")

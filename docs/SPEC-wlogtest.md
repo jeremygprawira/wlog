@@ -25,18 +25,18 @@ func (r *Recorder) RequireErrorCode(t testing.TB, code string)
 func (r *Recorder) RequireCount(t testing.TB, n int)
 ```
 
-`New` builds a real `*wlog.Logger` with `WithFormat(wlog.FormatJSON)` (silences the pretty
-console during tests) plus a `drain/memory.Memory`-backed drain, merges in any user-supplied
-`opts` (so a custom redactor, sampler, and so on can still be tested), and returns both. `Require*`
-failures call `t.Helper()` and print the closest event (via `Last()`) alongside the mismatch, so
-a failing assertion shows what was actually logged, not just "not equal".
+`New` builds a real `*wlog.Logger` with `WithFormat(wlog.FormatJSON)`, which silences the pretty
+console during tests. It adds a `drain/memory.Memory`-backed drain, and it merges in any
+user-supplied `opts`, so a custom redactor or sampler can still be tested. It returns both. A
+`Require*` failure calls `t.Helper()` and prints the closest event (via `Last()`) alongside the
+mismatch. A failing assertion therefore shows what was logged, and not just "not equal".
 
 ## Success Criteria
 
 1. A handler calling `wlog.Set(ctx, "order_id", "4821")` is visible via
    `rec.RequireField(t, "order_id", "4821")` without the test touching stdout.
-2. `RequireErrorCode` fails with a readable message (showing `Last()`) when the code doesn't
-   match or no error was logged.
+2. `RequireErrorCode` fails with a readable message (showing `Last()`) for a code that does
+   not match, and for a run that logged no error.
 3. User options passed to `New` (for example a custom redactor) take effect, proven by a test that
    configures `redact.Disabled()` and confirms an unmasked value shows up in `Events()`.
 4. Zero imports outside the standard library plus `drain/memory` and `core`, both in-module.

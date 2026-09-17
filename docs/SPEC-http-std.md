@@ -6,9 +6,9 @@
 
 ## Objective
 
-One `net/http` middleware (and, via a route-name hook, gorilla/mux) that wraps a request in a
-`wlog.Start`/`end`, captures everything by default, and is the reference implementation the
-shared conformance suite (`internal/conformance`) is built from.
+One `net/http` middleware that wraps a request in a `wlog.Start`/`end`. It also covers
+gorilla/mux through a route-name hook. It captures safe fields by default, and `CaptureAll()`
+adds bodies and values. The shared conformance suite (`internal/conformance`) is built from it.
 
 ## Behaviour
 
@@ -40,8 +40,8 @@ trace.trace_id trace.span_id (from a valid W3C traceparent header. Unset if abse
 user.id (via WithUserFunc, if set)
 ```
 
-`http.route` uses `r.Pattern` (populated by Go's `net/http.ServeMux` since 1.22) when non-empty,
-else falls back to `r.URL.Path`; `WithRouteFunc` overrides for gorilla/mux
+When `r.Pattern` holds a value, `http.route` uses it. Go 1.22 and later fill that field in
+`net/http.ServeMux`. Otherwise the route falls back to `r.URL.Path`. `WithRouteFunc` overrides both for gorilla/mux
 (`mux.CurrentRoute(r).GetPathTemplate()`) or any other router.
 
 ### Body capture
@@ -50,30 +50,31 @@ Both directions captured by default, capped at `MaxBodyCapture` bytes, only for 
 matching `BodyContentTypes` (default JSON + text). Other types are skipped (not read, not
 buffered) to avoid corrupting binary uploads/downloads. The request body is restored
 (`io.NopCloser` over the buffered bytes) so the real handler still reads it normally. The
-response writer wrapper preserves `http.Flusher`, `http.Hijacker`, and `io.ReaderFrom` when the
-underlying writer supports them, and stops buffering past the cap without altering what is
-written to the real client (gate G4).
+response writer wrapper keeps `http.Flusher`, `http.Hijacker`, and `io.ReaderFrom` for a writer
+that supports them. It stops buffering past the cap, and it never alters what the real client
+receives (gate G4).
 
 ### Panics
 
-A panic in the wrapped handler is recovered, turned into a 500 response (if nothing was written
-yet) with the panic captured via `wlog.Error` (using `runtime/debug.Stack()` as `ErrorInfo.Stack`
-through a default extractor that recognizes a recovered panic value), and the event still emits.
-The process keeps serving.
+A panic in the wrapped handler is recovered. The panic is captured through `wlog.Error`, and the
+default extractor recognizes a recovered panic value. It uses `runtime/debug.Stack()` as
+`ErrorInfo.Stack`. The response is a 500, unless the handler already wrote a response. The event
+still emits, and the process keeps serving.
 
 ### Plugin hooks
 
-Every plugin from `log.Plugins()` implementing `wlog.RequestStarter` runs (in registration
-order) right after `wlog.Start`, before the handler. Every one implementing
-`wlog.RequestFinisher` runs right before `end()`, given `ctx` only, the final event map is
-core-internal at this point, so a finisher observes side effects via `ctx` or its own state
-(for example a metrics counter), not the rendered event. Use an `Enricher` to add or read fields on
+Every plugin from `log.Plugins()` implementing `wlog.RequestStarter` runs right after
+`wlog.Start`, before the handler, in registration order. Every plugin that implements
+`wlog.RequestFinisher` runs right before `end()`, given `ctx` only. The final event map is
+core-internal at this point. A finisher therefore observes side effects through `ctx` or its own
+state, such as a metrics counter, and not the rendered event. Use an `Enricher` to add or read fields on
 the event itself.
 
 ## Success Criteria (also the conformance suite's contract)
 
 1. `internal/conformance.Run(t, adapter)` exercises: 200 response with route/status/duration
-   captured. A panic recovered into 500 with the event still emitted. Request id reuse/echo. Valid and invalid `traceparent`; `wlog.Set` from inside the handler visible on the event;
+   captured. A panic recovered into 500 with the event still emitted. Request id reuse/echo. A valid and an invalid `traceparent`. `wlog.Set` from inside the handler is visible on the
+   event.
    `SkipPaths` producing no event. Body capture on/off and content-type filtering. Header/query/
    cookie capture including redaction of `Authorization`/`Cookie` via the default redactor (no
    special-casing in this module, proof that core's defaults already cover it).
@@ -85,14 +86,14 @@ the event itself.
 
 ## Testing
 
-`httptest.NewRecorder`/`httptest.NewServer`. Package `nethttp_test` for unit tests;
+`httptest.NewRecorder` and `httptest.NewServer`. Unit tests live in package `nethttp_test`.
 `internal/conformance` is importable by every adapter module's own tests.
 
 ## Boundaries
 
 - **Always:** run every new HTTP adapter against `internal/conformance` before merging it.
 - **Ask first:** changing default capture behavior (currently: everything on).
-- **Never:** read a request body whose content type isn't in `BodyContentTypes`.
+- **Never:** read a request body whose content type is not in `BodyContentTypes`.
 
 ## Open Questions
 

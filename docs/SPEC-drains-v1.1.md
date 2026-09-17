@@ -11,7 +11,7 @@
 ## Objective
 
 Ship the three v1.1 drains. Each one turns a batch of already-redacted wide events into
-the backend's own wire format, so a team reaches Sentry, ClickHouse, or Datadog without a
+the backend's own wire format. A team then reaches Sentry, ClickHouse, or Datadog without a
 vendor SDK.
 
 ## drain-sentry
@@ -28,7 +28,7 @@ vendor SDK.
   {"event_id":"<32 hex>","timestamp":"<RFC3339Nano>","platform":"go","level":"error",...}
   ```
   All items share one envelope header line and one `sent_at`.
-- Error events only by default. An event is an error event when its `level` is `error` or
+- Error events only by default. For an error event, the `level` is `error` or
   it carries the reserved `error` key.
 - An error event maps to one `event` item:
   - `event_id`: 32 random hex characters, one per item.
@@ -36,7 +36,7 @@ vendor SDK.
     Sentry groups every event with the same code into one issue. The plan calls this
     "grouping by error code (fallback type)".
   - `message.formatted`: `error.message`, then `operation`.
-  - `tags`: `service`, `env`, `level`, `operation`, when each is present.
+  - `tags`: `service`, `env`, `level`, and `operation`, for each value the event holds.
   - `contexts.wlog`: the whole redacted event, so the wide event is attached.
 - `WithAllEvents(true)`, or `SENTRY_ALL_EVENTS=1`, also sends every non-error event as a
   `log` item in the same envelope, for Sentry Logs:
@@ -55,8 +55,8 @@ vendor SDK.
 - Insert: `POST {url}/?query=<urlencoded query>` where the query is
   `INSERT INTO {database}.{table} FORMAT JSONEachRow`, content type
   `application/x-ndjson` (one JSON object per line).
-- Auth: `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD`, or `WithBasicAuth`. Basic auth is
-  sent only when the user is non-empty.
+- Auth: `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD`, or `WithBasicAuth`. An empty user
+  sends no basic auth header.
 - Env: `CLICKHOUSE_DATABASE` (default `default`), `CLICKHOUSE_TABLE` (default
   `wlog_events`). Options `WithDatabase`, `WithTable`.
 - Row mapping, one column per reserved field, plus the whole event in the `event` column:
@@ -90,11 +90,11 @@ vendor SDK.
   ClickHouse error that `pipeline` reports.
 - The timestamp column takes `2006-01-02 15:04:05.000000000` in UTC, the `DateTime64(9)`
   text form, not RFC 3339. A database or table name must match `^[A-Za-z_][A-Za-z0-9_]*$`,
-  so a config value can never inject SQL. `CLICKHOUSE_URL` may carry its own query, such as
-  `secure=true`, which the insert statement joins.
+  so a config value can never inject SQL. `CLICKHOUSE_URL` can carry its own query, such as
+  `secure=true`. The insert statement joins that query.
 - Options: `WithURL`, `WithBasicAuth`, `WithDatabase`, `WithTable`, `WithPipeline`.
 - Constructors: `New` returns the async drain, `NewSender` the raw sender, and `MustNew`
-  panics on a configuration error.
+  panics on a config error.
 
 ## drain-datadog
 
@@ -110,8 +110,8 @@ vendor SDK.
   - `ddsource`: `wlog`, or `WithSource`.
   - `service`: `service.name`, else the `DD_SERVICE` env var.
   - `ddtags`: comma-joined tags, sorted, from `env:<service.env>`, `version:<service.version>`,
-    and `service:<service.name>`. An absent value adds no tag. `DD_ENV` supplies `env:` when
-    the event has none.
+    and `service:<service.name>`. An absent value adds no tag. For an event with no env,
+    `DD_ENV` supplies `env:`.
   - `message`: the whole event, encoded as one JSON string.
   - `level`: the event's `level` unchanged.
 - A 413 (payload too large) splits the batch in half and sends each half again. A single
@@ -143,7 +143,7 @@ vendor SDK.
 
 ## Boundaries
 
-- **Always:** read env when an option is absent. Keep the whole redacted event in the
+- **Always:** read env for an option the caller did not set. Keep the whole redacted event in the
   backend payload.
 - **Ask first:** adding a vendor SDK, changing the recommended ClickHouse schema, adding a
   fourth v1.1 drain.

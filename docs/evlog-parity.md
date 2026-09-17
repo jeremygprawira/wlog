@@ -9,6 +9,9 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 
 ## Status key
 
+This page was rebuilt against v0.5.0: every row below was checked against the code and its tests.
+A test proves every row that says built. A row that says partial names what is missing.
+
 | Status | Meaning |
 |---|---|
 | built | wlog ships it with a test |
@@ -33,8 +36,8 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | wide-events | built | `Start`, `Set`, `SetGroup`, `Append`, `Detach` |
 | structured-errors | built | `ErrorInfo` with code, message, kind, status, cause, stack, why, fix, link, attrs, plus the `Data` and `Internal` split, `Errorf`, and `DefaultExtractor` |
 | lifecycle | built | fixed stage order and plugin hooks |
-| sampling | built | `sample.New` with `Rate`, `KeepStatus`, `KeepDuration`, `KeepPath`, `KeepFunc` |
-| redaction | partial | `redact` with add/remove keys and patterns, builtins toggle, replacement, transform. Missing a replacement function of the matched value |
+| sampling | built | `sample.MustNew` with `Rate`, `KeepStatus`, `KeepDuration`, `KeepPath`, `KeepFunc`. A `**` segment crosses path segments, a head decision follows `trace.trace_id`, and a kept event records `wlog.sample_rate` |
+| redaction | built | `redact` with add/remove keys, add/remove patterns, a builtins toggle, a fixed replacement, a transform, and `Replace` for a replacement of the matched value. It also offers `DeniesPath` and `Replacement` |
 | typed-fields | built | `Key[T]` and `StrictKeys` |
 | catalogs | built | `catalog` registry with prefixes, templates, status, guidance, audit policy, and an extractor decorator |
 
@@ -44,20 +47,20 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 |---|---|---|
 | overview | built | `cmd/wlog` |
 | init | built | `wlog init` detects the framework and writes a compiling setup |
-| map | built | finds handlers, scores them, writes `wlog.map.json`, and prints `--all`, `--entry`, or `--json` |
+| map | built | finds handlers across packages, scores them, writes `wlog.map.json`, and prints `--all`, `--entry`, `--json`, or `--format sarif`. A run prints `N handlers found`, and zero handlers exits 2 |
 | rules | built | 8 requirements and 2 suggestions, with a class per entry point |
 | scoring | built | weighted 0-100 score, A to F grade, read/write/sensitive classes, and top-3 fixes |
-| ci | built | `--min-score`, `--baseline`, and `--strict` for a per-rule regression |
+| ci | built | `--min-score`, `--baseline` (a path or `git:<ref>`), and `--strict` per handler and per rule. `--no-write`, `//wlog:ignore <rule> -- <reason>`, and a golangci-lint v2 module plugin too |
 | observability-score | built | same source as scoring |
-| doctor | built | `wlog doctor` runs seven checks, with `--json` |
-| agents | built | `wlog agents` writes a fenced `AGENTS.md` block and three skills |
+| doctor | built | `wlog doctor` loads from `--dir` and runs eight checks. Each check carries a `WLOG_DOCTOR_*` code, a why, and a fix, and `--json` prints one object |
+| agents | built | `wlog agents` writes a fenced `AGENTS.md` block and three skills. It refuses an unpaired fence with its line number, and it never overwrites a skill without the wlog marker |
 | telemetry | not adopted | wlog sends no telemetry |
 
 ## integrate/adapters
 
 | evlog adapter | Status | wlog |
 |---|---|---|
-| overview | built | `Drain`, `DrainFunc`, `pipeline.Wrap`, env-first constructors |
+| overview | built | `Drain`, `DrainFunc`, `pipeline.Wrap`, and the env-first constructors `New`, `NewSender`, `MustNew`, and `WithPipeline` |
 | Axiom | built | `drain/axiom` |
 | Loki | built | `drain/loki` |
 | ClickHouse | built | `drain/clickhouse` with `DDL` |
@@ -65,7 +68,7 @@ Source: `https://www.evlog.dev/sitemap.xml` (106 pages) and the full docs text, 
 | Datadog | built | `drain/datadog` |
 | Sentry | partial | `drain/sentry` sends issues and logs. Evlog's page focuses on its log adapter |
 | File system | built | `drain/file` writes NDJSON with rotation, and `file.Read`/`file.Tail` read and follow it |
-| Memory | built | ring buffer, `Snapshot`, `Subscribe`, `SSEHandler`, plus `Named`, `Stores`, `Query`, and `Clear` |
+| Memory | built | ring buffer, `Snapshot`, `Subscribe`, `SSEHandler`, plus `Named`, `Stores`, `Query`, `Clear`, and `Remove`. Every subscriber and snapshot entry gets its own deep copy, and `Dropped()` counts a slow subscriber's losses |
 | PostHog | built | `drain/posthog` |
 | Better Stack | built | `drain/betterstack` |
 | HyperDX | built | `drain/hyperdx` |

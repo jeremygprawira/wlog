@@ -150,6 +150,16 @@ that holds it.
 - `cli`: CLI-1, CLI-3 to CLI-17, CLI-19 to CLI-22, PAR-6, PAR-28 to PAR-32, PAR-34, BET-9, BET-22.
 - `docs`: DOC-2 to DOC-6, DOC-8, SPEC-G21.
 
+### Docs
+
+- Every document passes the Simple English lint, and the skip list is gone. Every Go block either
+  compiles and runs, or carries a `<!-- snippet:sketch -->` marker that says it shows an API
+  shape. The snippet skip list is gone too.
+- `docs/evlog-parity.md` was rebuilt against v0.5.0: every row was checked against the code and
+  its tests.
+- `CLAUDE.md` gains the proof rule and names the `wlog.SetDefault` pointer as the one allowed
+  piece of package-level state.
+
 ### Note on the v1.2 to v1.4 approval gap
 
 The v1.2, v1.3, and v1.4 specs in `docs/CAPABILITIES.md` still say "awaiting approval". Their code
