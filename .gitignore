@@ -10,3 +10,7 @@ bin/
 .integration-out/
 wlog.map.json
 .DS_Store
+
+# The root module imports nothing outside the standard library, so this file
+# never holds a checksum. Some go commands still write an empty one.
+/go.sum
