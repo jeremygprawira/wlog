@@ -43,6 +43,9 @@ type Logger struct {
 	headSampler       HeadSampler
 	keepers           []Keeper
 	enrichers         []Enricher
+	starters          []Starter
+	finishers         []Finisher
+	measurers         []Measurer
 	fieldNames        FieldNames
 	plugins           []Plugin
 	strictKeys        map[string]bool
@@ -72,6 +75,7 @@ func New(opts ...Option) *Logger {
 		opt(l)
 	}
 	l.wirePlugins()
+	l.setupDrains()
 	for _, w := range warnings {
 		l.reportProblem(codeInvalidConfig, w.source, w.err)
 	}

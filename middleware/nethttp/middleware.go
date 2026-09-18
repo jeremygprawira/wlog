@@ -8,7 +8,6 @@
 package wlogstd
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/jeremygprawira/wlog"
@@ -26,12 +25,6 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 
 			ctx := log.WithContext(r.Context())
 			ctx, end := wlog.Start(ctx, "http.request")
-
-			for _, p := range log.Plugins() {
-				if rs, ok := p.(wlog.RequestStarter); ok {
-					ctx = rs.OnRequestStart(ctx)
-				}
-			}
 
 			requestID := r.Header.Get("X-Request-ID")
 			if requestID == "" {
@@ -76,10 +69,9 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 			// Registered in this order so they unwind in the opposite one:
 			// recoverPanic runs first (turns a panic into a 500 + logged error, so
 			// sw.status/route/etc below are still correct for a panicking request),
-			// then the http.* fields, then the RequestFinisher plugins, then end()
-			// emits the event last.
+			// then the http.* fields, then end() emits the event last. Core runs the
+			// Starter and Finisher plugins itself.
 			defer end()
-			defer runRequestFinishers(ctx, log)
 			defer func() {
 				fields := []any{
 					"method", r.Method,
@@ -102,13 +94,5 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 
 			next.ServeHTTP(sw, req)
 		})
-	}
-}
-
-func runRequestFinishers(ctx context.Context, log *wlog.Logger) {
-	for _, p := range log.Plugins() {
-		if rf, ok := p.(wlog.RequestFinisher); ok {
-			rf.OnRequestFinish(ctx)
-		}
 	}
 }

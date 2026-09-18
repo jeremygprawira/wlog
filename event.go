@@ -112,6 +112,9 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 	// an adapter that names the trace later merges into it.
 	e.fields["trace"] = map[string]any{"trace_id": newTraceID(), "span_id": newSpanID()}
 	ctx = withEvent(ctx, e)
+	// Every Starter runs once the event exists, and the context it returns is the
+	// one the unit continues with.
+	ctx = l.startHooks(ctx, e.kind)
 	e.ctx = ctx
 	return ctx, func() { l.emit(e) }
 }
@@ -397,6 +400,15 @@ func normalize(v any) any {
 	return out
 }
 
+// outcomeOf names the outcome of an event from its level: an event at level error
+// failed, and every other event succeeded.
+func outcomeOf(level Level) string {
+	if level == LevelError {
+		return "error"
+	}
+	return "success"
+}
+
 // emit builds the final event map, redacts it, and writes one JSON line to stdout.
 func (l *Logger) emit(e *event) {
 	// A closed drain would drop the event silently, so report it instead.
@@ -420,6 +432,10 @@ func (l *Logger) emit(e *event) {
 	e.sealed = true
 	e.mu.Unlock()
 
+	// The measure stage runs before the level filter and before head sampling, so a
+	// filter or a sampler never changes a metric.
+	l.measureEvent(ctx, e, level)
+
 	// An audit fact is never filtered away: a policy that asks for error-level
 	// logs still wants the record of who did what, and a dropped audit line is a
 	// hole in a chain that a reader must be able to verify.
@@ -427,10 +443,7 @@ func (l *Logger) emit(e *event) {
 		return
 	}
 
-	outcome := "success"
-	if level == LevelError {
-		outcome = "error"
-	}
+	outcome := outcomeOf(level)
 	kind := e.kind
 	if kind == "" {
 		kind = kindWork
@@ -535,6 +548,8 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	}
 	out = applyFieldNames(out, l.fieldNames)
 	l.finalizeSize(out, wlogFields)
+
+	l.finishHooks(ctx, out)
 
 	// A drain makes network calls, so it must not inherit the request's cancellation:
 	// WithoutCancel keeps the context's values (a span, a tenant) while ignoring a

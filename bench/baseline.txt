@@ -64,3 +64,17 @@ BenchmarkRedact_Apply-12    	   72678	     16553 ns/op	    3668 B/op	      23 al
 PASS
 PASS
 PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/jeremygprawira/wlog
+cpu: Apple M4 Pro
+BenchmarkEmit_WithMeasurer-12    	   42109	     27615 ns/op	   17238 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   42854	     27589 ns/op	   17238 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   43258	     27662 ns/op	   17217 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   42734	     27875 ns/op	   17229 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   42888	     27847 ns/op	   17233 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   43442	     27869 ns/op	   17241 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   43024	     28409 ns/op	   17241 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   43306	     27911 ns/op	   17265 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   42961	     27866 ns/op	   17230 B/op	     237 allocs/op
+BenchmarkEmit_WithMeasurer-12    	   43381	     27769 ns/op	   17252 B/op	     237 allocs/op

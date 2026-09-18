@@ -114,18 +114,18 @@ type hookPlugin struct {
 }
 
 func (*hookPlugin) Name() string { return "hooks" }
-func (p *hookPlugin) OnRequestStart(ctx context.Context) context.Context {
+func (p *hookPlugin) OnStart(ctx context.Context, _ string) context.Context {
 	p.started = true
 	return ctx
 }
-func (p *hookPlugin) OnRequestFinish(ctx context.Context) { p.finished = true }
+func (p *hookPlugin) OnFinish(context.Context, wlog.Event) { p.finished = true }
 
 func TestMiddleware_PluginRequestHooks(t *testing.T) {
 	p := &hookPlugin{}
 	log := wlog.New(wlog.WithFormat(wlog.FormatJSON), wlog.WithPlugins(p))
 	handler := wlogstd.Middleware(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !p.started {
-			t.Error("OnRequestStart had not run before the handler")
+			t.Error("OnStart had not run before the handler")
 		}
 	}))
 
@@ -134,9 +134,9 @@ func TestMiddleware_PluginRequestHooks(t *testing.T) {
 	captureStdout(t, func() { handler.ServeHTTP(rec, req) })
 
 	if !p.started {
-		t.Error("OnRequestStart was not called")
+		t.Error("OnStart was not called")
 	}
 	if !p.finished {
-		t.Error("OnRequestFinish was not called")
+		t.Error("OnFinish was not called")
 	}
 }

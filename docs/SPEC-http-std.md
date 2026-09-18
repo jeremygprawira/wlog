@@ -63,12 +63,10 @@ still emits, and the process keeps serving.
 
 ### Plugin hooks
 
-Every plugin from `log.Plugins()` implementing `wlog.RequestStarter` runs right after
-`wlog.Start`, before the handler, in registration order. Every plugin that implements
-`wlog.RequestFinisher` runs right before `end()`, given `ctx` only. The final event map is
-core-internal at this point. A finisher therefore observes side effects through `ctx` or its own
-state, such as a metrics counter, and not the rendered event. Use an `Enricher` to add or read fields on
-the event itself.
+Core calls the `Starter` hook of every plugin at `wlog.Start`, and its `Finisher` hook
+after finalize. http-std calls neither one. A `Finisher` reads the read-only event, so it
+sees the summary, the outcome, and the redacted fields. A `Starter` returns the context
+the request continues with, so a logger bridge binds a per-request logger.
 
 ## Success Criteria (also the conformance suite's contract)
 

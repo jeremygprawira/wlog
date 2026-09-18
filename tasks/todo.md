@@ -110,7 +110,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-SHAPE-2 Reserved keys and the ordered JSON writer
 - [x] 11-SHAPE-3 Summary
 - [x] 11-SHAPE-4 Stage order v2 and the size cap
-- [ ] 11-SHAPE-5 Plugin hooks v2
+- [x] 11-SHAPE-5 Plugin hooks v2
 - [x] 11-PROB-1 Problem codes
 - [ ] 11-PROB-2 Debug reasons and Stats
 - [ ] 11-SHAPE-6 Writers

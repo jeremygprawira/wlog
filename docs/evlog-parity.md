@@ -87,14 +87,14 @@ A test proves every row that says built. A row that says partial names what is m
 
 | evlog page | Status | wlog |
 |---|---|---|
-| overview | built | `Drain`, `Enricher`, `Keeper`, plugins |
+| overview | built | `Drain`, `Enricher`, `Keeper`, `Measurer`, plugins |
 | custom-drains | built | `wlog.DrainFunc`, `pipeline.Sender` |
 | custom-enrichers | built | `wlog.EnricherFunc` |
 | custom-framework | partial | `middleware/nethttp` is the base to wrap. No adapter guide |
 | drain-pipeline | built | `pipeline.Wrap` with batching, retry, bounded buffer, `FanOut`, `Close` |
 | identity-headers | built | `pipeline/httpdrain` sends `User-Agent: wlog/<version>` and `X-Wlog-Source` |
 | stream | built | `drain/memory` with `SSEHandler` |
-| plugins | built | `Plugin` plus optional `Setup`, `Enricher`, `Keeper`, `Drain`, `RequestStarter`, `RequestFinisher` |
+| plugins | built | `Plugin` plus optional `Setup`, `Starter`, `Finisher`, `Enricher`, `Keeper`, `Measurer`, `Drain` |
 | tail-sampling | built | `sample` keep rules |
 | fs-reader | built | `file.Read` and `file.Tail` |
 | diagnostics-channel | not adopted | Node runtime specific. The Go analogue is the slog input handler, which is built |

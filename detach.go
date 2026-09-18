@@ -47,6 +47,8 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 	// logger, and drops only the cancellation.
 	bg := context.WithoutCancel(ctx)
 	ctx = withEvent(bg, e)
+	// Every Starter runs once the child event exists, the same way Start does.
+	ctx = l.startHooks(ctx, e.kind)
 	e.ctx = ctx
 	return ctx, func() { l.emit(e) }
 }

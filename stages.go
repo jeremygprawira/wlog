@@ -121,6 +121,49 @@ func (l *Logger) keepOne(ctx context.Context, k Keeper, event Event) (keep bool)
 	return k.Keep(ctx, event)
 }
 
+// startHooks runs every Starter for one unit of work, in registration order. The
+// context the last one returns replaces the unit's context. A panic reports
+// WLOG_HOOK_PANIC and keeps the context from before that Starter.
+func (l *Logger) startHooks(ctx context.Context, kind string) context.Context {
+	for _, s := range l.starters {
+		ctx = l.safeStart(ctx, s, kind)
+	}
+	return ctx
+}
+
+// safeStart runs one Starter under recover.
+func (l *Logger) safeStart(ctx context.Context, s Starter, kind string) (out context.Context) {
+	out = ctx
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportProblem(codeHookPanic, sourceName(s), fmt.Errorf("panic: %v", r))
+		}
+	}()
+	return s.OnStart(ctx, kind)
+}
+
+// finishHooks runs every Finisher with the read-only event, after finalize and before
+// the drains, so a Finisher sees the summary, the outcome, and the redacted fields.
+func (l *Logger) finishHooks(ctx context.Context, event map[string]any) {
+	if len(l.finishers) == 0 {
+		return
+	}
+	view := viewOf(event)
+	for _, f := range l.finishers {
+		l.safeFinish(ctx, f, view)
+	}
+}
+
+// safeFinish runs one Finisher under recover.
+func (l *Logger) safeFinish(ctx context.Context, f Finisher, event Event) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportProblem(codeHookPanic, sourceName(f), fmt.Errorf("panic: %v", r))
+		}
+	}()
+	f.OnFinish(ctx, event)
+}
+
 // runEnrichers runs the enrich stage: every configured Enricher, in order, each
 // panic-isolated so one bad enricher never drops the fields the others added or the
 // event itself.

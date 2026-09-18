@@ -166,8 +166,8 @@ wlog.WithEnrichers(wlogotel.Enricher())
 
 ## Plugins
 
-A plugin is any value with `Name() string` that also implements `Setup`, `Enricher`,
-`Keeper`, `Drain`, `RequestStarter`, or `RequestFinisher`. One struct can implement
+A plugin is any value with `Name() string` that also implements `Setup`, `Starter`,
+`Finisher`, `Enricher`, `Keeper`, `Measurer`, or `Drain`. One struct can implement
 several.
 
 <!-- snippet:sketch -->
