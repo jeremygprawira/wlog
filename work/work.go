@@ -60,6 +60,10 @@ type Handle struct {
 	status StatusClass
 	end    func()
 	ended  bool
+
+	// failures counts the failed items of a batch, which Failed folds into the parent
+	// event.
+	failures int
 }
 
 // Start opens one unit of work: it extracts the trace context from the carrier, starts the
@@ -77,7 +81,7 @@ func Start(ctx context.Context, log *wlog.Logger, u Unit) (context.Context, *Han
 	if operation == "" {
 		operation = operationOf(u)
 	}
-	ctx, end := wlog.Start(log.WithContext(ctx), operation)
+	ctx, end := startEvent(ctx, log, operation)
 
 	h := &Handle{ctx: ctx, log: log, kind: u.Kind, group: groups[u.Kind], end: end}
 	wlog.Set(ctx, "kind", string(u.Kind))
@@ -88,6 +92,18 @@ func Start(ctx context.Context, log *wlog.Logger, u Unit) (context.Context, *Han
 		h.Set("lag_ms", lag)
 	}
 	return ctx, h
+}
+
+// startEvent opens the event of one unit of work. A unit that starts inside another one,
+// which is what a message of a batch does, becomes its child: Detach keeps the trace of
+// the parent and records trace.parent_event_id, so a reader walks from the batch to its
+// messages.
+func startEvent(ctx context.Context, log *wlog.Logger, operation string) (context.Context, func()) {
+	if wlog.HasEvent(ctx) {
+		return wlog.Detach(log.WithContext(ctx), operation)
+	}
+	ctx, end := wlog.Start(log.WithContext(ctx), operation)
+	return ctx, end
 }
 
 // Set writes one field into the group of the kind. A kind with no group, which is kind
@@ -195,6 +211,7 @@ type RunOption func(*runConfig)
 // runConfig holds what a caller asked Run to do.
 type runConfig struct {
 	recoverPanics bool
+	flush         bool
 }
 
 // RecoverPanics returns a panic from the handler as an error instead of panicking again,
@@ -206,6 +223,9 @@ func RecoverPanics() RunOption { return func(c *runConfig) { c.recoverPanics = t
 // A panic in fn is recorded with its stack, the event emits, and the panic continues by
 // default. RecoverPanics returns it as an error instead.
 func Run(ctx context.Context, log *wlog.Logger, u Unit, fn func(context.Context) error, opts ...RunOption) error {
+	if log == nil {
+		log = wlog.Default()
+	}
 	cfg := runConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -214,6 +234,9 @@ func Run(ctx context.Context, log *wlog.Logger, u Unit, fn func(context.Context)
 	ctx, h := Start(ctx, log, u)
 	recovered, err := callSafe(ctx, fn)
 	h.End(err)
+	if cfg.flush {
+		_ = log.Flush(ctx)
+	}
 
 	if recovered != nil && !cfg.recoverPanics {
 		// The event is out, so the caller sees the panic it raised, value and all.

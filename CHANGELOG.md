@@ -27,6 +27,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   recorded with its stack and reaches the caller, and `work.RecoverPanics()` returns it as
   an error. `work.ClassOf` maps a status code to a client class, a server class, or
   neither.
+- `work.BatchEvent` opens one parent event for a batch, with `batch_size` and
+  `batch_failures`, and every message event links to it with `trace.parent_event_id`.
+  `work.Ticker` emits one job event per tick and records a skipped tick. `work.Flush()`
+  makes `Run` flush the Logger before it returns. A `Unit` with `StartedAt` in the past
+  writes `lag_ms`.
 - `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
   allowed exception is the default Logger pointer.
 
