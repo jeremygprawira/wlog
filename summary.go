@@ -203,6 +203,11 @@ func idSuffix(event map[string]any, masked string) string {
 
 // isReservedKey reports whether a key belongs to the reserved table rather than to the
 // caller, so an id in the trace group is not repeated in the summary.
+// IsReservedKey reports whether key is a reserved key of the event shape. A preset and
+// a drain call it to tell a user key from a canonical one.
+func IsReservedKey(key string) bool { return isReservedKey(key) }
+
+// isReservedKey reports whether key is a reserved key of the event shape.
 func isReservedKey(key string) bool {
 	_, reserved := reservedRank[key]
 	if reserved {

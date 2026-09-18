@@ -1,0 +1,66 @@
+# OTel Collector configuration for the `otel` output preset.
+#
+# A filelog receiver reads one wlog line per file, the operators parse it, and a
+# transform processor moves the preset fields onto the log record. The integration test in
+# wlog/preset runs this config with a collector container and counts one log record per
+# line.
+receivers:
+  filelog:
+    include: [/in/*.json]
+    start_at: beginning
+    operators:
+      # The line is one JSON object of the preset. json_parser puts its keys under the
+      # entry attributes and reads the record time from the preset timestamp.
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.timestamp
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.999999999Z07:00'
+      - type: severity_parser
+        parse_from: attributes.severity_text
+        mapping:
+          error: error
+          warn: warn
+          info: info
+          debug: debug
+      - type: trace_parser
+        trace_id:
+          parse_from: attributes.trace_id
+        span_id:
+          parse_from: attributes.span_id
+      - type: move
+        from: attributes.body
+        to: body
+
+processors:
+  transform:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # The preset keeps the resource and the attributes in their own objects, and
+          # the record holds each as a map of its own.
+          - merge_maps(resource.attributes, attributes["resource"], "upsert") where attributes["resource"] != nil
+          - merge_maps(attributes, attributes["attributes"], "upsert") where attributes["attributes"] != nil
+          # The preset names the event kind event_name. The OTel convention calls it
+          # event.name.
+          - set(attributes["event.name"], attributes["event_name"]) where attributes["event_name"] != nil
+          - delete_key(attributes, "timestamp")
+          - delete_key(attributes, "severity_text")
+          - delete_key(attributes, "severity_number")
+          - delete_key(attributes, "trace_id")
+          - delete_key(attributes, "span_id")
+          - delete_key(attributes, "resource")
+          - delete_key(attributes, "attributes")
+          - delete_key(attributes, "event_name")
+
+exporters:
+  file:
+    path: /out/logs.json
+
+service:
+  pipelines:
+    logs:
+      receivers: [filelog]
+      processors: [transform]
+      exporters: [file]

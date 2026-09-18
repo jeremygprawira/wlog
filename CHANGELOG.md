@@ -38,9 +38,15 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
   allowed exception is the default Logger pointer.
 - `wlog.OutputPreset` and `wlog.WithOutput` let a JSON writer print the dialect of a
-  backend. `preset.Flat` writes every nested object as dotted keys, `preset.ByName`
-  resolves a name, and `preset.Rename` renames a top-level key. A preset changes the
-  printed line only, and every drain still receives the canonical event.
+  backend. `preset.Flat` writes every nested object as dotted keys. `preset.OTel` writes
+  the OTel log data model with semantic conventions v1.43.0. `preset.ByName` resolves a
+  name, and `preset.Rename` renames a top-level key. A preset changes the printed line
+  only, and every drain still receives the canonical event.
+- `integrations/search/collectors/otel-filelog.yaml` holds a tested OTel Collector config.
+  A filelog receiver reads the `otel` preset output, and a transform processor moves the
+  resource and the attributes onto the log record.
+- `wlog.IsReservedKey` tells a reserved event key from a user key, which a preset and a
+  drain need to apply the collision rule.
 
 ### Changed
 

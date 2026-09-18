@@ -18,9 +18,9 @@ import (
 // request, an error, and a log event.
 func TestPreset_FlatGolden(t *testing.T) {
 	for _, tc := range []struct{ name, canonical string }{
-		{"request", filepath.Join("..", "testdata", "shape", "request.json")},
+		{"request", filepath.Join("testdata", "canonical", "request.json")},
 		{"error", filepath.Join("testdata", "canonical", "error.json")},
-		{"log", filepath.Join("..", "testdata", "shape", "log.json")},
+		{"log", filepath.Join("testdata", "canonical", "log.json")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := preset.Flat().Apply(readEvent(t, tc.canonical))

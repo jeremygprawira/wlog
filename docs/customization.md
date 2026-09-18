@@ -61,6 +61,7 @@ route from its own router, so `WithRouteFunc` stays in the `middleware/nethttp` 
 <!-- snippet:sketch -->
 ```go
 wlog.WithOutput(preset.Flat())  // dotted keys, such as http.status
+wlog.WithOutput(preset.OTel())  // the OTel log data model
 wlog.WithOutput(preset.Rename(preset.Flat(), "summary", "msg")) // one key renamed
 ```
 

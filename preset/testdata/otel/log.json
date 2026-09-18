@@ -1,0 +1,1 @@
+{"timestamp":"2026-01-01T00:00:00Z","severity_text":"warn","severity_number":13,"body":"attempt 2","event_name":"wlog.log","attributes":{"log.record.uid":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","message":"attempt 2","operation":"retry","outcome":"success","wlog.schema_version":2}}

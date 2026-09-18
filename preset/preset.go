@@ -25,6 +25,8 @@ func ByName(name string) (wlog.OutputPreset, bool) {
 		return Default(), true
 	case "flat":
 		return Flat(), true
+	case "otel":
+		return OTel(), true
 	}
 	return nil, false
 }
@@ -112,4 +114,27 @@ func (defaultPreset) Apply(event map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+// pathValue reads the value at a dotted path, and reports whether it is present.
+func pathValue(event map[string]any, path string) (any, bool) {
+	parts := strings.Split(path, ".")
+	var current any = event
+	for _, part := range parts {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = object[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+// stringOf reads a string value, and treats a missing or wrong-typed value as "".
+func stringOf(value any) string {
+	text, _ := value.(string)
+	return text
 }
