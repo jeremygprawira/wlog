@@ -13,29 +13,30 @@ import (
 // event holds one unit of work's fields between Start and its end func running. It is
 // safe for concurrent Set calls: everything below mu is only ever touched with mu held.
 type event struct {
-	mu          sync.Mutex
-	fields      map[string]any
-	operation   string
-	start       time.Time
-	sealed      bool
-	rawValues   bool // skip normalize for a value already in tree form
-	dropped     int  // count of Set/SetGroup/Append calls rejected by a cap (G4)
-	size        int  // approximate bytes of the stored values (CORE-25)
-	droppedLogs int  // count of AppendLog lines rejected by maxLogLines (G4)
-	level       Level
-	levelSet    bool // true once SetLevel has been called; wins over the default
-	extractor   ErrorExtractor
-	errInfo     *ErrorInfo      // the error that currently decides the outcome
-	errList     []ErrorInfo     // earlier errors, oldest first, capped at maxErrorList
-	parent      *event          // set by Detach; nil for a top-level Start event
-	lateWrites  int             // writes received after this event sealed (G3, G4)
-	strictKeys  map[string]bool // nil unless StrictKeys is active for this event's env
-	unknownKeys []string
-	ctx         context.Context // the context Start/Detach was given, for the enrich stage
-	kind        string          // the event kind: work, log, or a kind SPEC-work sets
-	eventID     string          // the UUIDv7 that identifies this event, set at Start
-	l           *Logger         // the Logger that built this event, for a late-write report
-	caller      bool            // true when wlog.Error records the line that called it
+	mu           sync.Mutex
+	fields       map[string]any
+	operation    string
+	start        time.Time
+	sealed       bool
+	rawValues    bool // skip normalize for a value already in tree form
+	dropped      int  // count of Set/SetGroup/Append calls rejected by a cap (G4)
+	size         int  // approximate bytes of the stored values (CORE-25)
+	droppedLogs  int  // count of AppendLog lines rejected by maxLogLines (G4)
+	droppedCalls int  // count of calls rejected by maxCalls (G4)
+	level        Level
+	levelSet     bool // true once SetLevel has been called; wins over the default
+	extractor    ErrorExtractor
+	errInfo      *ErrorInfo      // the error that currently decides the outcome
+	errList      []ErrorInfo     // earlier errors, oldest first, capped at maxErrorList
+	parent       *event          // set by Detach; nil for a top-level Start event
+	lateWrites   int             // writes received after this event sealed (G3, G4)
+	strictKeys   map[string]bool // nil unless StrictKeys is active for this event's env
+	unknownKeys  []string
+	ctx          context.Context // the context Start/Detach was given, for the enrich stage
+	kind         string          // the event kind: work, log, or a kind SPEC-work sets
+	eventID      string          // the UUIDv7 that identifies this event, set at Start
+	l            *Logger         // the Logger that built this event, for a late-write report
+	caller       bool            // true when wlog.Error records the line that called it
 }
 
 // The kind of an event: a unit of work, or a plain log line. SPEC-work adds the
@@ -442,6 +443,7 @@ func (l *Logger) emit(e *event) {
 	maps.Copy(fields, e.fields)
 	dropped := e.dropped
 	droppedLogs := e.droppedLogs
+	droppedCalls := e.droppedCalls
 	lateWrites := e.lateWrites
 	unknownKeys := e.unknownKeys
 	errInfo := e.errInfo
@@ -504,6 +506,7 @@ func (l *Logger) emit(e *event) {
 	out["wlog"] = wlogObject("", map[string]any{
 		"dropped_fields": dropped,
 		"dropped_logs":   droppedLogs,
+		"dropped_calls":  droppedCalls,
 		"late_writes":    lateWrites,
 		"unknown_keys":   unknownKeys,
 	})

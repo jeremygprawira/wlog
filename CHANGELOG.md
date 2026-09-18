@@ -13,6 +13,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   carries none. `Default` builds one on first use, so `wlog.Info` works with no setup.
 - `wlog.Log(ctx, level, msg, kv...)` writes a plain line at any level, including one below
   the minimum level of the Logger.
+- A unit of work records the calls it makes. `wlog.StartCall` returns the context of one
+  call plus the end func that appends a record to `calls` and folds the numbers into
+  `call_stats`. `wlog.CallFromContext` and `wlog.CallSpanID` read the open call, which
+  lets a client or store adapter join a call the outer adapter already records.
 - `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
   allowed exception is the default Logger pointer.
 
