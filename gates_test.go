@@ -37,6 +37,8 @@ func FuzzCore_SinksNeverLeak(f *testing.F) {
 				ctx, end := wlog.Start(ctx, "op")
 				wlog.Set(ctx, "password", value)
 				end()
+
+				flushWriter(t, log)
 			})
 			if strings.Contains(out, value) {
 				t.Fatalf("secret leaked through a sink: value=%q output=%q", value, out)
@@ -105,6 +107,8 @@ func FuzzCore_EventShapeNeverLeaks(f *testing.F) {
 				wlog.Append(ctx, "password", secret)
 				wlog.Info(ctx, key, "password", secret)
 				end()
+
+				flushWriter(t, l)
 			})
 		}
 

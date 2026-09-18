@@ -19,7 +19,10 @@ func TestMiddleware_ClientIPUserAgentBytesIn(t *testing.T) {
 	req.Header.Set("User-Agent", "curl/8.0")
 	req.RemoteAddr = "203.0.113.9:54321"
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -44,7 +47,10 @@ func TestMiddleware_ClientIP_PrefersForwardedHeader(t *testing.T) {
 	req.RemoteAddr = "10.0.0.1:1234"
 	req.Header.Set("X-Forwarded-For", "203.0.113.9, 10.0.0.1")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)

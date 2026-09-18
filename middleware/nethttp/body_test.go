@@ -26,7 +26,10 @@ func TestMiddleware_CapturesBodies(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/orders", bytes.NewBufferString(`{"item":"shoes"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	if handlerSawBody != `{"item":"shoes"}` {
 		t.Errorf("handler did not see the full request body: %q", handlerSawBody)
@@ -56,7 +59,10 @@ func TestMiddleware_Body_ContentTypeFilter(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/upload", bytes.NewBufferString("binary-ish"))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -86,7 +92,10 @@ func TestMiddleware_Body_Cap(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/echo", bytes.NewBufferString(big))
 	req.Header.Set("Content-Type", "text/plain")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -110,7 +119,10 @@ func TestMiddleware_CaptureBodyOff(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/x", bytes.NewBufferString(`{"a":1}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)

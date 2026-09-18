@@ -1,9 +1,8 @@
 package wlogstd_test
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,18 +16,31 @@ import (
 // here); see wlog_test.go for the original.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
-	r, w, err := os.Pipe()
+	f, err := os.CreateTemp(t.TempDir(), "stdout")
 	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
+		t.Fatalf("CreateTemp: %v", err)
 	}
+	defer f.Close()
+
 	orig := os.Stdout
-	os.Stdout = w
+	os.Stdout = f
 	fn()
 	os.Stdout = orig
-	_ = w.Close()
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	return buf.String()
+
+	out, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	return string(out)
+}
+
+// flushWriter waits until log's writer has written every line it queued, so a test reads
+// the output of the async writer.
+func flushWriter(t *testing.T, log *wlog.Logger) {
+	t.Helper()
+	if err := log.Flush(context.Background()); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
 }
 
 func TestMiddleware_ReusesIncomingRequestID(t *testing.T) {
@@ -39,7 +51,10 @@ func TestMiddleware_ReusesIncomingRequestID(t *testing.T) {
 	req.Header.Set("X-Request-ID", "existing-id")
 	rec := httptest.NewRecorder()
 
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -60,7 +75,10 @@ func TestMiddleware_WithRouteFunc(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/anything", nil)
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -77,7 +95,10 @@ func TestMiddleware_NoPattern_FallsBackToPath(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/no-mux", nil)
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)

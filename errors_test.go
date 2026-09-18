@@ -84,6 +84,8 @@ func TestCore_Error_CustomExtractor(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "order.get")
 		wlog.Error(ctx, errors.New("no row"))
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -117,6 +119,8 @@ func TestCore_ErrorData_ReachesEvent(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "order.create")
 		wlog.Error(ctx, errors.New("bad field"))
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -155,7 +159,10 @@ func TestCore_ErrorData_ReturnsCurrent(t *testing.T) {
 	if got := wlog.ErrorData(context.Background()); got != nil {
 		t.Errorf("ErrorData outside an event = %v, want nil", got)
 	}
-	captureStdout(t, end)
+	captureStdout(t, func() {
+		end()
+		flushWriter(t, log)
+	})
 }
 
 // TestCore_Errorf_RecordsAndReturns proves Errorf records the error it returns.

@@ -20,7 +20,10 @@ func TestMiddleware_Panic_Recovers500AndLogs(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
@@ -45,7 +48,10 @@ func TestMiddleware_Panic_Recovers500AndLogs(t *testing.T) {
 	handler2 := wlogstd.Middleware(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	captureStdout(t, func() { handler2.ServeHTTP(rec2, req2) })
+	captureStdout(t, func() {
+		handler2.ServeHTTP(rec2, req2)
+		flushWriter(t, log)
+	})
 	if rec2.Code != http.StatusOK {
 		t.Errorf("second request status = %d, want 200 (process must keep serving)", rec2.Code)
 	}
@@ -58,7 +64,10 @@ func TestMiddleware_Traceparent(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -78,7 +87,10 @@ func TestMiddleware_Traceparent_InvalidIsIgnored(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	req.Header.Set("traceparent", "not-a-valid-header")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -99,7 +111,10 @@ func TestMiddleware_WithUserFunc(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	req.Header.Set("X-User-ID", "u_42")
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -131,7 +146,10 @@ func TestMiddleware_PluginRequestHooks(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
-	captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	if !p.started {
 		t.Error("OnStart was not called")

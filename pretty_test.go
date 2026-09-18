@@ -14,6 +14,8 @@ func TestCore_Format_DefaultEnv_IsJSON(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
 		t.Errorf("expected JSON output, got %q", out)
@@ -26,6 +28,8 @@ func TestCore_Format_DevEnv_IsPretty(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "order.create")
 		end()
+
+		flushWriter(t, log)
 	})
 	if strings.HasPrefix(strings.TrimSpace(out), "{") {
 		t.Errorf("expected pretty output in dev, got JSON: %q", out)
@@ -44,6 +48,8 @@ func TestCore_Format_ExplicitOverridesEnv(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
 		t.Errorf("WithFormat(FormatJSON) did not override the dev-env default: %q", out)
@@ -54,6 +60,9 @@ func TestCore_Format_ExplicitOverridesEnv(t *testing.T) {
 		ctx := log2.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
+		flushWriter(t, log2)
 	})
 	if strings.HasPrefix(strings.TrimSpace(out2), "{") {
 		t.Errorf("WithFormat(FormatPretty) did not override the default JSON format: %q", out2)
@@ -67,6 +76,8 @@ func TestCore_Pretty_IsRedacted(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "login")
 		wlog.Set(ctx, "password", "hunter2")
 		end()
+
+		flushWriter(t, log)
 	})
 	if strings.Contains(out, "hunter2") {
 		t.Errorf("pretty output leaked an unredacted secret: %q", out)
@@ -83,6 +94,8 @@ func TestCore_Pretty_ErrorBlock(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "order.get")
 		wlog.Error(ctx, errAny{})
 		end()
+
+		flushWriter(t, log)
 	})
 	if !strings.Contains(out, "no such order id") || !strings.Contains(out, "check the order id") {
 		t.Errorf("pretty output missing why/fix: %q", out)
@@ -101,6 +114,8 @@ func TestCore_Pretty_NoColorRespected(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if strings.Contains(out, "\033[") {
 		t.Errorf("NO_COLOR=1 but output still has ANSI escapes: %q", out)
@@ -111,6 +126,8 @@ func TestCore_Pretty_NoColorRespected(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if !strings.Contains(out2, "\033[") {
 		t.Errorf("NO_COLOR unset but output has no ANSI escapes: %q", out2)

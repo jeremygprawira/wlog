@@ -15,6 +15,8 @@ func TestCore_PlainLog_Info(t *testing.T) {
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
 		wlog.Info(ctx, "server started", "port", 8080)
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -41,6 +43,8 @@ func TestCore_PlainLog_WarnAndDebug(t *testing.T) {
 		out := captureStdout(t, func() {
 			ctx := log.WithContext(context.Background())
 			tc.fn(ctx, "msg")
+
+			flushWriter(t, log)
 		})
 		var got map[string]any
 		_ = json.Unmarshal([]byte(out), &got)
@@ -55,6 +59,8 @@ func TestCore_PlainLog_RedactsSensitiveKV(t *testing.T) {
 	out := captureStdout(t, func() {
 		ctx := log.WithContext(context.Background())
 		wlog.Info(ctx, "login attempt", "password", "hunter2")
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -77,6 +83,8 @@ func TestCore_PlainLog_StandaloneInsideRequest(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "request.op")
 		wlog.Info(ctx, "inside a request")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if len(outputs) != 1 || outputs[0] != "inside a request" {

@@ -75,10 +75,14 @@ func (l *Logger) safeSend(ctx context.Context, d Drain, event map[string]any) {
 }
 
 // Flush pushes the buffer of every drain that implements drainFlusher (a batched
-// pipeline, a file writer) and keeps them running, so the next event still arrives.
-// It returns the first error, and it always attempts every drain.
+// pipeline, a file writer) and keeps them running, so the next event still arrives. It
+// also waits until every line the writer has queued reaches the backend. It returns the
+// first error, and it always attempts every drain.
 func (l *Logger) Flush(ctx context.Context) error {
 	var firstErr error
+	if err := l.writer.flush(ctx); err != nil {
+		firstErr = err
+	}
 	for _, d := range l.drains {
 		f, ok := d.(drainFlusher)
 		if !ok {
@@ -99,6 +103,9 @@ func (l *Logger) Flush(ctx context.Context) error {
 // because a closed drain would drop it silently.
 func (l *Logger) Close(ctx context.Context) error {
 	l.closed.Store(true)
+	if err := l.writer.stop(ctx); err != nil {
+		l.reportProblem(codeDrainFailed, "writer", err)
+	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex

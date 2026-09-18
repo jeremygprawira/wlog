@@ -53,13 +53,12 @@ type StatsReporter interface {
 // loggerStats holds the counters of one Logger. Each drop reason has its own atomic, so
 // a drop is counted without a lock and without a map on the emit path (gate G3).
 type loggerStats struct {
-	emitted       atomic.Int64
-	writerDropped atomic.Int64
-	sampled       atomic.Int64
-	level         atomic.Int64
-	disabled      atomic.Int64
-	closed        atomic.Int64
-	tooLarge      atomic.Int64
+	emitted  atomic.Int64
+	sampled  atomic.Int64
+	level    atomic.Int64
+	disabled atomic.Int64
+	closed   atomic.Int64
+	tooLarge atomic.Int64
 }
 
 // count records one drop under reason, and returns nothing, so a caller may ignore it.
@@ -101,7 +100,7 @@ func (l *Logger) Stats() Stats {
 	return Stats{
 		Emitted:       l.stats.emitted.Load(),
 		Dropped:       l.stats.snapshot(),
-		WriterDropped: l.stats.writerDropped.Load(),
+		WriterDropped: l.writer.dropped.Load(),
 		Drains:        l.drainStats(),
 	}
 }

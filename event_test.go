@@ -19,7 +19,10 @@ func startEvent(t *testing.T) (context.Context, func() map[string]any) {
 	ctx, end := wlog.Start(ctx, "test.op")
 
 	return ctx, func() map[string]any {
-		out := captureStdout(t, end)
+		out := captureStdout(t, func() {
+			end()
+			flushWriter(t, log)
+		})
 		var got map[string]any
 		if err := json.Unmarshal([]byte(out), &got); err != nil {
 			t.Fatalf("invalid JSON line: %v\noutput: %q", err, out)
@@ -177,7 +180,10 @@ func TestCore_HasEvent(t *testing.T) {
 	if !wlog.HasEvent(ctx) {
 		t.Error("HasEvent = false inside a started event, want true")
 	}
-	captureStdout(t, end)
+	captureStdout(t, func() {
+		end()
+		flushWriter(t, log)
+	})
 
 	if wlog.HasEvent(context.Background()) {
 		t.Error("HasEvent = true on a bare context, want false")

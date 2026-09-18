@@ -52,6 +52,8 @@ func TestCore_Plugin_AllHooksWired(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -156,6 +158,8 @@ func TestHooks_MeasurerBeforeSampling(t *testing.T) {
 		wlog.SetLevel(ctx, wlog.LevelInfo)
 		end()
 		wlog.Info(log.WithContext(context.Background()), "a plain line")
+
+		flushWriter(t, log)
 	})
 
 	if out != "" {
@@ -189,6 +193,8 @@ func TestHooks_MeasurerValuePatterns(t *testing.T) {
 		ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
 		wlog.SetGroup(ctx, "http", "route", "/orders/ORD-42")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if len(p.measures) != 1 {
@@ -255,6 +261,8 @@ func TestCore_Plugin_PanicIsolatedAndReported(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if out == "" {
 		t.Fatal("event was lost after a plugin panic")

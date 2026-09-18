@@ -32,7 +32,10 @@ func TestMiddleware_BasicFields(t *testing.T) {
 	req.Pattern = "GET /orders/{id}"
 	rec := httptest.NewRecorder()
 
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	if err := json.Unmarshal([]byte(out), &got); err != nil {

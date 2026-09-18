@@ -15,6 +15,8 @@ func TestCore_Fields_DefaultIsNamespaced(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -34,6 +36,8 @@ func TestCore_Fields_Flat_UnnestsService(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -49,6 +53,8 @@ func TestCore_Fields_OTel_UsesResourceNames(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -64,6 +70,8 @@ func TestCore_Fields_WithFieldNames_RenamesOneKey(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "checkout")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -89,6 +97,8 @@ func TestCore_Fields_DenylistMatchesCanonicalNameBeforeRename(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any

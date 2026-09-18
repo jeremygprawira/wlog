@@ -219,6 +219,8 @@ func TestShape_EmptyValuesOmitted(t *testing.T) {
 		wlog.Set(ctx, "empty", "")
 		wlog.SetGroup(ctx, "group", map[string]any{})
 		end()
+
+		flushWriter(t, log)
 	})
 
 	for _, gone := range []string{`"empty"`, `"group"`, `"dropped_fields"`, "null"} {
@@ -267,6 +269,8 @@ func TestShape_BET5_MaskedValueStaysOut(t *testing.T) {
 		ctx, end := wlog.Start(log.WithContext(context.Background()), "checkout")
 		wlog.Set(ctx, "order_id", "hunter2-secret")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	summary := ""

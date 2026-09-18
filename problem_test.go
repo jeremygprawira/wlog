@@ -31,7 +31,10 @@ func TestProblems_BET4_EveryCodeDocumented(t *testing.T) {
 // emitted, with no open parent, reaches the caller instead of vanishing.
 func TestProblems_PAR3_LateWriteReported(t *testing.T) {
 	got := make(chan wlog.Problem, 4)
-	log := wlog.New(wlog.WithSilent(), wlog.OnProblem(func(p wlog.Problem) { got <- p }))
+	// A drain keeps the WLOG_SILENT_NO_DRAIN report out of the channel, so this test
+	// reads the report it asks about.
+	sink := wlog.DrainFunc(func(context.Context, map[string]any) {})
+	log := wlog.New(wlog.WithSilent(), wlog.WithDrains(sink), wlog.OnProblem(func(p wlog.Problem) { got <- p }))
 
 	ctx := log.WithContext(context.Background())
 	ctx, end := wlog.Start(ctx, "integration.op")

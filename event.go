@@ -1,11 +1,11 @@
 package wlog
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"sync"
 	"time"
@@ -571,9 +571,17 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	if l.silent {
 		return
 	}
+	l.writeEvent(out)
+}
 
+// writeEvent renders one event and hands the line to the writer. The render happens
+// here, on the goroutine that ended the event, so no other goroutine reads the event
+// map.
+func (l *Logger) writeEvent(out map[string]any) {
 	if l.resolvedFormat() == FormatPretty {
-		writePretty(os.Stdout, out, colorEnabled())
+		var buf bytes.Buffer
+		writePretty(&buf, out, colorEnabled())
+		l.writer.write(buf.Bytes())
 		return
 	}
 	b, err := encodeEvent(out)
@@ -581,5 +589,11 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 		l.reportProblem(codeDrainFailed, "stdout", err)
 		return
 	}
-	_, _ = os.Stdout.Write(b)
+	l.writer.write(b)
+}
+
+// startWriter prepares the writer of this Logger. New calls it once, after every option
+// has run.
+func (l *Logger) startWriter() {
+	l.writer.start(l)
 }

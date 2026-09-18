@@ -20,7 +20,10 @@ func TestMiddleware_CapturesHeadersQueryCookies(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 	rec := httptest.NewRecorder()
 
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -58,7 +61,10 @@ func TestMiddleware_CaptureTogglesOff(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 	rec := httptest.NewRecorder()
 
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
@@ -83,7 +89,10 @@ func TestMiddleware_SkipPaths_EmitsNothing(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	out := captureStdout(t, func() { handler.ServeHTTP(rec, req) })
+	out := captureStdout(t, func() {
+		handler.ServeHTTP(rec, req)
+		flushWriter(t, log)
+	})
 
 	if out != "" {
 		t.Errorf("expected no event for a skipped path, got %q", out)

@@ -16,6 +16,8 @@ func TestCore_Key_SetStoresUnderItsName(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		orderID.Set(ctx, "4821")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -39,6 +41,8 @@ func TestCore_StrictKeys_FlagsUnregisteredKey_InDev(t *testing.T) {
 		orderID.Set(ctx, "4821") // registered: fine
 		wlog.Set(ctx, "typo_field", "oops")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -61,6 +65,8 @@ func TestCore_StrictKeys_NoOp_OutsideLocalDev(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "typo_field", "oops")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -77,6 +83,8 @@ func TestCore_NoStrictKeys_NeverFlags(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "anything", "value")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any

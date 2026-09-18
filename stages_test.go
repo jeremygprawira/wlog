@@ -38,6 +38,8 @@ func TestCore_StageOrder_DroppedEventSkipsEnrichAndSinks(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "x", 1)
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if enricherRan {
@@ -56,6 +58,8 @@ func TestCore_StageOrder_EnricherOutputIsRedacted(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if !enricherRan {
@@ -78,6 +82,8 @@ func TestCore_StageOrder_AuditBypassesSampling(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "audit", map[string]any{"action": "refund"})
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if out == "" {
@@ -100,6 +106,8 @@ func TestCore_StageOrder_KeeperPanicIsIsolated(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	// A panicking Keeper falls back to "keep" so a bad sampler never silently
@@ -118,6 +126,8 @@ func TestStages_HeadSamplerPanicIsIsolated(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if out == "" {
@@ -191,6 +201,8 @@ func TestStages_SizeCapFinalize(t *testing.T) {
 		}
 		wlog.Set(ctx, "small", "kept")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if len(out) > 256*1024+1024 {

@@ -10,8 +10,8 @@ import (
 )
 
 // captureStdout redirects os.Stdout for the duration of fn and returns what was
-// written to it. wlog's stdout sink has no other hook point yet (C13 adds Sink), so
-// this is the only way to observe it end to end.
+// written to it. A test that reads the output also calls flushWriter inside fn, because
+// the default writer queues its line and writes it on another goroutine.
 //
 // It redirects to a file, not a pipe, because an event larger than the pipe buffer
 // would otherwise block the writer for good.
@@ -35,6 +35,15 @@ func captureStdout(t *testing.T, fn func()) string {
 	return string(out)
 }
 
+// flushWriter waits until log's writer has written every line it queued, so a test reads
+// the output of the async writer.
+func flushWriter(t *testing.T, log *wlog.Logger) {
+	t.Helper()
+	if err := log.Flush(context.Background()); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+}
+
 func TestCore_StartSetEmit(t *testing.T) {
 	log := wlog.New(wlog.WithService("go-customer", "1.4.0", "test"))
 
@@ -44,6 +53,8 @@ func TestCore_StartSetEmit(t *testing.T) {
 		wlog.Set(ctx, "order_id", "4821")
 		wlog.Set(ctx, "password", "hunter2")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any

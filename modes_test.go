@@ -32,6 +32,8 @@ func TestCore_Enabled(t *testing.T) {
 	out := captureStdout(t, func() {
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if len(rec.events) != 0 || out != "" {
 		t.Errorf("disabled logging emitted %d events and wrote %q", len(rec.events), out)
@@ -41,6 +43,8 @@ func TestCore_Enabled(t *testing.T) {
 	captureStdout(t, func() {
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if len(rec.events) != 1 {
 		t.Errorf("events after re-enable = %d, want 1", len(rec.events))
@@ -58,6 +62,8 @@ func TestCore_Silent(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "order_id", "1")
 		end()
+
+		flushWriter(t, log)
 	})
 	if out != "" {
 		t.Errorf("silent logger wrote %q to stdout", out)
@@ -79,6 +85,8 @@ func TestCore_RawValues(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "payload", payload)
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if len(rec.events) != 1 {

@@ -10,6 +10,7 @@ package wlog
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -49,6 +50,7 @@ type Logger struct {
 	measurers         []Measurer
 	stats             loggerStats
 	slowDrains        sync.Map // drain names that already reported WLOG_DRAIN_SLOW
+	writer            eventWriter
 	debug             bool
 	fieldNames        FieldNames
 	plugins           []Plugin
@@ -80,6 +82,13 @@ func New(opts ...Option) *Logger {
 	}
 	l.wirePlugins()
 	l.setupDrains()
+	l.startWriter()
+	// A silent Logger with no drain drops every event, which is never what a caller
+	// means, so say so once.
+	if l.silent && len(l.drains) == 0 {
+		l.reportProblem(codeSilentNoDrain, "WithSilent",
+			fmt.Errorf("WithSilent is set, and the Logger has no drain"))
+	}
 	for _, w := range warnings {
 		l.reportProblem(codeInvalidConfig, w.source, w.err)
 	}

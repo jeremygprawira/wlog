@@ -113,7 +113,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-SHAPE-5 Plugin hooks v2
 - [x] 11-PROB-1 Problem codes
 - [x] 11-PROB-2 Debug reasons and Stats
-- [ ] 11-SHAPE-6 Writers
+- [x] 11-SHAPE-6 Writers
 - [ ] 11-SHAPE-7 Pretty console v2
 - [ ] 11-LLM-1 Rename llm event keys
 - [ ] 11-DEF-1 SetDefault and a Logger-scoped switch

@@ -41,7 +41,10 @@ func TestDrain_CtxNotCanceledByEventEnd(t *testing.T) {
 	ctx := log.WithContext(reqCtx)
 	_, end := wlog.Start(ctx, "op")
 	cancel()
-	captureStdout(t, end)
+	captureStdout(t, func() {
+		end()
+		flushWriter(t, log)
+	})
 
 	if gotErr != nil {
 		t.Errorf("drain ctx error = %v, want nil after the request context canceled", gotErr)

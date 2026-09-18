@@ -27,6 +27,8 @@ func TestCore_WithDrains_FansOutRedactedEvent(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "password", "hunter2")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	mu.Lock()
@@ -57,6 +59,8 @@ func TestCore_Drain_PanicIsolated(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	if !reached {

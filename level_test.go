@@ -41,6 +41,8 @@ func TestCore_WithLevel_FiltersBelowMinimum(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "quiet.op")
 		wlog.Set(ctx, "x", 1) // stays at the default info level
 		end()
+
+		flushWriter(t, log)
 	})
 	if out != "" {
 		t.Errorf("expected no output below the minimum level, got %q", out)
@@ -54,6 +56,8 @@ func TestCore_WithLevel_KeepsAtOrAboveMinimum(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "loud.op")
 		wlog.SetLevel(ctx, wlog.LevelError)
 		end()
+
+		flushWriter(t, log)
 	})
 	if out == "" {
 		t.Error("expected output at or above the minimum level, got none")

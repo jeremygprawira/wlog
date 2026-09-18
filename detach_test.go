@@ -16,8 +16,14 @@ func TestCore_Detach_LinksToParent(t *testing.T) {
 	wlog.SetGroup(parentCtx, "trace", "request_id", "req-1", "trace_id", "trace-1")
 
 	childCtx, childEnd := wlog.Detach(parentCtx, "send.email")
-	childOut := captureStdout(t, childEnd)
-	parentOut := captureStdout(t, parentEnd)
+	childOut := captureStdout(t, func() {
+		childEnd()
+		flushWriter(t, log)
+	})
+	parentOut := captureStdout(t, func() {
+		parentEnd()
+		flushWriter(t, log)
+	})
 
 	var child map[string]any
 	if err := json.Unmarshal([]byte(childOut), &child); err != nil {
@@ -53,13 +59,19 @@ func TestCore_LateWrite_CountedOnOpenParent(t *testing.T) {
 	parentCtx, parentEnd := wlog.Start(parentCtx, "parent.op")
 	childCtx, childEnd := wlog.Detach(parentCtx, "child.op")
 
-	captureStdout(t, childEnd) // seals and emits the child
+	captureStdout(t, func() {
+		childEnd() // seals and emits the child
+		flushWriter(t, log)
+	})
 
 	// The child is already sealed; this write must not panic, and must surface on
 	// the nearest still-open ancestor (the parent) instead of vanishing silently.
 	wlog.Set(childCtx, "late", "value")
 
-	parentOut := captureStdout(t, parentEnd)
+	parentOut := captureStdout(t, func() {
+		parentEnd()
+		flushWriter(t, log)
+	})
 	var parent map[string]any
 	if err := json.Unmarshal([]byte(parentOut), &parent); err != nil {
 		t.Fatalf("invalid JSON line: %v\noutput: %q", err, parentOut)
@@ -77,6 +89,8 @@ func TestCore_LateWrite_NoOpenAncestor_IsSilentNoop(t *testing.T) {
 		ctx = log.WithContext(context.Background())
 		ctx, end = wlog.Start(ctx, "solo.op")
 		end() // seals; no parent exists at all
+
+		flushWriter(t, log)
 	})
 
 	// Must not panic.

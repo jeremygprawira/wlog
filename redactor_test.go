@@ -19,6 +19,8 @@ func TestCore_WithRedactor_Custom(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "nik", "3171010101010001")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -37,6 +39,8 @@ func TestCore_SetRedactor_SwapsAtRuntime(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "password", "hunter2")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -56,6 +60,8 @@ func TestCore_SetRedactor_NilResetsToDefault(t *testing.T) {
 		ctx, end := wlog.Start(ctx, "op")
 		wlog.Set(ctx, "password", "hunter2")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -71,6 +77,8 @@ func TestCore_RedactFingerprint_PresentByDefault(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -86,6 +94,8 @@ func TestCore_RedactFingerprint_Disabled(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any

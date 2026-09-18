@@ -22,6 +22,8 @@ func TestCore_Env_ServiceFromEnvVars(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -39,6 +41,8 @@ func TestCore_Env_ExplicitOptionWinsOverEnv(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 
 	var got map[string]any
@@ -56,6 +60,8 @@ func TestCore_Env_Level(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op") // default level info, below WLOG_LEVEL=warn
 		end()
+
+		flushWriter(t, log)
 	})
 	if out != "" {
 		t.Errorf("WLOG_LEVEL=warn did not filter an info-level event: %q", out)
@@ -69,6 +75,8 @@ func TestCore_Env_Format(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if strings.HasPrefix(strings.TrimSpace(out), "{") {
 		t.Errorf("WLOG_FORMAT=pretty produced JSON: %q", out)
@@ -87,6 +95,8 @@ func TestCore_Env_InvalidLevel_ReportsAndUsesDefault(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if out == "" {
 		t.Error("invalid WLOG_LEVEL caused every event to be dropped instead of falling back to the default")
@@ -107,6 +117,8 @@ func TestCore_Env_InvalidFormat_ReportsAndUsesDefault(t *testing.T) {
 		ctx := log.WithContext(context.Background())
 		_, end := wlog.Start(ctx, "op")
 		end()
+
+		flushWriter(t, log)
 	})
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") {
 		t.Errorf("invalid WLOG_FORMAT did not fall back to the default (JSON, no env set): %q", out)
