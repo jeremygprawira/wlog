@@ -21,9 +21,9 @@ func Debug(ctx context.Context, msg string, kv ...any) { plainLog(ctx, LevelDebu
 func plainLog(ctx context.Context, level Level, msg string, kv []any) {
 	l := loggerFrom(ctx)
 	if l == nil {
-		return
+		l = Default()
 	}
-	if !Enabled() {
+	if !l.Enabled() {
 		l.dropEvent(dropDisabled)
 		return
 	}

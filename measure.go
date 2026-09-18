@@ -37,7 +37,7 @@ type Measurer interface {
 // filter and before head sampling, so a filter or a sampler never changes a metric. A
 // disabled or closed Logger calls no Measurer, and neither does a log line.
 func (l *Logger) measureEvent(ctx context.Context, e *event, level Level) {
-	if len(l.measurers) == 0 || e.kind == kindLog || !Enabled() {
+	if len(l.measurers) == 0 || e.kind == kindLog || !l.Enabled() {
 		return
 	}
 	m := measureOf(e, level)

@@ -21,29 +21,6 @@ func sendEvent(t *testing.T, m *memory.Memory, level string, at time.Time, extra
 	m.Send(context.Background(), event)
 }
 
-// TestMemory_Named_SameStore proves one name always returns one store, and Stores lists
-// it.
-func TestMemory_Named_SameStore(t *testing.T) {
-	first := memory.Named("test-named", 10)
-	second := memory.Named("test-named", 20)
-	if first != second {
-		t.Fatal("Named returned two stores for one name")
-	}
-	first.Send(context.Background(), map[string]any{"level": "info"})
-	if len(second.Snapshot()) != 1 {
-		t.Errorf("the second handle does not see the first handle's event")
-	}
-	found := false
-	for _, name := range memory.Stores() {
-		if name == "test-named" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("Stores() = %v, want test-named", memory.Stores())
-	}
-}
-
 // TestMemory_Query proves the filter matches level, time, contained pair, and a custom
 // function, and honors Limit.
 func TestMemory_Query(t *testing.T) {

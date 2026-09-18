@@ -72,8 +72,7 @@ func TestProblems_BET10_EveryDropReason(t *testing.T) {
 
 	t.Run("disabled", func(t *testing.T) {
 		log, problems := everyDrop(t)
-		wlog.SetEnabled(false)
-		defer wlog.SetEnabled(true)
+		log.SetEnabled(false)
 
 		_, end := wlog.Start(log.WithContext(context.Background()), "op")
 		end()

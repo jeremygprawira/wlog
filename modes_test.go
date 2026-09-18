@@ -17,16 +17,15 @@ func (r *modeRecorder) drain() wlog.Drain {
 	})
 }
 
-// TestCore_Enabled proves the process-wide switch makes Start a no-op, and that
-// turning it back on restores logging.
+// TestCore_Enabled proves the switch of one Logger makes its own Start a no-op, and that
+// turning it back on restores logging for that Logger.
 func TestCore_Enabled(t *testing.T) {
 	rec := &modeRecorder{}
 	log := wlog.New(wlog.WithDrains(rec.drain()))
 	ctx := log.WithContext(context.Background())
 
-	t.Cleanup(func() { wlog.SetEnabled(true) })
-	wlog.SetEnabled(false)
-	if wlog.Enabled() {
+	log.SetEnabled(false)
+	if log.Enabled() {
 		t.Fatal("Enabled() = true after SetEnabled(false)")
 	}
 	out := captureStdout(t, func() {
@@ -39,7 +38,7 @@ func TestCore_Enabled(t *testing.T) {
 		t.Errorf("disabled logging emitted %d events and wrote %q", len(rec.events), out)
 	}
 
-	wlog.SetEnabled(true)
+	log.SetEnabled(true)
 	captureStdout(t, func() {
 		_, end := wlog.Start(ctx, "op")
 		end()

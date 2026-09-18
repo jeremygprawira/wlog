@@ -148,3 +148,12 @@ func cloneValue(value any) any {
 		return value
 	}
 }
+
+// Clear empties the store and keeps its size, so it can keep receiving events. A
+// subscriber channel is left alone, since it owns its own buffer.
+func (m *Memory) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.buf = nil
+	m.next = 0
+}

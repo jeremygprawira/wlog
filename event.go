@@ -97,11 +97,13 @@ func HasEvent(ctx context.Context) bool {
 // Call the returned end func exactly once, typically deferred, to redact and emit the
 // event.
 func Start(ctx context.Context, operation string) (context.Context, func()) {
+	// A bare context uses the default Logger, so a package function works with no
+	// setup at all.
 	l := loggerFrom(ctx)
 	if l == nil {
-		return ctx, func() {}
+		l = Default()
 	}
-	if !Enabled() {
+	if !l.Enabled() {
 		l.dropEvent(dropDisabled)
 		return ctx, func() {}
 	}

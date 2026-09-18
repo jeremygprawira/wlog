@@ -12,11 +12,12 @@ import (
 // trace.parent_operation, then is emitted on its own end func — it does not wait for,
 // or get merged into, the parent.
 func Detach(ctx context.Context, operation string) (context.Context, func()) {
+	// A bare context uses the default Logger, the same way Start does.
 	l := loggerFrom(ctx)
 	if l == nil {
-		return ctx, func() {}
+		l = Default()
 	}
-	if !Enabled() {
+	if !l.Enabled() {
 		l.dropEvent(dropDisabled)
 		return ctx, func() {}
 	}

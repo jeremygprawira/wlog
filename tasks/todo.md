@@ -116,7 +116,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-SHAPE-6 Writers
 - [x] 11-SHAPE-7 Pretty console v2
 - [x] 11-LLM-1 Rename llm event keys
-- [ ] 11-DEF-1 SetDefault and a Logger-scoped switch
+- [x] 11-DEF-1 SetDefault and a Logger-scoped switch
 - [ ] 11-DEF-2 Writes with no event
 - [ ] 11-CALL-1 StartCall and call records
 - [ ] 11-PROP-1 propagate

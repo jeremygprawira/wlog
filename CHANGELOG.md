@@ -7,11 +7,25 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+### Added
+
+- `wlog.SetDefault` and `wlog.Default` give a package function a Logger for a context that
+  carries none. `Default` builds one on first use, so `wlog.Info` works with no setup.
+- `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
+  allowed exception is the default Logger pointer.
+
 ### Changed
 
 - The `llm` group renames three keys for shape v2. `llm.model` becomes `llm.request_model`,
   `llm.cached_input_tokens` becomes `llm.cache_read_input_tokens`, and `llm.finish_reason`
   becomes `llm.finish_reasons`, an array with one entry per model call.
+
+### Removed
+
+- The package-level `wlog.SetEnabled` and `wlog.Enabled` are gone. Each Logger has
+  `SetEnabled` and `Enabled`, so one Logger that is off leaves every other Logger on.
+- `memory.Named`, `memory.Remove`, and `memory.Stores` are gone. They held a second
+  package-level registry, and a caller passes the store it wants instead.
 
 ### Fixed
 

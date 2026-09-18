@@ -32,7 +32,7 @@ const problemsURL = "https://github.com/jeremygprawira/wlog/blob/main/docs/probl
 
 // problemCatalog lists every code wlog reports, in the order docs/problems.md holds
 // them. Why says when the code fires, and Fix says what the caller does about it.
-var problemCatalog = []Problem{
+var problemCatalog = withLinks([]Problem{
 	{
 		Code: codeNoEvent,
 		Why:  "A write needs an event, and the context holds none.",
@@ -123,7 +123,7 @@ var problemCatalog = []Problem{
 		Why:  "Debug mode only. An event was dropped, and Why names the reason.",
 		Fix:  "Nothing, unless the drop is unexpected. Then read Why and adjust the filter.",
 	},
-}
+})
 
 // problemByCode finds one catalog entry. It reports false for an unknown code, so a
 // caller may report a code that this version does not know.
@@ -136,12 +136,13 @@ func problemByCode(code string) (Problem, bool) {
 	return Problem{}, false
 }
 
-// init fills the link of every catalog entry from its code, so the catalog holds no
-// repeated URL text.
-func init() {
-	for i := range problemCatalog {
-		problemCatalog[i].Link = problemsURL + anchor(problemCatalog[i].Code)
+// withLinks returns the catalog with the link of every entry filled from its code, so
+// the table holds no repeated URL text and no code writes it later.
+func withLinks(catalog []Problem) []Problem {
+	for i := range catalog {
+		catalog[i].Link = problemsURL + anchor(catalog[i].Code)
 	}
+	return catalog
 }
 
 // anchor turns a code into the anchor that GitHub builds for its heading, which is

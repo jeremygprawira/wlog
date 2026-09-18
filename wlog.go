@@ -17,18 +17,12 @@ import (
 	"github.com/jeremygprawira/wlog/redact"
 )
 
-// disabled is the process-wide off switch behind SetEnabled. It is stored inverted,
-// so the zero value means logging is on. This is the one piece of package-level state
-// SPEC.md allows: it stays read-only on the hot path and holds no per-event data.
-var disabled atomic.Bool
+// SetEnabled turns this Logger on or off. A Logger that is off starts no event and
+// writes no line, and every other Logger stays as it was. A Logger starts on.
+func (l *Logger) SetEnabled(on bool) { l.disabled.Store(!on) }
 
-// SetEnabled turns logging on or off for the whole process. With logging off, Start
-// and Detach return a no-op end func, and a plain line writes nothing. The default is
-// on.
-func SetEnabled(on bool) { disabled.Store(!on) }
-
-// Enabled reports whether logging is on.
-func Enabled() bool { return !disabled.Load() }
+// Enabled reports whether this Logger is on.
+func (l *Logger) Enabled() bool { return !l.disabled.Load() }
 
 // Logger holds the configuration every event is built and emitted with. Build one with
 // New at startup; attach it to request/job contexts with WithContext.
@@ -52,13 +46,16 @@ type Logger struct {
 	slowDrains        sync.Map // drain names that already reported WLOG_DRAIN_SLOW
 	writer            eventWriter
 	debug             bool
-	fieldNames        FieldNames
-	plugins           []Plugin
-	strictKeys        map[string]bool
-	format            Format
-	summary           func(Event) string
-	silent            bool
-	rawValues         bool
+	// disabled is the per-Logger off switch behind SetEnabled. It is stored inverted, so
+	// the zero value means the Logger is on.
+	disabled   atomic.Bool
+	fieldNames FieldNames
+	plugins    []Plugin
+	strictKeys map[string]bool
+	format     Format
+	summary    func(Event) string
+	silent     bool
+	rawValues  bool
 }
 
 type serviceInfo struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jeremygprawira/wlog"
@@ -92,10 +93,18 @@ func TestCore_Set_WithoutEvent_IsNoop(t *testing.T) {
 	wlog.Set(context.Background(), "key", "value")
 }
 
-func TestCore_Start_WithoutLogger_IsNoop(t *testing.T) {
-	// ctx carries no *Logger (never went through WithContext). Start/end must be
-	// harmless no-ops rather than panicking.
-	ctx, end := wlog.Start(context.Background(), "op")
-	wlog.Set(ctx, "key", "value")
-	end()
+// TestCore_Start_WithoutLogger_UsesDefault proves that a bare context starts an event
+// through the default Logger, so a package function works with no setup.
+func TestCore_Start_WithoutLogger_UsesDefault(t *testing.T) {
+	out := captureStdout(t, func() {
+		ctx, end := wlog.Start(context.Background(), "no-setup.op")
+		wlog.Set(ctx, "key", "value")
+		end()
+		if err := wlog.Default().Flush(context.Background()); err != nil {
+			t.Fatalf("Flush: %v", err)
+		}
+	})
+	if !strings.Contains(out, "no-setup.op") {
+		t.Errorf("Start with no Logger on the context wrote %q, want one line through Default", out)
+	}
 }

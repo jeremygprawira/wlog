@@ -119,7 +119,7 @@ A test proves every row that says built. A row that says partial names what is m
 | evlog page | Status | wlog |
 |---|---|---|
 | overview | built | this docs set |
-| configuration | built | options, env vars, code wins over env, plus `SetEnabled`, `WithSilent`, and `WithRawValues` |
+| configuration | built | options, env vars, code wins over env, plus a Logger-scoped on switch, `WithSilent`, and `WithRawValues` |
 | performance | built | benchmark budget, `make bench` |
 | cost | partial | `docs/cost.md` prices calls and charts spend. No interactive calculator |
 | best-practices | built | `docs/best-practices.md`, every rule tied to a test |
