@@ -75,7 +75,7 @@ func TestCore_RedactFingerprint_PresentByDefault(t *testing.T) {
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
-	if got["redact.fingerprint"] == nil || got["redact.fingerprint"] == "" {
+	if got := fingerprintOf(got); got == nil || got == "" {
 		t.Errorf("redact.fingerprint missing: %v", got)
 	}
 }
@@ -90,7 +90,7 @@ func TestCore_RedactFingerprint_Disabled(t *testing.T) {
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
-	if _, ok := got["redact.fingerprint"]; ok {
+	if got := fingerprintOf(got); got != nil {
 		t.Errorf("redact.fingerprint present despite WithRedactFingerprint(false): %v", got)
 	}
 }
@@ -156,7 +156,7 @@ func TestCore_SetRedactor_ConcurrentSwapsAndEmits(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, e := range events {
-		fp := e["redact.fingerprint"]
+		fp := fingerprintOf(e)
 		switch fp {
 		case defaultFP:
 			if e["password"] != "[REDACTED]" {
@@ -170,4 +170,11 @@ func TestCore_SetRedactor_ConcurrentSwapsAndEmits(t *testing.T) {
 			t.Fatalf("unexpected fingerprint: %v", fp)
 		}
 	}
+}
+
+// fingerprintOf returns wlog.redact_fingerprint from an event, which tells whether the
+// event was redacted at all.
+func fingerprintOf(event map[string]any) any {
+	counters, _ := event["wlog"].(map[string]any)
+	return counters["redact_fingerprint"]
 }

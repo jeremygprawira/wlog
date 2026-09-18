@@ -98,8 +98,9 @@ func TestCore_Set_KeyCap(t *testing.T) {
 	if count != 200 {
 		t.Errorf("kept %d keys, want 200 (the cap)", count)
 	}
-	if got["wlog.dropped_fields"] != float64(5) {
-		t.Errorf("wlog.dropped_fields = %v, want 5", got["wlog.dropped_fields"])
+	// The trace group holds one of the 200 fields, so six of the 205 keys are dropped.
+	if counters(got)["dropped_fields"] != float64(6) {
+		t.Errorf("wlog.dropped_fields = %v, want 5", counters(got)["dropped_fields"])
 	}
 }
 
@@ -114,8 +115,10 @@ func TestCore_SetGroup_FieldCap(t *testing.T) {
 	if len(g) != 50 {
 		t.Errorf("group has %d fields, want 50 (the cap)", len(g))
 	}
-	if got["wlog.dropped_fields"] != float64(5) {
-		t.Errorf("wlog.dropped_fields = %v, want 5", got["wlog.dropped_fields"])
+	// The group cap counted the five fields it refused, and the top-level cap saw one
+	// key for the whole group.
+	if counters(got)["dropped_fields"] != float64(5) {
+		t.Errorf("wlog.dropped_fields = %v, want 5", counters(got)["dropped_fields"])
 	}
 }
 
@@ -130,8 +133,10 @@ func TestCore_Append_LenCap(t *testing.T) {
 	if len(arr) != 200 {
 		t.Errorf("array has %d elements, want 200 (the cap)", len(arr))
 	}
-	if got["wlog.dropped_fields"] != float64(5) {
-		t.Errorf("wlog.dropped_fields = %v, want 5", got["wlog.dropped_fields"])
+	// The array cap counted the five elements it refused, and the top-level cap saw one
+	// key for the whole array.
+	if counters(got)["dropped_fields"] != float64(5) {
+		t.Errorf("wlog.dropped_fields = %v, want 5", counters(got)["dropped_fields"])
 	}
 }
 
@@ -193,7 +198,7 @@ func TestCore_CORE25_SizeCapCounts(t *testing.T) {
 	end()
 
 	got := rec.Last()
-	dropped, ok := got["wlog.dropped_fields"]
+	dropped, ok := counters(got)["dropped_fields"]
 	if !ok {
 		t.Fatalf("no dropped counter: the size cap did not fire (fields: %d)", len(got))
 	}
@@ -233,4 +238,11 @@ func TestCore_CORE23_SetGroupMergesNested(t *testing.T) {
 	if address["city"] != "Jakarta" || address["zip"] != "10110" {
 		t.Errorf("address = %v, want both levels merged", address)
 	}
+}
+
+// counters returns the nested wlog object of an event: the schema version, the
+// redaction fingerprint, and each counter of what core had to drop.
+func counters(event map[string]any) map[string]any {
+	object, _ := event["wlog"].(map[string]any)
+	return object
 }

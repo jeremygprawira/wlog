@@ -28,7 +28,7 @@ func TestAppendLog_FoldsAndCaps(t *testing.T) {
 	if len(logs) != 50 {
 		t.Errorf("len(logs) = %d, want 50", len(logs))
 	}
-	if got := last["wlog.dropped_logs"]; got != int64(10) && got != 10 {
+	if got := last["wlog"].(map[string]any)["dropped_logs"]; got != int64(10) && got != 10 {
 		t.Errorf("wlog.dropped_logs = %v (%T), want 10", got, got)
 	}
 	first, _ := logs[0].(map[string]any)

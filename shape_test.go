@@ -7,11 +7,14 @@ package wlog_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/drain/memory"
 	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
@@ -138,4 +141,87 @@ func errorObject(t *testing.T, event map[string]any) map[string]any {
 		t.Fatalf("error = %v, want an object", event["error"])
 	}
 	return info
+}
+
+// TestShape_CORE34_WlogNested proves that the counters and the fingerprint live in one
+// nested wlog object, and that no flat key pretends to be part of it.
+func TestShape_CORE34_WlogNested(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	_, end := wlog.Start(log.WithContext(context.Background()), "op")
+	end()
+
+	got := rec.Last()
+	counters, ok := got["wlog"].(map[string]any)
+	if !ok {
+		t.Fatalf("wlog = %v, want the nested object", got["wlog"])
+	}
+	if got := fmt.Sprint(counters["schema_version"]); got != "2" {
+		t.Errorf("wlog.schema_version = %v, want 2", counters["schema_version"])
+	}
+	if counters["redact_fingerprint"] == nil || counters["redact_fingerprint"] == "" {
+		t.Errorf("wlog.redact_fingerprint = %v, want the fingerprint", counters["redact_fingerprint"])
+	}
+	if _, ok := counters["dropped_fields"]; ok {
+		t.Errorf("wlog carries a zero counter: %v", counters)
+	}
+	for key := range got {
+		if strings.HasPrefix(key, "wlog.") || key == "redact.fingerprint" {
+			t.Errorf("flat key %q is still written", key)
+		}
+	}
+}
+
+// TestShape_EventIDIsUUIDv7 proves that each event carries a version 7 UUID, that two
+// events differ, and that a detached child keeps the parent's trace id.
+func TestShape_EventIDIsUUIDv7(t *testing.T) {
+	pattern := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+
+	ctx, end := wlog.Start(ctx, "parent")
+	_, endChild := wlog.Detach(ctx, "child")
+	endChild()
+	end()
+
+	events := rec.Events()
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want 2", len(events))
+	}
+	seen := map[string]bool{}
+	for _, event := range events {
+		id, _ := event["event_id"].(string)
+		if !pattern.MatchString(id) {
+			t.Errorf("event_id = %q, want a version 7 UUID", id)
+		}
+		if seen[id] {
+			t.Errorf("event_id %q appears twice", id)
+		}
+		seen[id] = true
+	}
+	parentTrace, _ := events[1]["trace"].(map[string]any)
+	childTrace, _ := events[0]["trace"].(map[string]any)
+	if parentTrace["trace_id"] == nil || parentTrace["trace_id"] != childTrace["trace_id"] {
+		t.Errorf("child trace_id = %v, want the parent's %v", childTrace["trace_id"], parentTrace["trace_id"])
+	}
+	if childTrace["span_id"] == parentTrace["span_id"] {
+		t.Error("the child shares the parent's span_id, want its own")
+	}
+}
+
+// TestShape_EmptyValuesOmitted proves that an empty value costs no space, because the
+// schema gives an absent value and an empty one the same meaning.
+func TestShape_EmptyValuesOmitted(t *testing.T) {
+	log := wlog.New(wlog.WithFormat(wlog.FormatJSON), wlog.WithDrains(memory.New(0)))
+	out := captureStdout(t, func() {
+		ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+		wlog.Set(ctx, "empty", "")
+		wlog.SetGroup(ctx, "group", map[string]any{})
+		end()
+	})
+
+	for _, gone := range []string{`"empty"`, `"group"`, `"dropped_fields"`, "null"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("%s is in the line: %s", gone, out)
+		}
+	}
 }

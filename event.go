@@ -33,9 +33,22 @@ type event struct {
 	strictKeys  map[string]bool // nil unless StrictKeys is active for this event's env
 	unknownKeys []string
 	ctx         context.Context // the context Start/Detach was given, for the enrich stage
+	kind        string          // the event kind: work, log, or a kind SPEC-work sets
+	eventID     string          // the UUIDv7 that identifies this event, set at Start
 	l           *Logger         // the Logger that built this event, for a late-write report
 	caller      bool            // true when wlog.Error records the line that called it
 }
+
+// The kind of an event: a unit of work, or a plain log line. SPEC-work adds the
+// request, rpc, message, job, command, and function kinds, which its own API sets.
+const (
+	kindWork = "work"
+	kindLog  = "log"
+)
+
+// schemaVersion is the version of the event shape this release writes. It travels in
+// wlog.schema_version, so a consumer knows which schema to validate against.
+const schemaVersion = 2
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
 // counted in wlog.dropped_fields on the emitted event, rather than growing unbounded.
@@ -89,7 +102,11 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo,
 		strictKeys: l.strictKeysForEvent(), rawValues: l.rawValues, l: l, caller: l.errorCaller,
+		kind: kindWork, eventID: newEventID(time.Now()),
 	}
+	// The trace starts here, so a child that Detach makes copies the same trace and
+	// an adapter that names the trace later merges into it.
+	e.fields["trace"] = map[string]any{"trace_id": newTraceID(), "span_id": newSpanID()}
 	ctx = withEvent(ctx, e)
 	e.ctx = ctx
 	return ctx, func() { l.emit(e) }
@@ -409,12 +426,35 @@ func (l *Logger) emit(e *event) {
 	if level == LevelError {
 		outcome = "error"
 	}
+	kind := e.kind
+	if kind == "" {
+		kind = kindWork
+	}
+	// Core names the trace when no enricher and no adapter did, so every event of
+	// real work joins the same trace as its children.
+	if kind != kindLog {
+		if trace, ok := e.fields["trace"].(map[string]any); ok {
+			if trace["trace_id"] == nil || trace["trace_id"] == "" {
+				trace["trace_id"] = newTraceID()
+			}
+			if trace["span_id"] == nil || trace["span_id"] == "" {
+				trace["span_id"] = newSpanID()
+			}
+		} else if _, taken := e.fields["trace"]; !taken {
+			e.fields["trace"] = map[string]any{"trace_id": newTraceID(), "span_id": newSpanID()}
+		}
+	}
 	out := map[string]any{
-		"timestamp":   e.start.UTC().Format(time.RFC3339Nano),
-		"level":       string(level),
-		"operation":   e.operation,
-		"duration_ms": float64(time.Since(e.start).Microseconds()) / 1000,
-		"outcome":     outcome,
+		"timestamp": e.start.UTC().Format(time.RFC3339Nano),
+		"level":     string(level),
+		"operation": e.operation,
+		"kind":      kind,
+		"outcome":   outcome,
+		"event_id":  e.eventID,
+	}
+	// A log line records no work, so it carries no duration.
+	if kind != kindLog {
+		out["duration_ms"] = float64(time.Since(e.start).Microseconds()) / 1000
 	}
 	if l.service != (serviceInfo{}) {
 		out["service"] = map[string]any{
@@ -422,18 +462,12 @@ func (l *Logger) emit(e *event) {
 		}
 	}
 	maps.Copy(out, fields)
-	if dropped > 0 {
-		out["wlog.dropped_fields"] = dropped
-	}
-	if droppedLogs > 0 {
-		out["wlog.dropped_logs"] = droppedLogs
-	}
-	if lateWrites > 0 {
-		out["wlog.late_writes"] = lateWrites
-	}
-	if len(unknownKeys) > 0 {
-		out["wlog.unknown_keys"] = unknownKeys
-	}
+	out["wlog"] = wlogObject("", map[string]any{
+		"dropped_fields": dropped,
+		"dropped_logs":   droppedLogs,
+		"late_writes":    lateWrites,
+		"unknown_keys":   unknownKeys,
+	})
 	// Normalized through normalize() (not assigned directly) so redaction, which only
 	// walks map[string]any/[]any/string, sees inside error detail too.
 	if errInfo != nil {
@@ -460,7 +494,14 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	redactor := l.currentRedactor()
 	redactor.Apply(out)
 	if l.redactFingerprint {
-		out["redact.fingerprint"] = redactor.Fingerprint()
+		wlogFields, _ := out["wlog"].(map[string]any)
+		if wlogFields == nil {
+			wlogFields = map[string]any{"schema_version": schemaVersion}
+		}
+		if print := redactor.Fingerprint(); print != "" {
+			wlogFields["redact_fingerprint"] = print
+		}
+		out["wlog"] = wlogFields
 	}
 	out = applyFieldNames(out, l.fieldNames)
 	// A drain makes network calls, so it must not inherit the request's cancellation:
@@ -476,10 +517,10 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 		writePretty(os.Stdout, out, colorEnabled())
 		return
 	}
-	b, err := json.Marshal(out)
+	b, err := encodeEvent(out)
 	if err != nil {
 		l.reportProblem(codeDrainFailed, "stdout", err)
 		return
 	}
-	_, _ = fmt.Fprintln(os.Stdout, string(b))
+	_, _ = os.Stdout.Write(b)
 }

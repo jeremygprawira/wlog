@@ -62,8 +62,8 @@ func TestCore_Error_ListCappedAtTen(t *testing.T) {
 	if len(errs) != 10 {
 		t.Errorf("errors has %d entries, want 10 (the cap)", len(errs))
 	}
-	if got["wlog.dropped_fields"] != float64(1) {
-		t.Errorf("wlog.dropped_fields = %v, want 1", got["wlog.dropped_fields"])
+	if counters, _ := got["wlog"].(map[string]any); counters["dropped_fields"] != float64(1) {
+		t.Errorf("wlog.dropped_fields = %v, want 1", got["wlog"])
 	}
 }
 

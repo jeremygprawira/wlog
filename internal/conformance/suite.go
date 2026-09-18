@@ -167,11 +167,11 @@ func testTraceparent(t *testing.T, adapter Adapter) {
 	req2.Header.Set("traceparent", "garbage")
 	w2 := httptest.NewRecorder()
 	h2.ServeHTTP(w2, req2)
+	// Core names the trace of every event of work, so an absent trace_id is not the
+	// rule here. An invalid header must simply not be adopted.
 	trace2, _ := rec2.last()["trace"].(map[string]any)
-	if trace2 != nil {
-		if _, ok := trace2["trace_id"]; ok {
-			t.Errorf("trace_id set from an invalid traceparent: %v", trace2["trace_id"])
-		}
+	if got := trace2["trace_id"]; got == "garbage" {
+		t.Errorf("trace_id came from an invalid traceparent: %v", got)
 	}
 }
 

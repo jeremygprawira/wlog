@@ -82,11 +82,11 @@ func TestMiddleware_Traceparent_InvalidIsIgnored(t *testing.T) {
 
 	var got map[string]any
 	_ = json.Unmarshal([]byte(out), &got)
+	// Core names the trace of every event of work, so an absent trace_id would be
+	// wrong here. What matters is that the invalid header was not adopted.
 	trace, _ := got["trace"].(map[string]any)
-	if trace != nil {
-		if _, ok := trace["trace_id"]; ok {
-			t.Errorf("trace_id set from an invalid traceparent: %v", trace["trace_id"])
-		}
+	if got := trace["trace_id"]; got == "not-a-valid-header" {
+		t.Errorf("trace_id came from an invalid traceparent: %v", got)
 	}
 }
 

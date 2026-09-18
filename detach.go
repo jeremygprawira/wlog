@@ -19,17 +19,23 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo, rawValues: l.rawValues,
-		strictKeys: l.strictKeysForEvent(),
+		strictKeys: l.strictKeysForEvent(), l: l, caller: l.errorCaller,
+		kind: kindWork, eventID: newEventID(time.Now()),
 	}
 
 	if parent := eventFrom(ctx); parent != nil {
 		e.l = l
 		e.parent = parent
 		parent.mu.Lock()
-		trace := map[string]any{}
+		trace := map[string]any{"trace_id": newTraceID()}
 		if pt, ok := parent.fields["trace"].(map[string]any); ok {
 			maps.Copy(trace, pt)
+			// The child joins the parent's trace. It names its own span and points
+			// at the parent's, so a reader walks the trace in either direction.
+			trace["parent_span_id"] = pt["span_id"]
+			trace["parent_event_id"] = parent.eventID
 		}
+		trace["span_id"] = newSpanID()
 		parentOp := parent.operation
 		parent.mu.Unlock()
 		trace["parent_operation"] = parentOp

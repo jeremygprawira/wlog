@@ -64,8 +64,8 @@ func TestCore_LateWrite_CountedOnOpenParent(t *testing.T) {
 	if err := json.Unmarshal([]byte(parentOut), &parent); err != nil {
 		t.Fatalf("invalid JSON line: %v\noutput: %q", err, parentOut)
 	}
-	if parent["wlog.late_writes"] != float64(1) {
-		t.Errorf("parent wlog.late_writes = %v, want 1", parent["wlog.late_writes"])
+	if counters(parent)["late_writes"] != float64(1) {
+		t.Errorf("parent wlog.late_writes = %v, want 1", counters(parent))
 	}
 }
 
@@ -139,14 +139,14 @@ func TestCore_CORE28_DetachAppliesStrictKeys(t *testing.T) {
 
 	found := false
 	for _, ev := range rec.Events() {
-		if keys, ok := ev["wlog.unknown_keys"].([]any); ok {
+		if keys, ok := counters(ev)["unknown_keys"].([]any); ok {
 			for _, k := range keys {
 				if k == "amout" {
 					found = true
 				}
 			}
 		}
-		if keys, ok := ev["wlog.unknown_keys"].([]string); ok {
+		if keys, ok := counters(ev)["unknown_keys"].([]string); ok {
 			for _, k := range keys {
 				if k == "amout" {
 					found = true

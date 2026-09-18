@@ -32,8 +32,15 @@ func TestTypedKeys_SetAndFlagTypo(t *testing.T) {
 	if last["amount"] != 12.50 {
 		t.Errorf("amount = %v, want 12.5", last["amount"])
 	}
-	unknowns, _ := last["wlog.unknown_keys"].([]string)
+	unknowns, _ := counters(last)["unknown_keys"].([]string)
 	if !slices.Contains(unknowns, "amout") {
 		t.Errorf("wlog.unknown_keys = %v, want it to contain amout", unknowns)
 	}
+}
+
+// counters returns the nested wlog object of an event, which holds the counters of what
+// core had to drop.
+func counters(event map[string]any) map[string]any {
+	object, _ := event["wlog"].(map[string]any)
+	return object
 }

@@ -36,7 +36,7 @@ func TestLLM_CAT1_CallsCapped(t *testing.T) {
 	if len(toolCalls) != 200 {
 		t.Errorf("llm.tool_calls holds %d entries, want the cap of 200", len(toolCalls))
 	}
-	if got := intOf(rec.Last()["wlog.dropped_fields"]); got != 350 {
+	if got := intOf(counters(rec.Last())["dropped_fields"]); got != 350 {
 		t.Errorf("wlog.dropped_fields = %v, want 350 (50 calls and 300 tool calls)", got)
 	}
 
@@ -303,4 +303,11 @@ func TestLLM_CAT3_SnapshotPrefix(t *testing.T) {
 			t.Errorf("DefaultPrices still holds a row for %q", stale)
 		}
 	}
+}
+
+// counters returns the nested wlog object of an event, which holds the counters of what
+// core had to drop.
+func counters(event map[string]any) map[string]any {
+	object, _ := event["wlog"].(map[string]any)
+	return object
 }
