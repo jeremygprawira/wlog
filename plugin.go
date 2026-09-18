@@ -50,8 +50,8 @@ func (l *Logger) Plugins() []Plugin {
 }
 
 // wirePlugins runs each plugin's Setup (if any) and registers it as an Enricher,
-// Keeper (only if no WithSampler already set one), and/or Drain, for whichever of
-// those it implements. Called once, from New, after every Option has run.
+// Keeper, and/or Drain, for whichever of those it implements. Called once, from New,
+// after every Option has run.
 func (l *Logger) wirePlugins() {
 	for _, p := range l.plugins {
 		l.safeSetup(p)
@@ -59,7 +59,7 @@ func (l *Logger) wirePlugins() {
 			l.enrichers = append(l.enrichers, en)
 		}
 		if k, ok := p.(Keeper); ok {
-			l.samplers = append(l.samplers, k)
+			l.keepers = append(l.keepers, k)
 		}
 		if d, ok := p.(Drain); ok {
 			l.drains = append(l.drains, d)

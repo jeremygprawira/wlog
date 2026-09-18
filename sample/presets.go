@@ -18,8 +18,8 @@ func KeepErrorsAndSlow(slow time.Duration, healthyRate float64) Option {
 	return func(k *keeper) {
 		KeepDuration(slow)(k)
 		KeepStatus(500)(k)
-		KeepFunc(func(_ context.Context, event map[string]any) bool {
-			return levelOf(event) == wlog.LevelWarn
+		KeepFunc(func(_ context.Context, event wlog.Event) bool {
+			return event.Level() == wlog.LevelWarn
 		})(k)
 		Rate(wlog.LevelInfo, healthyRate)(k)
 		Rate(wlog.LevelDebug, 0)(k)

@@ -1,8 +1,12 @@
+// This file tests the two sampling decisions of package sample: Sample draws the head
+// rate of one level, and Keep force-keeps the enriched events a team needs. The tests
+// build their own read-only event, so a rule is tested without a logger.
 package sample_test
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,54 +14,80 @@ import (
 	"github.com/jeremygprawira/wlog/sample"
 )
 
+// mapEvent is a read-only event built from a map, so a test calls Keep without a
+// logger. Its level comes from the level field, which is how core names it.
+type mapEvent map[string]any
+
+// Get reads a value at a dotted path, such as "http.status".
+func (e mapEvent) Get(path string) (any, bool) {
+	var current any = map[string]any(e)
+	for _, part := range strings.Split(path, ".") {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		value, ok := object[part]
+		if !ok {
+			return nil, false
+		}
+		current = value
+	}
+	return current, true
+}
+
+// Kind returns no kind, because a rule never reads it.
+func (e mapEvent) Kind() string { return "" }
+
+// Level reads the level field of the event.
+func (e mapEvent) Level() wlog.Level {
+	level, _ := e["level"].(string)
+	return wlog.Level(level)
+}
+
 func TestSample_Default_KeepsEverything(t *testing.T) {
 	k := sample.MustNew()
-	event := map[string]any{"level": "info"}
-	if !k.Keep(context.Background(), event) {
-		t.Error("default sampler dropped an event")
+	if keep, rate := k.Sample(wlog.LevelInfo, ""); !keep || rate != 100 {
+		t.Errorf("default sampler = (%v, %v), want every event kept at 100", keep, rate)
 	}
 }
 
 func TestSample_Rate_ZeroDropsInfo(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 0))
-	event := map[string]any{"level": "info"}
-	if k.Keep(context.Background(), event) {
+	if keep, _ := k.Sample(wlog.LevelInfo, ""); keep {
 		t.Error("Rate(Info, 0) kept an info event")
 	}
 }
 
 func TestSample_Rate_HundredKeepsInfo(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 100))
-	event := map[string]any{"level": "info"}
-	if !k.Keep(context.Background(), event) {
+	if keep, _ := k.Sample(wlog.LevelInfo, ""); !keep {
 		t.Error("Rate(Info, 100) dropped an info event")
 	}
 }
 
 func TestSample_Errors_AlwaysKept_EvenAtZeroRate(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelError, 0))
-	event := map[string]any{"level": "error"}
-	if !k.Keep(context.Background(), event) {
+	if !k.Keep(context.Background(), mapEvent{"level": "error"}) {
 		t.Error("an error-level event was dropped despite Rate(Error, 0)")
 	}
 }
 
 func TestSample_KeepStatus_OverridesZeroRate(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepStatus(500))
-	event := map[string]any{"level": "info", "http": map[string]any{"status": 503}}
+	event := mapEvent{"level": "info", "http": map[string]any{"status": 503}}
 	if !k.Keep(context.Background(), event) {
 		t.Error("KeepStatus(500) did not force-keep a 503 event")
 	}
 
-	okEvent := map[string]any{"level": "info", "http": map[string]any{"status": 200}}
+	okEvent := mapEvent{"level": "info", "http": map[string]any{"status": 200}}
 	if k.Keep(context.Background(), okEvent) {
-		t.Error("a non-matching status went to head sampling and should have been dropped at rate 0")
+		t.Error("Keep kept a healthy event, which is the head decision's job")
 	}
 }
 
 func TestSample_KeepDuration_OverridesZeroRate(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepDuration(time.Second))
-	event := map[string]any{"level": "info", "duration_ms": int64(2000)}
+	event := mapEvent{"level": "info", "duration_ms": int64(2000)}
 	if !k.Keep(context.Background(), event) {
 		t.Error("KeepDuration(1s) did not force-keep a 2s event")
 	}
@@ -65,22 +95,23 @@ func TestSample_KeepDuration_OverridesZeroRate(t *testing.T) {
 
 func TestSample_KeepPath_OverridesZeroRate(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepPath("/api/payments/**"))
-	event := map[string]any{"level": "info", "http": map[string]any{"path": "/api/payments/refund"}}
+	event := mapEvent{"level": "info", "http": map[string]any{"path": "/api/payments/refund"}}
 	if !k.Keep(context.Background(), event) {
 		t.Error("KeepPath did not force-keep a matching path")
 	}
 
-	other := map[string]any{"level": "info", "http": map[string]any{"path": "/api/orders"}}
+	other := mapEvent{"level": "info", "http": map[string]any{"path": "/api/orders"}}
 	if k.Keep(context.Background(), other) {
-		t.Error("a non-matching path went to head sampling and should have been dropped at rate 0")
+		t.Error("Keep kept a path that matches no rule")
 	}
 }
 
 func TestSample_KeepFunc(t *testing.T) {
-	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepFunc(func(_ context.Context, event map[string]any) bool {
-		return event["vip"] == true
+	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepFunc(func(_ context.Context, event wlog.Event) bool {
+		vip, ok := event.Get("vip")
+		return ok && vip == true
 	}))
-	event := map[string]any{"level": "info", "vip": true}
+	event := mapEvent{"level": "info", "vip": true}
 	if !k.Keep(context.Background(), event) {
 		t.Error("KeepFunc did not force-keep a matching event")
 	}
@@ -89,19 +120,19 @@ func TestSample_KeepFunc(t *testing.T) {
 func TestSample_KeepErrorsAndSlow(t *testing.T) {
 	k := sample.MustNew(sample.KeepErrorsAndSlow(time.Second, 0))
 
-	slow := map[string]any{"level": "info", "duration_ms": int64(5000)}
+	slow := mapEvent{"level": "info", "duration_ms": int64(5000)}
 	if !k.Keep(context.Background(), slow) {
 		t.Error("KeepErrorsAndSlow did not keep a slow request")
 	}
 
-	errEvent := map[string]any{"level": "error", "duration_ms": int64(1)}
+	errEvent := mapEvent{"level": "error", "duration_ms": int64(1)}
 	if !k.Keep(context.Background(), errEvent) {
 		t.Error("KeepErrorsAndSlow did not keep an error event")
 	}
 
-	healthy := map[string]any{"level": "info", "duration_ms": int64(1)}
+	healthy := mapEvent{"level": "info", "duration_ms": int64(1)}
 	if k.Keep(context.Background(), healthy) {
-		t.Error("KeepErrorsAndSlow kept a healthy fast event at healthyRate 0")
+		t.Error("KeepErrorsAndSlow kept a healthy fast event")
 	}
 }
 
@@ -118,7 +149,7 @@ func TestSample_SMP3_DoubleStarGlob(t *testing.T) {
 		{"/other/api", false},
 	}
 	for _, tc := range cases {
-		event := map[string]any{"level": "info", "http": map[string]any{"path": tc.path}}
+		event := mapEvent{"level": "info", "http": map[string]any{"path": tc.path}}
 		if got := k.Keep(context.Background(), event); got != tc.keep {
 			t.Errorf("Keep(%q) = %v, want %v", tc.path, got, tc.keep)
 		}
@@ -126,7 +157,7 @@ func TestSample_SMP3_DoubleStarGlob(t *testing.T) {
 
 	// One star stays inside one segment.
 	single := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepPath("/api/*"))
-	if single.Keep(context.Background(), map[string]any{"level": "info", "http": map[string]any{"path": "/api/payments/123"}}) {
+	if single.Keep(context.Background(), mapEvent{"level": "info", "http": map[string]any{"path": "/api/payments/123"}}) {
 		t.Error("* crossed a slash, which it must not")
 	}
 
@@ -143,19 +174,15 @@ func TestSample_SMP3_DoubleStarGlob(t *testing.T) {
 // service and every retry of the same request agrees, and that a fractional rate is used.
 func TestSample_SMP4_TraceConsistent(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 12.5))
-	event := map[string]any{
-		"level": "info",
-		"trace": map[string]any{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"},
-	}
+	const id = "4bf92f3577b34da6a3ce929d0e0e4736"
 
-	first := k.Keep(context.Background(), event)
+	first, rate := k.Sample(wlog.LevelInfo, id)
+	if rate != 12.5 {
+		t.Errorf("rate = %v, want the configured 12.5", rate)
+	}
 	for i := 0; i < 20; i++ {
 		// Same trace id, same answer, however many times it is asked.
-		fresh := map[string]any{
-			"level": "info",
-			"trace": map[string]any{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"},
-		}
-		if got := k.Keep(context.Background(), fresh); got != first {
+		if got, _ := k.Sample(wlog.LevelInfo, id); got != first {
 			t.Fatalf("the same trace id kept %v then %v", first, got)
 		}
 	}
@@ -164,8 +191,7 @@ func TestSample_SMP4_TraceConsistent(t *testing.T) {
 	half := sample.MustNew(sample.Rate(wlog.LevelInfo, 50))
 	kept := 0
 	for i := 0; i < 400; i++ {
-		id := fmt.Sprintf("trace-%d", i)
-		if half.Keep(context.Background(), map[string]any{"level": "info", "trace": map[string]any{"trace_id": id}}) {
+		if keep, _ := half.Sample(wlog.LevelInfo, fmt.Sprintf("trace-%d", i)); keep {
 			kept++
 		}
 	}
@@ -182,43 +208,17 @@ func TestSample_SMP4_TraceConsistent(t *testing.T) {
 	}
 }
 
-// TestSample_SMP4_RateRecorded proves a kept event records the rate that kept it, so a
-// reader can weigh a sampled count.
-func TestSample_SMP4_RateRecorded(t *testing.T) {
+// TestSample_SMP4_RateReported proves the head decision reports the rate that decided it,
+// so core can record the rate on the event and a reader can weigh a sampled count.
+func TestSample_SMP4_RateReported(t *testing.T) {
 	k := sample.MustNew(sample.Rate(wlog.LevelInfo, 25))
-	event := map[string]any{"level": "info", "trace": map[string]any{"trace_id": "keep-me-25"}}
-	if !k.Keep(context.Background(), event) {
-		t.Fatalf("no trace id was kept at 25%%; the test needs one")
-	}
-	if got, _ := event["wlog.sample_rate"].(float64); got != 25 {
-		t.Errorf("wlog.sample_rate = %v, want 25", event["wlog.sample_rate"])
+	if _, rate := k.Sample(wlog.LevelInfo, "any-trace"); rate != 25 {
+		t.Errorf("rate = %v, want the configured 25", rate)
 	}
 
-	// A tail-kept event records 100, because nothing sampled it away.
-	tail := sample.MustNew(sample.Rate(wlog.LevelInfo, 0), sample.KeepStatus(500))
-	tailed := map[string]any{"level": "info", "http": map[string]any{"status": 503}}
-	if !tail.Keep(context.Background(), tailed) {
-		t.Fatal("KeepStatus did not keep a 503")
-	}
-	if got, _ := tailed["wlog.sample_rate"].(float64); got != 100 {
-		t.Errorf("wlog.sample_rate = %v, want 100 for a tail-kept event", tailed["wlog.sample_rate"])
-	}
-
-	// An error event is always kept, and records 100 as well.
-	errEvent := map[string]any{"level": "error"}
-	if !k.Keep(context.Background(), errEvent) {
-		t.Fatal("an error event was dropped")
-	}
-	if got, _ := errEvent["wlog.sample_rate"].(float64); got != 100 {
-		t.Errorf("wlog.sample_rate = %v, want 100 for an error", errEvent["wlog.sample_rate"])
-	}
-
-	// A dropped event carries nothing.
-	dropped := map[string]any{"level": "info", "trace": map[string]any{"trace_id": "drop-me"}}
-	if k.Keep(context.Background(), dropped) {
-		t.Log("this trace id was kept, so the drop path is covered by another draw")
-	} else if _, ok := dropped["wlog.sample_rate"]; ok {
-		t.Error("a dropped event recorded a rate")
+	// A level with no Rate call is kept whole, at rate 100.
+	if keep, rate := k.Sample(wlog.LevelError, ""); !keep || rate != 100 {
+		t.Errorf("an error level = (%v, %v), want (true, 100)", keep, rate)
 	}
 }
 
@@ -227,7 +227,7 @@ func TestSample_SMP4_RateRecorded(t *testing.T) {
 func TestSample_SMP2_KeepsWarnAnd5xx(t *testing.T) {
 	k := sample.MustNew(sample.KeepErrorsAndSlow(time.Minute, 1))
 
-	kept := []map[string]any{
+	kept := []mapEvent{
 		{"level": "warn"},
 		// A 5xx with no wlog.Error must still be kept: the status is the failure.
 		{"level": "info", "http": map[string]any{"status": 503}},
@@ -244,13 +244,10 @@ func TestSample_SMP2_KeepsWarnAnd5xx(t *testing.T) {
 	// kept at all.
 	infoKept, debugKept := 0, 0
 	for i := 0; i < 400; i++ {
-		trace := map[string]any{"trace_id": fmt.Sprintf("t-%d", i)}
-		event := map[string]any{"level": "info", "http": map[string]any{"status": 200}, "trace": trace}
-		if k.Keep(context.Background(), event) {
+		if keep, _ := k.Sample(wlog.LevelInfo, fmt.Sprintf("t-%d", i)); keep {
 			infoKept++
 		}
-		debug := map[string]any{"level": "debug", "trace": map[string]any{"trace_id": fmt.Sprintf("d-%d", i)}}
-		if k.Keep(context.Background(), debug) {
+		if keep, _ := k.Sample(wlog.LevelDebug, fmt.Sprintf("d-%d", i)); keep {
 			debugKept++
 		}
 	}

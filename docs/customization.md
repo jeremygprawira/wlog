@@ -69,13 +69,15 @@ wlog.WithFieldNames(wlog.FieldNames{"level": "severity"}) // one key at a time
 
 <!-- snippet:sketch -->
 ```go
-wlog.WithSampler(sample.MustNew(
-    sample.Rate(wlog.LevelInfo, 10),                  // keep 10% of info events
-    sample.KeepStatus(500),                           // always keep a 5xx
-    sample.KeepDuration(time.Second),                 // always keep a slow event
-    sample.KeepPath("/orders/*"),                     // always keep one route
-    sample.KeepFunc(func(ctx context.Context, e map[string]any) bool { ... }),
-))
+sampler := sample.MustNew(
+    sample.Rate(wlog.LevelInfo, 10),    // head: keep 10% of info events
+    sample.KeepStatus(500),             // tail: always keep a 5xx
+    sample.KeepDuration(time.Second),   // tail: always keep a slow event
+    sample.KeepPath("/orders/*"),       // tail: always keep one route
+    sample.KeepFunc(func(ctx context.Context, e wlog.Event) bool { ... }),
+)
+wlog.WithHeadSampler(sampler)  // Sample decides the head draw
+wlog.WithKeepers(sampler)      // Keep force-keeps on a tail rule
 ```
 
 `sample.KeepErrorsAndSlow(time.Second, 10)` is the common preset. Audit events bypass

@@ -72,9 +72,7 @@ func (l *Logger) summarizer(ctx context.Context, event map[string]any, masked st
 	if l.summary == nil {
 		return fallback
 	}
-	kind, _ := event["kind"].(string)
-	view := eventView{fields: event, kind: kind, level: levelFrom(event)}
-	if custom := l.callSummary(ctx, view); custom != "" {
+	if custom := l.callSummary(ctx, viewOf(event)); custom != "" {
 		return custom
 	}
 	return fallback

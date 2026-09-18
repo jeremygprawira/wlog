@@ -40,7 +40,8 @@ type Logger struct {
 	drains            []Drain
 	problems          *problemReporter
 	closed            atomic.Bool
-	samplers          []Keeper
+	headSampler       HeadSampler
+	keepers           []Keeper
 	enrichers         []Enricher
 	fieldNames        FieldNames
 	plugins           []Plugin

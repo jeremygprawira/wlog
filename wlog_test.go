@@ -1,10 +1,8 @@
 package wlog_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"testing"
 
@@ -14,23 +12,27 @@ import (
 // captureStdout redirects os.Stdout for the duration of fn and returns what was
 // written to it. wlog's stdout sink has no other hook point yet (C13 adds Sink), so
 // this is the only way to observe it end to end.
+//
+// It redirects to a file, not a pipe, because an event larger than the pipe buffer
+// would otherwise block the writer for good.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
-	r, w, err := os.Pipe()
+	f, err := os.CreateTemp(t.TempDir(), "stdout")
 	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
+		t.Fatalf("CreateTemp: %v", err)
 	}
+	defer f.Close()
+
 	orig := os.Stdout
-	os.Stdout = w
+	os.Stdout = f
 	fn()
 	os.Stdout = orig
-	_ = w.Close()
 
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatalf("io.Copy: %v", err)
+	out, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
 	}
-	return buf.String()
+	return string(out)
 }
 
 func TestCore_StartSetEmit(t *testing.T) {

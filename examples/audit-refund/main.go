@@ -35,8 +35,8 @@ func refund(ctx context.Context, orderID string, amount float64) {
 func Run(path string) error {
 	log := wlog.New(
 		wlog.WithService("audit-refund-example", "0.0.1", "local"),
-		// A sampler that keeps no ordinary event proves the audit record still lands.
-		wlog.WithSampler(sample.MustNew(sample.Rate(wlog.LevelInfo, 0))),
+		// A head sampler that keeps no ordinary event proves the audit record still lands.
+		wlog.WithHeadSampler(sample.MustNew(sample.Rate(wlog.LevelInfo, 0))),
 		wlog.WithDrains(audit.Journal(path, audit.WithKey(journalKey))),
 	)
 	ctx := log.WithContext(context.Background())

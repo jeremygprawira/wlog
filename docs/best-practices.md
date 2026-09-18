@@ -51,11 +51,16 @@ rate can never hide a failure.
 
 <!-- snippet:sketch -->
 ```go
-wlog.WithSampler(sample.MustNew(
-    sample.Rate(wlog.LevelInfo, 10),
-    sample.KeepDuration(time.Second),
-))
+sampler := sample.MustNew(
+    sample.Rate(wlog.LevelInfo, 10),   // head: keep 10% of info events
+    sample.KeepDuration(time.Second),  // tail: always keep a slow event
+)
+wlog.WithHeadSampler(sampler)
+wlog.WithKeepers(sampler)
 ```
+
+A `Keeper` sees the enriched event, so a tail rule reads every field. One `Keeper` that
+answers yes forces an event back from a head drop.
 
 `TestCore_StageOrder_AuditBypassesSampling` proves an audit event survives a 0% sampler.
 

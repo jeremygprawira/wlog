@@ -4,24 +4,33 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 )
 
-// Keeper decides whether to keep an event that would otherwise be sampled away. It is
-// the hook point for head/tail sampling (a later module); with none configured, every
-// event is kept.
+// HeadSampler makes the head decision from the level and the trace id alone, before any
+// field is added to the event. It returns whether to keep the event and the rate that
+// decided, so core can record the rate on an event a later Keeper forces back.
+type HeadSampler interface {
+	Sample(level Level, traceID string) (keep bool, rate float64)
+}
+
+// Keeper decides on the enriched event, right after the enrich stage. It returns true
+// to force the event back from a head drop, and false to leave the head decision as it
+// is. It never drops an event the head sampler kept, so one Keeper that says yes is
+// enough to keep it.
 type Keeper interface {
-	Keep(ctx context.Context, event map[string]any) bool
+	Keep(ctx context.Context, event Event) bool
 }
 
 // KeeperFunc adapts a plain function to the Keeper interface.
-type KeeperFunc func(ctx context.Context, event map[string]any) bool
+type KeeperFunc func(ctx context.Context, event Event) bool
 
 // Keep calls f.
-func (f KeeperFunc) Keep(ctx context.Context, event map[string]any) bool { return f(ctx, event) }
+func (f KeeperFunc) Keep(ctx context.Context, event Event) bool { return f(ctx, event) }
 
 // Enricher adds derived fields to an event: host info, a parsed user agent, geo, and
-// so on (the enrich module). Enrichers run after sampling decides to keep an event and
-// before redaction, so anything an enricher adds is still masked like any other field.
+// so on (the enrich module). Enrichers run after the head decision and before the tail
+// keep, so a Keeper reads the fields an enricher added.
 type Enricher interface {
 	Enrich(ctx context.Context, event map[string]any)
 }
@@ -32,38 +41,69 @@ type EnricherFunc func(ctx context.Context, event map[string]any)
 // Enrich calls f.
 func (f EnricherFunc) Enrich(ctx context.Context, event map[string]any) { f(ctx, event) }
 
-// WithSampler adds a Keeper that decides which events to keep. Unset, every event
-// is kept. Several keepers, from this option and from plugins, all run, and one
-// keeper that says yes keeps the event.
-func WithSampler(k Keeper) Option {
-	return func(l *Logger) { l.samplers = append(l.samplers, k) }
+// WithHeadSampler sets the head sampler, which decides which events to build. It sees
+// the level and the trace id only. Unset, every event is built.
+func WithHeadSampler(s HeadSampler) Option {
+	return func(l *Logger) { l.headSampler = s }
 }
 
-// WithEnrichers adds enrichers, run in order, after sampling and before redaction.
+// WithKeepers adds keepers, run in order after the enrich stage. Several keepers, from
+// this option and from plugins, all run, and one keeper that says yes keeps the event.
+func WithKeepers(keepers ...Keeper) Option {
+	return func(l *Logger) { l.keepers = append(l.keepers, keepers...) }
+}
+
+// WithEnrichers adds enrichers, run in order, after the head decision and before the
+// tail keep.
 func WithEnrichers(enrichers ...Enricher) Option {
 	return func(l *Logger) { l.enrichers = append(l.enrichers, enrichers...) }
 }
 
-// shouldKeep runs the fixed keep/sample stage: an event carrying the reserved "audit"
-// key always bypasses sampling (SPEC.md: audit is never sampled away); otherwise a
-// configured Keeper decides, panic-isolated, falling back to "keep" so a broken
-// sampler can never silently drop every event.
-func (l *Logger) shouldKeep(ctx context.Context, event map[string]any) bool {
-	if _, isAudit := event[auditField]; isAudit {
-		return true
+// headKeep runs the head stage: it asks the configured HeadSampler for the level and
+// the trace id, and reports whether the event survives plus the rate that decided it.
+//
+// An event carrying the reserved audit key bypasses the sampler, because a dropped
+// audit line is a hole in a chain (SPEC.md). An absent sampler keeps everything.
+func (l *Logger) headKeep(event map[string]any) (keep bool, rate float64) {
+	if _, isAudit := event[auditField]; l.headSampler == nil || isAudit {
+		return true, 100
 	}
-	if len(l.samplers) == 0 {
-		return true
-	}
-	return l.safeKeep(ctx, event)
+	return l.sampleOne(event)
 }
 
-// safeKeep runs every Keeper and combines the answers with OR: one keeper that
-// says yes keeps the event. A keeper that panics counts as a yes, so a broken
-// sampler can never silently drop every event.
-func (l *Logger) safeKeep(ctx context.Context, event map[string]any) bool {
-	for _, k := range l.samplers {
-		if l.keepOne(ctx, k, event) {
+// sampleOne runs one HeadSampler under recover. A sampler that panics counts as a keep
+// at rate 100, so a broken sampler can never silently drop every event.
+func (l *Logger) sampleOne(event map[string]any) (keep bool, rate float64) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportProblem(codeHookPanic, sourceName(l.headSampler), fmt.Errorf("panic: %v", r))
+			keep, rate = true, 100
+		}
+	}()
+	return l.headSampler.Sample(levelFrom(event), traceIDOf(event))
+}
+
+// traceIDOf reads trace.trace_id, the one field of the event the head stage may see
+// beside the level.
+func traceIDOf(event map[string]any) string {
+	trace, _ := event["trace"].(map[string]any)
+	id, _ := trace["trace_id"].(string)
+	return id
+}
+
+// viewOf returns the read-only event a Keeper, a hook, or a summary builder reads.
+func viewOf(event map[string]any) eventView {
+	kind, _ := event["kind"].(string)
+	return eventView{fields: event, kind: kind, level: levelFrom(event)}
+}
+
+// keepEvent runs every Keeper and combines the answers with OR: one keeper that says
+// yes keeps the event. It returns false when no Keeper is configured, so a head drop
+// stands. A keeper that panics counts as a yes, so a broken sampler can never silently
+// drop every event.
+func (l *Logger) keepEvent(ctx context.Context, event map[string]any) bool {
+	for _, k := range l.keepers {
+		if l.keepOne(ctx, k, viewOf(event)) {
 			return true
 		}
 	}
@@ -71,7 +111,7 @@ func (l *Logger) safeKeep(ctx context.Context, event map[string]any) bool {
 }
 
 // keepOne runs one Keeper under recover.
-func (l *Logger) keepOne(ctx context.Context, k Keeper, event map[string]any) (keep bool) {
+func (l *Logger) keepOne(ctx context.Context, k Keeper, event Event) (keep bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			l.reportProblem(codeHookPanic, sourceName(k), fmt.Errorf("panic: %v", r))
@@ -121,4 +161,57 @@ func (l *Logger) safeEnrich(ctx context.Context, en Enricher, event map[string]a
 		}
 	}()
 	en.Enrich(ctx, event)
+}
+
+// finalizeSize runs the last part of the finalize stage: the size cap of SPEC-G7.
+// While the event holds more than maxEventSize bytes, it drops the largest user field
+// and records the name. The names become wlog.truncated, the drops join
+// wlog.dropped_fields, and a report names the code WLOG_EVENT_TOO_LARGE.
+//
+// It returns the event unchanged when it fits. The order is fixed by size and then by
+// name, so two events with the same fields trim the same way (gate G6).
+//
+// ponytail: user fields only, so a reserved group stays over the cap. Each group is
+// bounded by its own field cap, so add reserved keys to the loop if that ceiling matters.
+func (l *Logger) finalizeSize(out map[string]any, wlogFields map[string]any) {
+	total := valueSize(out)
+	if total <= maxEventSize {
+		return
+	}
+
+	// One size per user key, measured once, so the trim walks the event a fixed
+	// number of times however many keys it has.
+	keys := make([]string, 0, len(out))
+	sizes := make(map[string]int, len(out))
+	for key, value := range out {
+		if isReservedKey(key) {
+			continue
+		}
+		keys = append(keys, key)
+		sizes[key] = len(key) + 8 + valueSize(value)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if sizes[keys[i]] != sizes[keys[j]] {
+			return sizes[keys[i]] > sizes[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+
+	truncated := make([]any, 0, len(keys))
+	for _, key := range keys {
+		if total <= maxEventSize {
+			break
+		}
+		delete(out, key)
+		total -= sizes[key]
+		truncated = append(truncated, key)
+	}
+	if len(truncated) == 0 {
+		return
+	}
+	wlogFields["truncated"] = truncated
+	dropped, _ := wlogFields["dropped_fields"].(int)
+	wlogFields["dropped_fields"] = dropped + len(truncated)
+	l.reportProblem(codeEventTooLarge, "finalize",
+		fmt.Errorf("dropped %d fields to fit the %d byte cap", len(truncated), maxEventSize))
 }

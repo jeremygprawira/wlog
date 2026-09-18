@@ -58,7 +58,11 @@ const (
 	auditField      = "audit"   // the one reserved key an event always has room for
 	maxGroupFields  = 50        // fields inside one SetGroup group
 	maxArrayLen     = 200       // elements in one Append array
-	maxEventSize    = 256 << 10 // bytes of field values one event may hold (CORE-25)
+	maxEventSize    = 256 << 10 // the cap finalize enforces on one event (SPEC-G7)
+	// maxEventMemory is the ceiling one write stops at, so a single event cannot grow
+	// without bound (gate G4). It sits above maxEventSize, because finalize trims the
+	// event to the smaller cap and names what it removed in wlog.truncated.
+	maxEventMemory = 4 << 20
 )
 
 type eventCtxKey struct{}
@@ -274,11 +278,12 @@ func arrayLimit(key string) int {
 // llm.Add does, would otherwise pay for the same entries again on every write and run out of
 // room long before the array reached its own cap (gate G4).
 //
-// Phase 11 replaces this ceiling with the full size cap of the event shape. Callers must hold
+// The ceiling is maxEventMemory, which only stops unbounded growth. The 256 KiB event cap
+// belongs to finalize, which trims the event and names what it removed. Callers must hold
 // e.mu.
 func (e *event) chargeSize(old, next any) bool {
 	growth := valueSize(next) - valueSize(old)
-	if e.size+growth > maxEventSize {
+	if e.size+growth > maxEventMemory {
 		e.dropped++
 		return false
 	}
@@ -480,33 +485,57 @@ func (l *Logger) emit(e *event) {
 	l.pipeline(ctx, out)
 }
 
-// pipeline runs the fixed per-event stages (SPEC.md): keep/sample, then enrich, then
-// redact, then rename, then sinks/drains. A dropped event skips enrich and redact
-// entirely; anything an enricher adds still passes through redact, same as any other
-// field. Shared by emit (a wide event) and plainLog (a one-off line), so both go
-// through exactly the same pipeline.
+// pipeline runs the fixed per-event stages (SPEC.md): head sample, enrich, tail keep,
+// redact, finalize, then the drains and the writers. Head sampling sees the level and
+// the trace id only. A Keeper sees the enriched event and can force a head drop back.
+// A dropped event skips redact and every later stage.
+//
+// Shared by emit (a wide event) and plainLog (a one-off line), so both go through
+// exactly the same pipeline.
 func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
-	if !l.shouldKeep(ctx, out) {
+	keep, rate := l.headKeep(out)
+
+	// A head drop that no Keeper can rescue skips every later stage, so the enrich work
+	// is not spent on an event nobody reads.
+	if !keep && len(l.keepers) == 0 {
 		return
 	}
 	l.runEnrichers(ctx, out)
+
+	// The tail keep runs when head sampling left room for a rescue: the event was
+	// dropped, the sampler kept only a share of events, or no sampler decided at all. An
+	// audit event skips the stage, because an audit record is never filtered.
+	if _, isAudit := out[auditField]; !isAudit && (!keep || l.headSampler == nil || rate < 100) {
+		keep = l.keepEvent(ctx, out) || keep
+	}
+	if !keep {
+		return
+	}
 
 	redactor := l.currentRedactor()
 	redactor.Apply(out)
 	// The summary is built from the redacted event, so a value the redactor hid
 	// cannot reappear inside the sentence that describes the event.
 	out["summary"] = l.summarizer(ctx, out, redactor.Replacement())
+
+	wlogFields, _ := out["wlog"].(map[string]any)
+	if wlogFields == nil {
+		wlogFields = map[string]any{"schema_version": schemaVersion}
+		out["wlog"] = wlogFields
+	}
 	if l.redactFingerprint {
-		wlogFields, _ := out["wlog"].(map[string]any)
-		if wlogFields == nil {
-			wlogFields = map[string]any{"schema_version": schemaVersion}
-		}
 		if print := redactor.Fingerprint(); print != "" {
 			wlogFields["redact_fingerprint"] = print
 		}
-		out["wlog"] = wlogFields
+	}
+	// A head sampler records the share of events it kept, so a reader can weigh a
+	// sampled count. A drop that a Keeper forced back keeps the rate of the drop.
+	if l.headSampler != nil {
+		wlogFields["sample_rate"] = rate
 	}
 	out = applyFieldNames(out, l.fieldNames)
+	l.finalizeSize(out, wlogFields)
+
 	// A drain makes network calls, so it must not inherit the request's cancellation:
 	// WithoutCancel keeps the context's values (a span, a tenant) while ignoring a
 	// canceled request. Enrichers above keep the live context so they see its values.

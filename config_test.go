@@ -170,17 +170,17 @@ func TestCore_CORE30_InvalidLevelRejected(t *testing.T) {
 }
 
 // keepingPlugin is a Plugin that also keeps events, so the test can prove that a
-// plugin's Keeper and WithSampler combine with OR.
+// plugin's Keeper and WithKeepers combine with OR.
 type keepingPlugin struct{ keep bool }
 
 // Name names the plugin.
 func (keepingPlugin) Name() string { return "keeper" }
 
 // Keep returns the configured answer.
-func (p keepingPlugin) Keep(context.Context, map[string]any) bool { return p.keep }
+func (p keepingPlugin) Keep(context.Context, wlog.Event) bool { return p.keep }
 
-// TestCore_CORE31_KeepersCombineOr proves that every Keeper runs and that one
-// keeper which says yes keeps the event.
+// TestCore_CORE31_KeepersCombineOr proves that every Keeper runs after a head drop and
+// that one keeper which says yes forces the event back.
 func TestCore_CORE31_KeepersCombineOr(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -194,7 +194,8 @@ func TestCore_CORE31_KeepersCombineOr(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			log, rec := wlogtest.New(t,
-				wlog.WithSampler(wlog.KeeperFunc(func(context.Context, map[string]any) bool { return tc.sampler })),
+				wlog.WithHeadSampler(dropAll{}),
+				wlog.WithKeepers(wlog.KeeperFunc(func(context.Context, wlog.Event) bool { return tc.sampler })),
 				wlog.WithPlugins(keepingPlugin{keep: tc.plug}),
 			)
 			ctx := log.WithContext(context.Background())

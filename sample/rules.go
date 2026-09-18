@@ -3,17 +3,19 @@ package sample
 import (
 	"context"
 	"time"
+
+	"github.com/jeremygprawira/wlog"
 )
 
 // tailRule force-keeps an event it matches. glob is empty for a rule that carries none, and
 // is validated when the sampler is built.
 type tailRule struct {
-	fn   func(ctx context.Context, event map[string]any) bool
+	fn   func(ctx context.Context, event wlog.Event) bool
 	glob string
 }
 
 // matches reports whether the rule keeps this event.
-func (r tailRule) matches(ctx context.Context, event map[string]any) bool { return r.fn(ctx, event) }
+func (r tailRule) matches(ctx context.Context, event wlog.Event) bool { return r.fn(ctx, event) }
 
 // valid reports whether the rule can ever match.
 func (r tailRule) valid() error {
@@ -26,8 +28,8 @@ func (r tailRule) valid() error {
 // KeepStatus force-keeps an event whose http.status is >= atLeast.
 func KeepStatus(atLeast int) Option {
 	return func(k *keeper) {
-		k.tails = append(k.tails, tailRule{fn: func(_ context.Context, event map[string]any) bool {
-			status, ok := statusOf(event)
+		k.tails = append(k.tails, tailRule{fn: func(_ context.Context, event wlog.Event) bool {
+			status, ok := intAt(event, "http.status")
 			return ok && status >= atLeast
 		}})
 	}
@@ -37,8 +39,8 @@ func KeepStatus(atLeast int) Option {
 func KeepDuration(atLeast time.Duration) Option {
 	atLeastMS := int(atLeast.Milliseconds())
 	return func(k *keeper) {
-		k.tails = append(k.tails, tailRule{fn: func(_ context.Context, event map[string]any) bool {
-			ms, ok := numOf(event["duration_ms"])
+		k.tails = append(k.tails, tailRule{fn: func(_ context.Context, event wlog.Event) bool {
+			ms, ok := intAt(event, "duration_ms")
 			return ok && ms >= atLeastMS
 		}})
 	}
@@ -51,8 +53,12 @@ func KeepPath(glob string) Option {
 	return func(k *keeper) {
 		k.tails = append(k.tails, tailRule{
 			glob: glob,
-			fn: func(_ context.Context, event map[string]any) bool {
-				p, ok := pathOf(event)
+			fn: func(_ context.Context, event wlog.Event) bool {
+				value, ok := event.Get("http.path")
+				if !ok {
+					return false
+				}
+				p, ok := value.(string)
 				return ok && matchGlob(glob, p)
 			},
 		})
@@ -60,17 +66,18 @@ func KeepPath(glob string) Option {
 }
 
 // KeepFunc force-keeps an event when fn returns true.
-func KeepFunc(fn func(ctx context.Context, event map[string]any) bool) Option {
+func KeepFunc(fn func(ctx context.Context, event wlog.Event) bool) Option {
 	return func(k *keeper) { k.tails = append(k.tails, tailRule{fn: fn}) }
 }
 
-// statusOf reads http.status.
-func statusOf(event map[string]any) (int, bool) {
-	http, ok := event["http"].(map[string]any)
+// intAt reads a number at a dotted path, such as "http.status" or "duration_ms", and
+// reports whether the field is there with a number in it.
+func intAt(event wlog.Event, path string) (int, bool) {
+	value, ok := event.Get(path)
 	if !ok {
 		return 0, false
 	}
-	return numOf(http["status"])
+	return numOf(value)
 }
 
 // numOf coerces any of the numeric shapes an event field might carry (a literal Go
@@ -88,14 +95,4 @@ func numOf(v any) (int, bool) {
 	default:
 		return 0, false
 	}
-}
-
-// pathOf reads http.path.
-func pathOf(event map[string]any) (string, bool) {
-	http, ok := event["http"].(map[string]any)
-	if !ok {
-		return "", false
-	}
-	p, ok := http["path"].(string)
-	return p, ok
 }
