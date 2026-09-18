@@ -24,8 +24,8 @@ var levelRank = map[Level]int{
 	LevelError: 3,
 }
 
-// WithLevel sets the minimum level a Logger writes; events below it are dropped
-// silently. Default LevelDebug (nothing filtered).
+// WithLevel sets the minimum level a Logger writes. An event below it is dropped, and
+// debug mode names the reason. Default LevelDebug (nothing filtered).
 func WithLevel(min Level) Option {
 	return func(l *Logger) {
 		if !validLevel(min) {
@@ -50,6 +50,7 @@ func validLevel(level Level) bool {
 func SetLevel(ctx context.Context, level Level) {
 	e := eventFrom(ctx)
 	if e == nil {
+		noEvent(ctx, "level")
 		return
 	}
 	if !validLevel(level) {

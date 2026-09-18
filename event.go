@@ -75,6 +75,17 @@ func eventFrom(ctx context.Context) *event {
 	return e
 }
 
+// noEvent reports that a write found no event on the context, and names what tried to
+// write. A write is never lost in silence, because a job that calls wlog.Error without
+// Start used to record nothing at all.
+func noEvent(ctx context.Context, what string) {
+	l := loggerFrom(ctx)
+	if l == nil {
+		l = Default()
+	}
+	l.Report(Problem{Code: codeNoEvent, Source: what})
+}
+
 // HasEvent reports whether ctx carries a wide event that still accepts writes, which
 // means one from a Start whose end has not run. Callers that build on top of Start/Set
 // (like package audit) use it to tell "inside a request" from "standalone": a sealed
@@ -134,6 +145,7 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 func Set(ctx context.Context, key string, value any) {
 	e := eventFrom(ctx)
 	if e == nil {
+		noEvent(ctx, key)
 		return
 	}
 	// The copy runs before the lock, so a MarshalJSON method that logs through
@@ -189,6 +201,7 @@ func (e *event) trackUnknownKey(key string) {
 func SetGroup(ctx context.Context, group string, kv ...any) {
 	e := eventFrom(ctx)
 	if e == nil {
+		noEvent(ctx, group)
 		return
 	}
 	pairs := kvToMap(kv)
@@ -237,6 +250,7 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 func Append(ctx context.Context, key string, value any) {
 	e := eventFrom(ctx)
 	if e == nil {
+		noEvent(ctx, key)
 		return
 	}
 	copied := e.copyForStore(value)

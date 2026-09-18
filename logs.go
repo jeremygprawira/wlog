@@ -20,6 +20,7 @@ type LogLine struct {
 func AppendLog(ctx context.Context, line LogLine) {
 	e := eventFrom(ctx)
 	if e == nil {
+		noEvent(ctx, "logs")
 		return
 	}
 	// Like Set, the copy runs before the lock, so a MarshalJSON on the line

@@ -202,6 +202,7 @@ func recordError(ctx context.Context, err error, callerDepth int) {
 	}
 	e := eventFrom(ctx)
 	if e == nil {
+		recordOrphanError(ctx, err, callerDepth)
 		return
 	}
 
@@ -251,19 +252,42 @@ func isNilError(err error) bool {
 // An extractor is user code, and user code panics. The panic becomes the
 // INTERNAL fallback with a readable message, and OnProblem hears about it, so a
 // broken extractor never reaches the caller of Error and never loses the event.
-func (e *event) safeExtract(err error) (info ErrorInfo) {
+func (e *event) safeExtract(err error) ErrorInfo {
+	return safeExtract(e.l, e.extractor, err)
+}
+
+// safeExtract runs one ErrorExtractor under recover, so an extractor that panics costs
+// the error its detail and nothing else.
+func safeExtract(l *Logger, extractor ErrorExtractor, err error) (info ErrorInfo) {
 	defer func() {
 		if r := recover(); r != nil {
 			info = ErrorInfo{
 				Code:    "INTERNAL",
 				Message: fmt.Sprintf("[extractor: %T panicked]", err),
 			}
-			if l := loggerFrom(e.ctx); l != nil {
+			if l != nil {
 				l.reportProblem(codeHookPanic, "extractor", fmt.Errorf("extractor panic: %v", r))
 			}
 		}
 	}()
-	return e.extractor.Extract(err)
+	return extractor.Extract(err)
+}
+
+// recordOrphanError writes one log event for an error that arrived with no event on the
+// context, so a job that calls wlog.Error without Start still records the failure. It
+// reports WLOG_NO_EVENT too, because the caller expected to be inside a unit of work.
+func recordOrphanError(ctx context.Context, err error, callerDepth int) {
+	l := loggerFrom(ctx)
+	if l == nil {
+		l = Default()
+	}
+	noEvent(ctx, "error")
+
+	info := safeExtract(l, l.errorExtractor, err)
+	if l.errorCaller {
+		info.Caller = callerOf(callerDepth + 2)
+	}
+	plainLine(ctx, LevelError, info.Message, nil, true, &info)
 }
 
 // CurrentError returns the error the current event holds now, or false when it holds
