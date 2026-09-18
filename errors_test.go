@@ -193,10 +193,10 @@ func TestCore_CORE7_ExtractorPanicIsolated(t *testing.T) {
 
 	log, rec := wlogtest.New(t,
 		wlog.WithErrorExtractor(panickingExtractor{}),
-		wlog.OnError(func(err error, source string) {
+		wlog.OnProblem(func(p wlog.Problem) {
 			mu.Lock()
 			defer mu.Unlock()
-			reported = append(reported, source+": "+err.Error())
+			reported = append(reported, p.Source+": "+p.Err.Error())
 		}),
 	)
 	ctx := log.WithContext(context.Background())
@@ -244,7 +244,7 @@ func TestCore_CORE7_TypedNilError(t *testing.T) {
 func TestCore_CORE8_OnErrorPanicIsolated(t *testing.T) {
 	log := wlog.New(
 		wlog.WithDrains(panickingDrain{}),
-		wlog.OnError(func(error, string) { panic("onerror boom") }),
+		wlog.OnProblem(func(wlog.Problem) { panic("onproblem boom") }),
 	)
 	ctx := log.WithContext(context.Background())
 

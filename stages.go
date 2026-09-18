@@ -74,7 +74,7 @@ func (l *Logger) safeKeep(ctx context.Context, event map[string]any) bool {
 func (l *Logger) keepOne(ctx context.Context, k Keeper, event map[string]any) (keep bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			l.reportError(fmt.Errorf("panic: %v", r), sourceName(k))
+			l.reportProblem(codeHookPanic, sourceName(k), fmt.Errorf("panic: %v", r))
 			keep = true
 		}
 	}()
@@ -117,7 +117,7 @@ func enriched(before, after any) bool {
 func (l *Logger) safeEnrich(ctx context.Context, en Enricher, event map[string]any) {
 	defer func() {
 		if r := recover(); r != nil {
-			l.reportError(fmt.Errorf("panic: %v", r), sourceName(en))
+			l.reportProblem(codeHookPanic, sourceName(en), fmt.Errorf("panic: %v", r))
 		}
 	}()
 	en.Enrich(ctx, event)

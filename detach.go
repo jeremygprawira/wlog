@@ -23,6 +23,7 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 	}
 
 	if parent := eventFrom(ctx); parent != nil {
+		e.l = l
 		e.parent = parent
 		parent.mu.Lock()
 		trace := map[string]any{}
@@ -47,8 +48,8 @@ func Detach(ctx context.Context, operation string) (context.Context, func()) {
 // recordLateWrite is called (with e.mu already held by the caller) when a write lands
 // on an event that has already been emitted. It walks up to the nearest ancestor that
 // is still open and counts the write there as wlog.late_writes; if every ancestor is
-// already sealed too (or there is none), the write is dropped silently rather than
-// lost track of forever or, worse, causing a panic (gate G3).
+// already sealed too (or there is none), the write is reported as WLOG_LATE_WRITE
+// rather than lost forever or, worse, causing a panic (gate G3).
 func (e *event) recordLateWrite() {
 	for p := e.parent; p != nil; {
 		p.mu.Lock()
@@ -60,5 +61,8 @@ func (e *event) recordLateWrite() {
 		next := p.parent
 		p.mu.Unlock()
 		p = next
+	}
+	if e.l != nil {
+		e.l.reportProblem(codeLateWrite, "write", nil)
 	}
 }

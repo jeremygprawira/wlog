@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// envWarning is a problem found while reading env vars in New, reported via OnError
-// only after every Option has run (so a later OnError option is already in place to
+// envWarning is a problem found while reading env vars in New, reported via OnProblem
+// only after every Option has run (so a later OnProblem option is already in place to
 // receive it).
 type envWarning struct {
 	err    error

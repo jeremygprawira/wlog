@@ -6,7 +6,7 @@ import (
 )
 
 // Plugin is the minimal contract every plugin satisfies: a name, used to identify it
-// in OnError reports. A plugin opts into behavior by also implementing any of Setup,
+// in an OnProblem report. A plugin opts into behavior by also implementing any of Setup,
 // Enricher, Keeper, Drain, RequestStarter, or RequestFinisher — pick only the hooks it
 // needs, in one struct, instead of wiring several separate options.
 type Plugin interface {
@@ -14,7 +14,7 @@ type Plugin interface {
 }
 
 // Setup runs once, at New(), after every other option has been applied. A returned
-// error is reported via OnError (source: the plugin's Name()) rather than failing
+// error is reported via OnProblem (source: the plugin's Name()) rather than failing
 // New(), which has no error return in its signature.
 type Setup interface {
 	Setup(l *Logger) error
@@ -70,7 +70,7 @@ func (l *Logger) wirePlugins() {
 func (l *Logger) safeSetup(p Plugin) {
 	defer func() {
 		if r := recover(); r != nil {
-			l.reportError(fmt.Errorf("panic: %v", r), sourceName(p))
+			l.reportProblem(codeHookPanic, sourceName(p), fmt.Errorf("panic: %v", r))
 		}
 	}()
 	s, ok := p.(Setup)
@@ -78,11 +78,11 @@ func (l *Logger) safeSetup(p Plugin) {
 		return
 	}
 	if err := s.Setup(l); err != nil {
-		l.reportError(err, sourceName(p))
+		l.reportProblem(codeInvalidConfig, sourceName(p), err)
 	}
 }
 
-// sourceName names v for an OnError report: its Plugin.Name() if it has one,
+// sourceName names v for an OnProblem report: its Plugin.Name() if it has one,
 // otherwise its Go type, so a plain Enricher/Keeper/Drain (not a Plugin) still gets a
 // useful, if less friendly, label.
 func sourceName(v any) string {

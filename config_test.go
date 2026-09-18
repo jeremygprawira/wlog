@@ -80,7 +80,7 @@ func TestCore_Env_InvalidLevel_ReportsAndUsesDefault(t *testing.T) {
 	var errs []string
 	log := wlog.New(
 		wlog.WithFormat(wlog.FormatJSON),
-		wlog.OnError(func(err error, source string) { errs = append(errs, fmt.Sprintf("%s: %v", source, err)) }),
+		wlog.OnProblem(func(p wlog.Problem) { errs = append(errs, fmt.Sprintf("%s: %v", p.Source, p.Err)) }),
 	)
 
 	out := captureStdout(t, func() {
@@ -99,8 +99,8 @@ func TestCore_Env_InvalidLevel_ReportsAndUsesDefault(t *testing.T) {
 func TestCore_Env_InvalidFormat_ReportsAndUsesDefault(t *testing.T) {
 	t.Setenv("WLOG_FORMAT", "not-a-format")
 	var errs []string
-	log := wlog.New(wlog.OnError(func(err error, source string) {
-		errs = append(errs, fmt.Sprintf("%s: %v", source, err))
+	log := wlog.New(wlog.OnProblem(func(p wlog.Problem) {
+		errs = append(errs, fmt.Sprintf("%s: %v", p.Source, p.Err))
 	}))
 
 	out := captureStdout(t, func() {
@@ -146,7 +146,7 @@ func TestCore_CORE30_InvalidLevelRejected(t *testing.T) {
 
 	log, rec := wlogtest.New(t,
 		wlog.WithLevel(wlog.Level("verbose")),
-		wlog.OnError(func(error, string) {
+		wlog.OnProblem(func(wlog.Problem) {
 			mu.Lock()
 			defer mu.Unlock()
 			reported++

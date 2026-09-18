@@ -48,8 +48,8 @@ func TestCore_Drain_PanicIsolated(t *testing.T) {
 
 	log := wlog.New(
 		wlog.WithDrains(bad, good),
-		wlog.OnError(func(err error, source string) {
-			errs = append(errs, fmt.Sprintf("%s: %v", source, err))
+		wlog.OnProblem(func(p wlog.Problem) {
+			errs = append(errs, fmt.Sprintf("%s: %v", p.Source, p.Err))
 		}),
 	)
 
@@ -229,7 +229,7 @@ func TestCore_CORE32_EmitAfterCloseReported(t *testing.T) {
 	close(d.release)
 	log, rec := wlogtest.New(t,
 		wlog.WithDrains(d),
-		wlog.OnError(func(error, string) { mu.Lock(); reported++; mu.Unlock() }),
+		wlog.OnProblem(func(wlog.Problem) { mu.Lock(); reported++; mu.Unlock() }),
 	)
 	ctx := log.WithContext(context.Background())
 

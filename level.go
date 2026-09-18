@@ -31,7 +31,7 @@ func WithLevel(min Level) Option {
 		if !validLevel(min) {
 			// Report and keep the current level, so a typo never silences a
 			// service or turns it into noise.
-			l.reportError(fmt.Errorf("unknown level %q", string(min)), "WithLevel")
+			l.reportProblem(codeInvalidConfig, "WithLevel", fmt.Errorf("unknown level %q", string(min)))
 			return
 		}
 		l.minLevel = min
@@ -56,7 +56,7 @@ func SetLevel(ctx context.Context, level Level) {
 		// Report and keep the event's own level, so a typo never labels an event
 		// with a severity no filter understands.
 		if l := loggerFrom(e.ctx); l != nil {
-			l.reportError(fmt.Errorf("unknown level %q", string(level)), "SetLevel")
+			l.reportProblem(codeInvalidConfig, "SetLevel", fmt.Errorf("unknown level %q", string(level)))
 		}
 		return
 	}

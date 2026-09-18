@@ -37,8 +37,7 @@ type Logger struct {
 	minLevel          Level
 	errorExtractor    ErrorExtractor
 	drains            []Drain
-	onError           func(err error, source string)
-	pendingErrors     []report
+	problems          *problemReporter
 	closed            atomic.Bool
 	samplers          []Keeper
 	enrichers         []Enricher
@@ -60,7 +59,7 @@ type Option func(*Logger)
 // New builds a Logger from opts. With no options, it uses redact.Default() and no
 // service metadata.
 func New(opts ...Option) *Logger {
-	l := &Logger{minLevel: LevelDebug, errorExtractor: defaultExtractor{}, redactFingerprint: true}
+	l := &Logger{minLevel: LevelDebug, errorExtractor: defaultExtractor{}, redactFingerprint: true, problems: newProblemReporter()}
 	l.redactor.Store(redact.Default())
 	warnings := l.applyEnvDefaults()
 	for _, opt := range opts {
@@ -68,10 +67,11 @@ func New(opts ...Option) *Logger {
 	}
 	l.wirePlugins()
 	for _, w := range warnings {
-		l.reportError(w.err, w.source)
+		l.reportProblem(codeInvalidConfig, w.source, w.err)
 	}
-	// An option that failed before the OnError option ran left its report here.
-	l.flushReports()
+	// A report that arrived before OnProblem ran waits for the handler, and the
+	// default handler takes over when the caller set none.
+	l.problems.flush()
 	return l
 }
 

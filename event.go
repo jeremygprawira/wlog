@@ -33,6 +33,7 @@ type event struct {
 	strictKeys  map[string]bool // nil unless StrictKeys is active for this event's env
 	unknownKeys []string
 	ctx         context.Context // the context Start/Detach was given, for the enrich stage
+	l           *Logger         // the Logger that built this event, for a late-write report
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -86,7 +87,7 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo,
-		strictKeys: l.strictKeysForEvent(), rawValues: l.rawValues,
+		strictKeys: l.strictKeysForEvent(), rawValues: l.rawValues, l: l,
 	}
 	ctx = withEvent(ctx, e)
 	e.ctx = ctx
@@ -377,7 +378,7 @@ func normalize(v any) any {
 func (l *Logger) emit(e *event) {
 	// A closed drain would drop the event silently, so report it instead.
 	if l.closed.Load() {
-		l.reportError(fmt.Errorf("Logger.Close was called: the event was dropped"), "emit")
+		l.reportProblem(codeLoggerClosed, "emit", fmt.Errorf("Logger.Close was called: the event was dropped"))
 		return
 	}
 
@@ -476,7 +477,7 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	}
 	b, err := json.Marshal(out)
 	if err != nil {
-		l.reportError(err, "stdout")
+		l.reportProblem(codeDrainFailed, "stdout", err)
 		return
 	}
 	_, _ = fmt.Fprintln(os.Stdout, string(b))

@@ -217,7 +217,7 @@ func isNilError(err error) bool {
 // safeExtract runs the extractor for one error and returns its result.
 //
 // An extractor is user code, and user code panics. The panic becomes the
-// INTERNAL fallback with a readable message, and OnError hears about it, so a
+// INTERNAL fallback with a readable message, and OnProblem hears about it, so a
 // broken extractor never reaches the caller of Error and never loses the event.
 func (e *event) safeExtract(err error) (info ErrorInfo) {
 	defer func() {
@@ -227,7 +227,7 @@ func (e *event) safeExtract(err error) (info ErrorInfo) {
 				Message: fmt.Sprintf("[extractor: %T panicked]", err),
 			}
 			if l := loggerFrom(e.ctx); l != nil {
-				l.reportError(fmt.Errorf("extractor panic: %v", r), "extractor")
+				l.reportProblem(codeHookPanic, "extractor", fmt.Errorf("extractor panic: %v", r))
 			}
 		}
 	}()

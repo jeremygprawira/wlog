@@ -49,14 +49,8 @@ func WithDrains(drains ...Drain) Option {
 	return func(l *Logger) { l.drains = append(l.drains, drains...) }
 }
 
-// OnError is called when a drain panics. Default: errors are dropped rather than
-// panicking or blocking the caller (gate G3); set this to observe them.
-func OnError(fn func(err error, source string)) Option {
-	return func(l *Logger) { l.onError = fn }
-}
-
 // sendToDrains fans event out to every configured drain. Each call is isolated: a
-// panicking drain is recovered and reported via OnError, and never stops the other
+// panicking drain is recovered and reported via OnProblem, and never stops the other
 // drains or affects the event's caller.
 func (l *Logger) sendToDrains(ctx context.Context, event map[string]any) {
 	for _, d := range l.drains {
@@ -67,42 +61,10 @@ func (l *Logger) sendToDrains(ctx context.Context, event map[string]any) {
 func (l *Logger) safeSend(ctx context.Context, d Drain, event map[string]any) {
 	defer func() {
 		if r := recover(); r != nil {
-			l.reportError(fmt.Errorf("panic: %v", r), sourceName(d))
+			l.reportProblem(codeDrainFailed, sourceName(d), fmt.Errorf("panic: %v", r))
 		}
 	}()
 	d.Send(ctx, event)
-}
-
-// reportError hands one failure to OnError.
-//
-// OnError is user code, and a panic inside it would otherwise climb out of a
-// logging call. The panic is swallowed here, because the report of a failure
-// must never become a failure of its own.
-//
-// An option can fail before the OnError option has run, because options apply in
-// order. Those reports wait in pending until New finishes.
-func (l *Logger) reportError(err error, source string) {
-	if l.onError == nil {
-		l.pendingErrors = append(l.pendingErrors, report{err: err, source: source})
-		return
-	}
-	defer func() { _ = recover() }()
-	l.onError(err, source)
-}
-
-// report is one failure that waits for OnError to arrive.
-type report struct {
-	err    error
-	source string
-}
-
-// flushReports hands the reports that arrived before OnError was set.
-func (l *Logger) flushReports() {
-	pending := l.pendingErrors
-	l.pendingErrors = nil
-	for _, r := range pending {
-		l.reportError(r.err, r.source)
-	}
 }
 
 // Flush pushes the buffer of every drain that implements drainFlusher (a batched
@@ -159,7 +121,7 @@ func (l *Logger) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		// The deadline came first, so a drain is still running. Say so rather
 		// than report a clean close.
-		l.reportError(fmt.Errorf("close: %w", ctx.Err()), "drains")
+		l.reportProblem(codeDrainFailed, "drains", fmt.Errorf("close: %w", ctx.Err()))
 		mu.Lock()
 		defer mu.Unlock()
 		return errors.Join(firstErr, ctx.Err())
@@ -175,7 +137,7 @@ func (l *Logger) safeFlush(ctx context.Context, f drainFlusher) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
-			l.reportError(err, sourceName(f))
+			l.reportProblem(codeDrainFailed, sourceName(f), err)
 		}
 	}()
 	return f.Flush(ctx)
@@ -185,7 +147,7 @@ func (l *Logger) safeClose(ctx context.Context, c drainCloser) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
-			l.reportError(err, sourceName(c))
+			l.reportProblem(codeDrainFailed, sourceName(c), err)
 		}
 	}()
 	return c.Close(ctx)

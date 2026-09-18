@@ -111,7 +111,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 11-SHAPE-3 Summary
 - [ ] 11-SHAPE-4 Stage order v2 and the size cap
 - [ ] 11-SHAPE-5 Plugin hooks v2
-- [ ] 11-PROB-1 Problem codes
+- [x] 11-PROB-1 Problem codes
 - [ ] 11-PROB-2 Debug reasons and Stats
 - [ ] 11-SHAPE-6 Writers
 - [ ] 11-SHAPE-7 Pretty console v2

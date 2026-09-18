@@ -62,7 +62,7 @@ func TestCore_Plugin_PanicIsolatedAndReported(t *testing.T) {
 	var errs []string
 	log := wlog.New(
 		wlog.WithPlugins(panicPlugin{}),
-		wlog.OnError(func(err error, source string) { errs = append(errs, fmt.Sprintf("%s: %v", source, err)) }),
+		wlog.OnProblem(func(p wlog.Problem) { errs = append(errs, fmt.Sprintf("%s: %v", p.Source, p.Err)) }),
 	)
 
 	out := captureStdout(t, func() {
