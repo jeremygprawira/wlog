@@ -36,6 +36,7 @@ type Logger struct {
 	service           serviceInfo
 	minLevel          Level
 	errorExtractor    ErrorExtractor
+	errorCaller       bool
 	drains            []Drain
 	problems          *problemReporter
 	closed            atomic.Bool
@@ -59,7 +60,10 @@ type Option func(*Logger)
 // New builds a Logger from opts. With no options, it uses redact.Default() and no
 // service metadata.
 func New(opts ...Option) *Logger {
-	l := &Logger{minLevel: LevelDebug, errorExtractor: defaultExtractor{}, redactFingerprint: true, problems: newProblemReporter()}
+	l := &Logger{
+		minLevel: LevelDebug, errorExtractor: defaultExtractor{}, errorCaller: true,
+		redactFingerprint: true, problems: newProblemReporter(),
+	}
 	l.redactor.Store(redact.Default())
 	warnings := l.applyEnvDefaults()
 	for _, opt := range opts {

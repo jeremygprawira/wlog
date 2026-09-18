@@ -29,7 +29,10 @@ type ErrorInfo struct {
 	Type string `json:"type,omitempty"`
 	// Causes lists the messages of an errors.Join or a multi-%w error, capped at
 	// maxCauses entries so a wide join never grows an event without bound.
-	Causes []string       `json:"causes,omitempty"`
+	Causes []string `json:"causes,omitempty"`
+	// Caller is the file and line of the wlog.Error call, such as "checkout.go:42".
+	// It costs one runtime.Caller per call, and WithCaller(false) turns it off.
+	Caller string         `json:"caller,omitempty"`
 	Why    string         `json:"why,omitempty"`
 	Fix    string         `json:"fix,omitempty"`
 	Link   string         `json:"link,omitempty"`
@@ -163,11 +166,37 @@ func WithErrorExtractor(x ErrorExtractor) Option {
 	return func(l *Logger) { l.errorExtractor = x }
 }
 
+// WithCaller turns the recording of ErrorInfo.Caller on or off. It is on by default,
+// and it costs one runtime.Caller per wlog.Error call.
+func WithCaller(on bool) Option {
+	return func(l *Logger) { l.errorCaller = on }
+}
+
+// callerOf returns the file and line of one frame above this function, as
+// "file.go:12". It returns an empty string when the runtime cannot read the frame, so
+// a report never fails over its own detail.
+func callerOf(skip int) string {
+	_, file, line, ok := runtime.Caller(skip + 1)
+	if !ok {
+		return ""
+	}
+	if at := strings.LastIndexByte(file, '/'); at >= 0 {
+		file = file[at+1:]
+	}
+	return fmt.Sprintf("%s:%d", file, line)
+}
+
 // Error records err on the current event via the Logger's ErrorExtractor. The
 // previous error, if any, moves to errors[] (capped at maxErrorList); this call's
 // error becomes the new error field. Unless SetLevel already ran, the event's level
 // becomes LevelError — an explicit SetLevel, before or after, still wins.
 func Error(ctx context.Context, err error) {
+	recordError(ctx, err, 1)
+}
+
+// recordError records err on the event, and names the caller depth frames above the
+// function that called it, so Error and Errorf both report the line a user wrote.
+func recordError(ctx context.Context, err error, callerDepth int) {
 	if isNilError(err) {
 		return
 	}
@@ -184,6 +213,9 @@ func Error(ctx context.Context, err error) {
 	}
 
 	info := e.safeExtract(err)
+	if e.caller {
+		info.Caller = callerOf(callerDepth + 1)
+	}
 	if e.errInfo != nil {
 		if len(e.errList) >= maxErrorList {
 			e.dropped++
@@ -274,6 +306,6 @@ func ErrorData(ctx context.Context) map[string]any {
 // that a handler writes today.
 func Errorf(ctx context.Context, format string, a ...any) error {
 	err := fmt.Errorf(format, a...)
-	Error(ctx, err)
+	recordError(ctx, err, 2)
 	return err
 }

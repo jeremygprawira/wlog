@@ -106,7 +106,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 
 ## Phase 11, v0.6: event shape v2 and the five foundations
 
-- [ ] 11-SHAPE-1 Time semantics and ErrorInfo v2
+- [x] 11-SHAPE-1 Time semantics and ErrorInfo v2
 - [ ] 11-SHAPE-2 Reserved keys and the ordered JSON writer
 - [ ] 11-SHAPE-3 Summary
 - [ ] 11-SHAPE-4 Stage order v2 and the size cap

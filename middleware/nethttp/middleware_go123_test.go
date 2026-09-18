@@ -51,8 +51,10 @@ func TestMiddleware_BasicFields(t *testing.T) {
 	if httpField["status"] != float64(200) {
 		t.Errorf("http.status = %v, want 200", httpField["status"])
 	}
-	if _, ok := httpField["duration_ms"]; !ok {
-		t.Error("http.duration_ms missing")
+	// CORE-27: the duration lives in the reserved duration_ms key alone, so the http
+	// group carries no second copy that could disagree with it.
+	if _, ok := httpField["duration_ms"]; ok {
+		t.Error("http.duration_ms is present, want it gone")
 	}
 	if httpField["bytes_out"] != float64(2) {
 		t.Errorf("http.bytes_out = %v, want 2", httpField["bytes_out"])

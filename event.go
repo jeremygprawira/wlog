@@ -34,6 +34,7 @@ type event struct {
 	unknownKeys []string
 	ctx         context.Context // the context Start/Detach was given, for the enrich stage
 	l           *Logger         // the Logger that built this event, for a late-write report
+	caller      bool            // true when wlog.Error records the line that called it
 }
 
 // Caps that bound one event's memory (gate G4). A field beyond its cap is dropped and
@@ -87,7 +88,7 @@ func Start(ctx context.Context, operation string) (context.Context, func()) {
 	e := &event{
 		fields: map[string]any{}, operation: operation, start: time.Now(),
 		extractor: l.errorExtractor, level: LevelInfo,
-		strictKeys: l.strictKeysForEvent(), rawValues: l.rawValues, l: l,
+		strictKeys: l.strictKeysForEvent(), rawValues: l.rawValues, l: l, caller: l.errorCaller,
 	}
 	ctx = withEvent(ctx, e)
 	e.ctx = ctx
@@ -409,10 +410,10 @@ func (l *Logger) emit(e *event) {
 		outcome = "error"
 	}
 	out := map[string]any{
-		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
+		"timestamp":   e.start.UTC().Format(time.RFC3339Nano),
 		"level":       string(level),
 		"operation":   e.operation,
-		"duration_ms": time.Since(e.start).Milliseconds(),
+		"duration_ms": float64(time.Since(e.start).Microseconds()) / 1000,
 		"outcome":     outcome,
 	}
 	if l.service != (serviceInfo{}) {

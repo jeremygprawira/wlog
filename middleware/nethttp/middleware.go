@@ -10,7 +10,6 @@ package wlogstd
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/jeremygprawira/wlog"
 )
@@ -69,7 +68,6 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 				ResponseWriter: w, status: http.StatusOK,
 				captureBody: cfg.captureBody, allowedTypes: cfg.bodyContentTypes, maxCapture: cfg.maxBodyCapture,
 			}
-			start := time.Now()
 			// req, not r: net/http.ServeMux sets Pattern on the *Request it actually
 			// dispatches to, which WithContext made a shallow copy of — reading
 			// route/path off the original r would always see the zero value.
@@ -88,7 +86,6 @@ func Middleware(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handle
 					"route", cfg.route(req),
 					"path", req.URL.Path,
 					"status", sw.status,
-					"duration_ms", time.Since(start).Milliseconds(),
 					"bytes_out", sw.bytes,
 					"client_ip", clientIP(r),
 					"user_agent", r.UserAgent(),
