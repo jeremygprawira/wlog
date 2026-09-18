@@ -38,6 +38,7 @@ var reservedTailRank = func() map[string]int {
 // follows the tables rather than the alphabet.
 var nestedKeyOrder = map[string][]string{
 	"service":   {"name", "version", "env", "instance"},
+	"http":      {"method", "route", "path", "status", "protocol", "scheme", "host", "bytes_in", "bytes_out", "client_ip", "user_agent"},
 	"trace":     {"trace_id", "span_id", "parent_span_id", "request_id", "parent_event_id", "parent_operation"},
 	"wlog":      {"schema_version", "redact_fingerprint", "sample_rate", "dropped_fields", "dropped_logs", "dropped_errors", "dropped_calls", "dropped_audit", "late_writes", "unknown_keys", "truncated"},
 	"rpc":       {"system", "service", "method", "status_code", "protocol", "peer", "stream", "messages_sent", "messages_received", "request_size", "response_size"},

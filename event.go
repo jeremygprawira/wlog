@@ -1,7 +1,6 @@
 package wlog
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -579,9 +578,7 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 // map.
 func (l *Logger) writeEvent(out map[string]any) {
 	if l.resolvedFormat() == FormatPretty {
-		var buf bytes.Buffer
-		writePretty(&buf, out, colorEnabled())
-		l.writer.write(buf.Bytes())
+		l.writer.write(renderPretty(out, colorEnabled()))
 		return
 	}
 	b, err := encodeEvent(out)

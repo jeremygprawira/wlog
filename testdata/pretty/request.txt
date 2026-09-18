@@ -1,0 +1,11 @@
+ERROR POST /orders/{id} 502 in 840.2ms: PAYMENT_DECLINED card declined (order_id=4821)
+  Why:  The issuer rejected the charge.
+  Fix:  Ask the customer for another card.
+  More: https://docs.example.com/errors/PAYMENT_DECLINED
+  at orders/charge.go:88
+  ├─ service  name=shop version=1.2.3 env=prod
+  ├─ http     method=POST route=/orders/{id} status=502 bytes_in=76 bytes_out=37
+  ├─ trace    trace_id=4bf92f3577b34da6a3ce929d0e0e4736 span_id=00f067aa0ba902b7 request_id=8a3692537f716fa0
+  ├─ calls    POST api.stripe.com/v1/charges 402 801.5ms
+  ├─ logs     info cache miss key=order:4821
+  └─ order_id=4821
