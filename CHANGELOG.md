@@ -17,6 +17,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   call plus the end func that appends a record to `calls` and folds the numbers into
   `call_stats`. `wlog.CallFromContext` and `wlog.CallSpanID` read the open call, which
   lets a client or store adapter join a call the outer adapter already records.
+- `propagate` carries the trace context of one unit of work across a process boundary.
+  `Extract` reads `traceparent`, `tracestate`, and `X-Request-ID`, and `Inject` writes
+  them. `HeaderCarrier`, `MapCarrier`, and `BytesCarrier` cover HTTP headers, plain maps,
+  and byte headers, and `WithB3` and `WithXRay` add the two read-only fallbacks.
 - `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
   allowed exception is the default Logger pointer.
 

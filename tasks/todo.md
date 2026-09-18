@@ -119,7 +119,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-DEF-1 SetDefault and a Logger-scoped switch
 - [x] 11-DEF-2 Writes with no event
 - [x] 11-CALL-1 StartCall and call records
-- [ ] 11-PROP-1 propagate
+- [x] 11-PROP-1 propagate
 - [ ] 11-WORK-1 Units, kinds, and levels
 - [ ] 11-WORK-2 Lag, batches, and flush
 - [ ] 11-SCH-1 JSON Schemas
