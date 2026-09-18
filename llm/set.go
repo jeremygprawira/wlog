@@ -35,8 +35,8 @@ func Add(ctx context.Context, r Record) {
 	if total := fields["input_tokens"].(int) + fields["output_tokens"].(int); total > 0 {
 		fields["total_tokens"] = total
 	}
-	if cached := intOf(existing["cached_input_tokens"]) + r.CachedInputTokens; cached > 0 {
-		fields["cached_input_tokens"] = cached
+	if cached := intOf(existing["cache_read_input_tokens"]) + r.CachedInputTokens; cached > 0 {
+		fields["cache_read_input_tokens"] = cached
 	}
 	if written := intOf(existing["cache_write_input_tokens"]) + r.CacheWriteInputTokens; written > 0 {
 		fields["cache_write_input_tokens"] = written
@@ -75,6 +75,11 @@ func Add(ctx context.Context, r Record) {
 		total := int64Of(existing["cost_micros"]) + r.Cost.TotalMicros
 		fields["cost_micros"] = total
 	}
+	// One entry per call, appended, because a request may finish more than one way.
+	if r.FinishReason != "" {
+		reasons, _ := existing["finish_reasons"].([]any)
+		fields["finish_reasons"] = append(reasons, r.FinishReason)
+	}
 
 	wlog.SetGroup(ctx, group, fields)
 	// The count goes through core, so an entry that hit llm's own cap appears in
@@ -89,7 +94,7 @@ func fieldsFor(r Record) map[string]any {
 		fields["provider"] = r.Provider
 	}
 	if r.Model != "" {
-		fields["model"] = r.Model
+		fields["request_model"] = r.Model
 	}
 	if r.Operation != "" {
 		fields["operation"] = r.Operation
@@ -104,7 +109,7 @@ func fieldsFor(r Record) map[string]any {
 		fields["total_tokens"] = total
 	}
 	if r.CachedInputTokens > 0 {
-		fields["cached_input_tokens"] = r.CachedInputTokens
+		fields["cache_read_input_tokens"] = r.CachedInputTokens
 	}
 	if r.CacheWriteInputTokens > 0 {
 		fields["cache_write_input_tokens"] = r.CacheWriteInputTokens
@@ -129,7 +134,8 @@ func fieldsFor(r Record) map[string]any {
 		fields["streamed"] = true
 	}
 	if r.FinishReason != "" {
-		fields["finish_reason"] = r.FinishReason
+		// finish_reasons is an array, because a request may finish more than one way.
+		fields["finish_reasons"] = []any{r.FinishReason}
 	}
 	if r.Cost != nil {
 		// Money stays in whole micros: a float on the event would round, and SPEC-llm says

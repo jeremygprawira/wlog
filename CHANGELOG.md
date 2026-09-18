@@ -7,6 +7,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+### Changed
+
+- The `llm` group renames three keys for shape v2. `llm.model` becomes `llm.request_model`,
+  `llm.cached_input_tokens` becomes `llm.cache_read_input_tokens`, and `llm.finish_reason`
+  becomes `llm.finish_reasons`, an array with one entry per model call.
+
 ### Fixed
 
 - The nightly integration stack runs to the end. It had never done so. The collector

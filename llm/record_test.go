@@ -52,18 +52,23 @@ func TestLLM_Set(t *testing.T) {
 
 	group := llmGroup(t, rec)
 	want := map[string]any{
-		"provider": "openai", "model": "gpt-x", "operation": "chat",
-		"input_tokens": int64(10), "output_tokens": int64(5), "cached_input_tokens": int64(3),
+		"provider": "openai", "request_model": "gpt-x", "operation": "chat",
+		"input_tokens": int64(10), "output_tokens": int64(5), "cache_read_input_tokens": int64(3),
 		"reasoning_tokens": int64(2), "total_tokens": int64(15),
 		"tool_call_count": int64(1), "tool_call_failures": int64(1),
 		"time_to_first_chunk_ms": int64(100), "duration_ms": int64(2000),
-		"streamed": true, "finish_reason": "stop",
+		"streamed":    true,
 		"cost_micros": int64(300),
 	}
 	for key, value := range want {
 		if group[key] != value {
 			t.Errorf("llm.%s = %v (%T), want %v", key, group[key], group[key], value)
 		}
+	}
+	// finish_reasons is an array, so it compares by hand.
+	reasons, _ := group["finish_reasons"].([]any)
+	if len(reasons) != 1 || reasons[0] != "stop" {
+		t.Errorf("llm.finish_reasons = %v, want one entry for the call", group["finish_reasons"])
 	}
 }
 
@@ -74,7 +79,7 @@ func TestLLM_Set_ZeroFieldsOff(t *testing.T) {
 	end()
 
 	group := llmGroup(t, rec)
-	for _, key := range []string{"input_tokens", "output_tokens", "cached_input_tokens", "reasoning_tokens", "total_tokens", "tool_calls", "tool_call_count", "time_to_first_chunk_ms", "duration_ms", "streamed", "finish_reason", "cost_micros", "cost_usd"} {
+	for _, key := range []string{"input_tokens", "output_tokens", "cache_read_input_tokens", "reasoning_tokens", "total_tokens", "tool_calls", "tool_call_count", "time_to_first_chunk_ms", "duration_ms", "streamed", "finish_reasons", "cost_micros", "cost_usd"} {
 		if _, present := group[key]; present {
 			t.Errorf("llm.%s present on a zero record: %v", key, group[key])
 		}

@@ -104,11 +104,11 @@ failed to price, instead of reading a silent zero.
 ### Fields on the event
 
 ```
-llm.provider llm.model llm.operation
-llm.input_tokens llm.output_tokens llm.cached_input_tokens llm.reasoning_tokens
+llm.provider llm.request_model llm.operation
+llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.reasoning_tokens
 llm.total_tokens
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
-llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reason
+llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reasons
 llm.cost_micros llm.cost_unknown
 llm.calls[]  (one object per call, set by Add)
 ```

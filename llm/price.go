@@ -224,13 +224,13 @@ func recordFrom(m map[string]any) Record {
 		Model:                 modelOf(m),
 		InputTokens:           intOf(m["input_tokens"]),
 		OutputTokens:          intOf(m["output_tokens"]),
-		CachedInputTokens:     intOf(m["cached_input_tokens"]),
+		CachedInputTokens:     intOf(m["cache_read_input_tokens"]),
 		CacheWriteInputTokens: intOf(m["cache_write_input_tokens"]),
 	}
 }
 
-// modelOf reads the model name.
+// modelOf reads the request model name.
 func modelOf(m map[string]any) string {
-	model, _ := m["model"].(string)
+	model, _ := m["request_model"].(string)
 	return model
 }

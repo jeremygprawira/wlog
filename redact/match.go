@@ -58,7 +58,7 @@ var reservedShape = [][]string{
 	{"service", "env"},
 	{"faas", "name"},
 	{"faas", "request_id"},
-	{"llm", "model"},
+	{"llm", "request_model"},
 	{"llm", "calls"},
 }
 

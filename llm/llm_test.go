@@ -178,7 +178,7 @@ func TestLLM_CAT2_TokenInvariants(t *testing.T) {
 	group, _ := rec.Last()["llm"].(map[string]any)
 	for _, key := range []string{
 		"input_tokens", "output_tokens", "total_tokens",
-		"cached_input_tokens", "cache_write_input_tokens", "reasoning_tokens",
+		"cache_read_input_tokens", "cache_write_input_tokens", "reasoning_tokens",
 	} {
 		if _, ok := group[key]; !ok {
 			t.Errorf("llm.%s is missing from the event: %v", key, group)
@@ -310,4 +310,38 @@ func TestLLM_CAT3_SnapshotPrefix(t *testing.T) {
 func counters(event map[string]any) map[string]any {
 	object, _ := event["wlog"].(map[string]any)
 	return object
+}
+
+// TestLLM_KeysV2Golden proves the three renamed keys of shape v2: model is request_model,
+// cached_input_tokens is cache_read_input_tokens, and finish_reason is finish_reasons, an
+// array with one entry per model call. No v1 name stays on the event.
+func TestLLM_KeysV2Golden(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "agent.run")
+
+	llm.Set(ctx, llm.Record{
+		Model:             "claude-sonnet-5",
+		InputTokens:       100,
+		CachedInputTokens: 1_000,
+		FinishReason:      "end_turn",
+	})
+	llm.Add(ctx, llm.Record{Model: "claude-sonnet-5", CachedInputTokens: 1_000, FinishReason: "tool_use"})
+	end()
+
+	group, _ := rec.Last()["llm"].(map[string]any)
+	if group["request_model"] != "claude-sonnet-5" {
+		t.Errorf("llm.request_model = %v, want the model", group["request_model"])
+	}
+	if got := intOf(group["cache_read_input_tokens"]); got != 2_000 {
+		t.Errorf("llm.cache_read_input_tokens = %v, want both calls added up", group["cache_read_input_tokens"])
+	}
+	reasons, ok := group["finish_reasons"].([]any)
+	if !ok || len(reasons) != 2 || reasons[0] != "end_turn" || reasons[1] != "tool_use" {
+		t.Errorf("llm.finish_reasons = %v, want one entry per call in order", group["finish_reasons"])
+	}
+	for _, gone := range []string{"model", "cached_input_tokens", "finish_reason"} {
+		if _, ok := group[gone]; ok {
+			t.Errorf("llm.%s is a v1 key: %v", gone, group)
+		}
+	}
 }
