@@ -120,7 +120,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-DEF-2 Writes with no event
 - [x] 11-CALL-1 StartCall and call records
 - [x] 11-PROP-1 propagate
-- [ ] 11-WORK-1 Units, kinds, and levels
+- [x] 11-WORK-1 Units, kinds, and levels
 - [ ] 11-WORK-2 Lag, batches, and flush
 - [ ] 11-SCH-1 JSON Schemas
 - [ ] 11-PRE-1 Preset contract and flat

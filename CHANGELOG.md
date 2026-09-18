@@ -21,6 +21,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   `Extract` reads `traceparent`, `tracestate`, and `X-Request-ID`, and `Inject` writes
   them. `HeaderCarrier`, `MapCarrier`, and `BytesCarrier` cover HTTP headers, plain maps,
   and byte headers, and `WithB3` and `WithXRay` add the two read-only fallbacks.
+- `work` opens one unit of work of a kind and writes the group of that kind.
+  `work.Start` returns a handle, `Handle.Set` and `Handle.Status` write fields, `Handle.End`
+  records the outcome and emits once, and `work.Run` wraps a handler function. A panic is
+  recorded with its stack and reaches the caller, and `work.RecoverPanics()` returns it as
+  an error. `work.ClassOf` maps a status code to a client class, a server class, or
+  neither.
 - `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
   allowed exception is the default Logger pointer.
 
