@@ -11,7 +11,7 @@ func DDL(database, table string) string {
     timestamp DateTime64(9),
     level LowCardinality(String),
     operation String,
-    duration_ms UInt64,
+    duration_ms Float64,
     outcome LowCardinality(String),
     service_name LowCardinality(String),
     service_version String,

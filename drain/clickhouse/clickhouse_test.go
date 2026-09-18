@@ -161,6 +161,7 @@ func TestClickHouse_DDL(t *testing.T) {
 	for _, want := range []string{
 		"CREATE TABLE IF NOT EXISTS analytics.events",
 		"timestamp DateTime64(9)",
+		"duration_ms Float64",
 		"level LowCardinality(String)",
 		"http_status UInt16",
 		"event String",
