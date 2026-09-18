@@ -46,6 +46,7 @@ type Logger struct {
 	plugins           []Plugin
 	strictKeys        map[string]bool
 	format            Format
+	summary           func(Event) string
 	silent            bool
 	rawValues         bool
 }

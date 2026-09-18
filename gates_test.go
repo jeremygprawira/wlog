@@ -112,6 +112,13 @@ func FuzzCore_EventShapeNeverLeaks(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The summary is built from the redacted event, so it is one more place a
+		// masked value could reappear. BET-5 names this property directly.
+		for _, event := range rec.Events() {
+			if text, ok := event["summary"].(string); ok && strings.Contains(text, secret) {
+				t.Fatalf("secret leaked into summary: key=%q value=%q summary=%s", key, secret, text)
+			}
+		}
 		for name, text := range map[string]string{"drain": string(out), "stdout": stdout} {
 			if strings.Contains(text, secret) {
 				t.Fatalf("secret leaked into %s: key=%q depth=%d value=%q output=%s", name, key, depth, secret, text)

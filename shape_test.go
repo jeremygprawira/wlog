@@ -6,6 +6,7 @@ package wlog_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/memory"
+	"github.com/jeremygprawira/wlog/redact"
 	"github.com/jeremygprawira/wlog/wlogtest"
 )
 
@@ -223,5 +225,62 @@ func TestShape_EmptyValuesOmitted(t *testing.T) {
 		if strings.Contains(out, gone) {
 			t.Errorf("%s is in the line: %s", gone, out)
 		}
+	}
+}
+
+// TestShape_BET5_SummaryPanicFallsBack proves that a builder which panics costs the
+// event nothing but the custom summary, and that the panic is reported.
+func TestShape_BET5_SummaryPanicFallsBack(t *testing.T) {
+	problems := make(chan wlog.Problem, 4)
+	log, rec := wlogtest.New(t,
+		wlog.WithSummary(func(wlog.Event) string { panic("summary boom") }),
+		wlog.OnProblem(func(p wlog.Problem) { problems <- p }),
+	)
+
+	_, end := wlog.Start(log.WithContext(context.Background()), "checkout")
+	end()
+
+	if got := rec.Last()["summary"]; got != "checkout success in 0.0ms" && !strings.HasPrefix(fmt.Sprint(got), "checkout success in ") {
+		t.Errorf("summary = %v, want the default text", got)
+	}
+	select {
+	case p := <-problems:
+		if p.Code != "WLOG_HOOK_PANIC" || p.Source != "summary" {
+			t.Errorf("report = %+v, want WLOG_HOOK_PANIC from the summary", p)
+		}
+	default:
+		t.Error("a panicking summary builder reported nothing")
+	}
+}
+
+// TestShape_BET5_MaskedValueStaysOut proves that a value the redactor hid cannot come
+// back inside the summary of the event that hid it.
+func TestShape_BET5_MaskedValueStaysOut(t *testing.T) {
+	// order_id is an id key, so the summary would carry it, and this redactor masks
+	// it, so the summary must leave it out instead of showing the mask.
+	log := wlog.New(
+		wlog.WithFormat(wlog.FormatJSON),
+		wlog.WithDrains(memory.New(0)),
+		wlog.WithRedactor(redact.MustNew(redact.AddKeys("order_id"))),
+	)
+	out := captureStdout(t, func() {
+		ctx, end := wlog.Start(log.WithContext(context.Background()), "checkout")
+		wlog.Set(ctx, "order_id", "hunter2-secret")
+		end()
+	})
+
+	summary := ""
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, `"summary"`) {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("invalid JSON line: %v", err)
+		}
+		summary = fmt.Sprint(event["summary"])
+	}
+	if strings.Contains(summary, "hunter2-secret") {
+		t.Errorf("summary holds a masked value: %q", summary)
 	}
 }

@@ -493,6 +493,9 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 
 	redactor := l.currentRedactor()
 	redactor.Apply(out)
+	// The summary is built from the redacted event, so a value the redactor hid
+	// cannot reappear inside the sentence that describes the event.
+	out["summary"] = l.summarizer(ctx, out, redactor.Replacement())
 	if l.redactFingerprint {
 		wlogFields, _ := out["wlog"].(map[string]any)
 		if wlogFields == nil {
