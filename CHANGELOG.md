@@ -37,6 +37,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   writes `lag_ms`.
 - `tools/cmd/pkgstate` fails on a package-level variable that some code writes. The one
   allowed exception is the default Logger pointer.
+- `wlog.OutputPreset` and `wlog.WithOutput` let a JSON writer print the dialect of a
+  backend. `preset.Flat` writes every nested object as dotted keys, `preset.ByName`
+  resolves a name, and `preset.Rename` renames a top-level key. A preset changes the
+  printed line only, and every drain still receives the canonical event.
 
 ### Changed
 
@@ -51,6 +55,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 - The package-level `wlog.SetEnabled` and `wlog.Enabled` are gone. Each Logger has
   `SetEnabled` and `Enabled`, so one Logger that is off leaves every other Logger on.
+- `wlog.FieldsFlat`, `wlog.FieldsOTel`, `wlog.FieldNames`, and `wlog.WithFieldNames` are
+  gone. `wlog.WithOutput` with a preset replaces them.
 - `memory.Named`, `memory.Remove`, and `memory.Stores` are gone. They held a second
   package-level registry, and a caller passes the store it wants instead.
 

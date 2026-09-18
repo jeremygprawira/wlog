@@ -572,7 +572,6 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	if l.headSampler != nil {
 		wlogFields["sample_rate"] = rate
 	}
-	out = applyFieldNames(out, l.fieldNames)
 	if !l.finalizeSize(out, wlogFields) {
 		l.dropEvent(dropTooLarge)
 		return
@@ -600,12 +599,54 @@ func (l *Logger) writeEvent(out map[string]any) {
 		l.writer.write(renderPretty(out, colorEnabled()))
 		return
 	}
-	b, err := encodeEvent(out)
+	b, err := l.encodeOutput(out)
 	if err != nil {
 		l.reportProblem(codeDrainFailed, "stdout", err)
 		return
 	}
 	l.writer.write(b)
+}
+
+// encodeOutput returns out as the JSON line the writer prints. It applies the configured
+// output preset to a copy of the event, and a preset that panics reports
+// WLOG_HOOK_PANIC and leaves the canonical event to be printed instead.
+func (l *Logger) encodeOutput(out map[string]any) ([]byte, error) {
+	if l.output == nil || len(l.output.Lead()) == 0 {
+		return encodeEvent(out)
+	}
+	shaped, ok := l.applyOutput(out)
+	if !ok {
+		return encodeEvent(out)
+	}
+	return encodePreset(shaped, l.output.Lead())
+}
+
+// applyOutput runs the configured preset under recover, and reports a preset that
+// panics. It returns false when the preset failed, so the caller prints the canonical
+// event. The preset receives a copy of the event, so it never reaches a drain.
+func (l *Logger) applyOutput(out map[string]any) (shaped map[string]any, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportProblem(codeHookPanic, presetName(l.output), fmt.Errorf("panic: %v", r))
+			shaped, ok = nil, false
+		}
+	}()
+	copied, _ := copyValue(out).(map[string]any)
+	if copied == nil {
+		return nil, false
+	}
+	shaped = l.output.Apply(copied)
+	if shaped == nil {
+		return nil, false
+	}
+	return shaped, true
+}
+
+// presetName returns the name of a preset. A preset whose Name method panics counts as
+// unnamed, so a report never fails on the name itself.
+func presetName(p OutputPreset) (name string) {
+	defer func() { _ = recover() }()
+	return p.Name()
 }
 
 // startWriter prepares the writer of this Logger. New calls it once, after every option

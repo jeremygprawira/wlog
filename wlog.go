@@ -49,7 +49,7 @@ type Logger struct {
 	// disabled is the per-Logger off switch behind SetEnabled. It is stored inverted, so
 	// the zero value means the Logger is on.
 	disabled   atomic.Bool
-	fieldNames FieldNames
+	output     OutputPreset
 	plugins    []Plugin
 	strictKeys map[string]bool
 	format     Format

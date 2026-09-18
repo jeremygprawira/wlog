@@ -56,14 +56,16 @@ wlogstd.Middleware(log,
 The Echo, Echo v5, and Gin adapters re-export the same options. Each adapter sets the
 route from its own router, so `WithRouteFunc` stays in the `middleware/nethttp` package.
 
-## Field names
+## Output presets
 
 <!-- snippet:sketch -->
 ```go
-wlog.WithFieldNames(wlog.FieldsFlat())  // service, http.method, error
-wlog.WithFieldNames(wlog.FieldsOTel())  // service.name, http.request.method
-wlog.WithFieldNames(wlog.FieldNames{"level": "severity"}) // one key at a time
+wlog.WithOutput(preset.Flat())  // dotted keys, such as http.status
+wlog.WithOutput(preset.Rename(preset.Flat(), "summary", "msg")) // one key renamed
 ```
+
+A preset shapes the JSON line a writer prints. A drain always receives the canonical
+event, so a backend dialect never reaches a sampler or a hook.
 
 ## Sampling
 

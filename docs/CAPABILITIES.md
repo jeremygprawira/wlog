@@ -12,7 +12,7 @@ root module (`github.com/jeremygprawira/wlog`). A package with a third-party imp
 | Module id | Responsibility | Depends on | Go module | Phase |
 |---|---|---|---|---|
 | `redact` | Denylist masking: keys, paths, and value patterns. Keys can be added or removed. Values stay immutable | none | root | 1 |
-| `core` | Wide event and ctx API. `Start`/`Detach`, `SetLevel`, errors (`error` and `errors[]`), typed keys (`Key[T]`), plugins, field-name presets, plain log lines. `Drain`/`ErrorExtractor`/`Enricher`/`Keeper` interfaces, JSON and pretty console sinks, env configuration, atomic redactor swap, fixed pipeline order | redact | root | 1 |
+| `core` | Wide event and ctx API. `Start`/`Detach`, `SetLevel`, errors (`error` and `errors[]`), typed keys (`Key[T]`), plugins, output presets, plain log lines. `Drain`/`ErrorExtractor`/`Enricher`/`Keeper` interfaces, JSON and pretty console sinks, env configuration, atomic redactor swap, fixed pipeline order | redact | root | 1 |
 | `pipeline` | Async batching, retry/backoff, fan-out, bounded buffer (drop oldest + `OnDropped`), flush on `Close`, shared HTTP drain helper with identity headers | core | root | 2 |
 | `sample` | Head (rate per level) and tail (status, duration, path, predicate) sampling. Default keeps 100%, plus presets | core | root | 2 |
 | `enrich` | Built-in enrichers: host/pod/region, deploy version, user agent, **geo** (CDN headers), user-id lookup | core | root | 2 |

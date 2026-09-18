@@ -108,18 +108,53 @@ func orderedNested(order []string, value map[string]any) []string {
 	return keys
 }
 
-// encodeEvent returns out as one JSON line in the reserved key order. HTML escaping
-// is off, so a URL or a query string reads as it was written.
+// encodeEvent returns out as one JSON line in the reserved key order of the default
+// shape. HTML escaping is off, so a URL or a query string reads as it was written.
 //
 // A key whose value is an empty string, a nil, or an empty object or array is left
 // out, because the schema gives an absent value and an empty one the same meaning, and
 // the shorter line costs less to store.
 func encodeEvent(out map[string]any) ([]byte, error) {
+	return encodeOrdered(out, orderedKeys(out), true)
+}
+
+// encodePreset returns out as one JSON line in the order a preset asks for: the lead
+// keys first and in that order, then every other key sorted by name. Nested keys sort by
+// name too, because a preset writes its own objects.
+func encodePreset(out map[string]any, lead []string) ([]byte, error) {
+	return encodeOrdered(out, leadKeys(out, lead), false)
+}
+
+// leadKeys returns the keys of out in preset order: the lead keys present in out, then
+// the rest sorted by name.
+func leadKeys(out map[string]any, lead []string) []string {
+	keys := make([]string, 0, len(out))
+	taken := make(map[string]bool, len(lead))
+	for _, key := range lead {
+		if _, present := out[key]; present && !taken[key] {
+			taken[key] = true
+			keys = append(keys, key)
+		}
+	}
+	rest := make([]string, 0, len(out))
+	for key := range out {
+		if !taken[key] {
+			rest = append(rest, key)
+		}
+	}
+	sort.Strings(rest)
+	return append(keys, rest...)
+}
+
+// encodeOrdered writes out as one JSON object with keys in the given order. A key whose
+// value is empty is left out. When fixedNested is true, an object whose field order a
+// table fixes keeps that order.
+func encodeOrdered(out map[string]any, keys []string, fixedNested bool) ([]byte, error) {
 	buf := bytes.Buffer{}
 	buf.WriteByte('{')
 	var enc json.Encoder
 	first := true
-	for _, key := range orderedKeys(out) {
+	for _, key := range keys {
 		value := out[key]
 		if isEmptyValue(value) {
 			continue
@@ -134,7 +169,7 @@ func encodeEvent(out map[string]any) ([]byte, error) {
 		var body bytes.Buffer
 		enc = *json.NewEncoder(&body)
 		enc.SetEscapeHTML(false)
-		if err := enc.Encode(orderedValue(key, value)); err != nil {
+		if err := enc.Encode(orderedValue(key, value, fixedNested)); err != nil {
 			return nil, err
 		}
 		buf.Write(bytes.TrimRight(body.Bytes(), "\n"))
@@ -145,9 +180,9 @@ func encodeEvent(out map[string]any) ([]byte, error) {
 
 // orderedValue returns value unchanged, except for an object whose field order a table
 // fixes, which becomes an orderedObject.
-func orderedValue(key string, value any) any {
+func orderedValue(key string, value any, fixedNested bool) any {
 	object, ok := value.(map[string]any)
-	if !ok {
+	if !ok || !fixedNested {
 		return value
 	}
 	order, known := nestedKeyOrder[key]
@@ -180,7 +215,7 @@ func (o orderedObject) MarshalJSON() ([]byte, error) {
 		first = false
 		buf.WriteString(quote(key))
 		buf.WriteByte(':')
-		body, err := json.Marshal(orderedValue(key, value))
+		body, err := json.Marshal(orderedValue(key, value, true))
 		if err != nil {
 			return nil, err
 		}
