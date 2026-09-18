@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeremygprawira/wlog/schema/map.v2.json",
+  "title": "wlog map report v2",
+  "description": "The document that wlog map writes and that wlog doctor reads, as the map rules of version 2 produce it.",
+  "type": "object",
+  "required": ["version", "score", "min_score", "pass", "grade", "summary", "handlers"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "The version of the document shape",
+      "const": 2
+    },
+    "tool_version": {
+      "description": "The version of the tool that wrote the document",
+      "type": "string"
+    },
+    "rules_version": {
+      "description": "The version of the rule set the tool used",
+      "type": "integer"
+    },
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "min_score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "pass": {"type": "boolean"},
+    "grade": {"type": "string"},
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handlers", "passed", "failed", "score", "grade", "min_score"],
+      "properties": {
+        "handlers": {"type": "integer"},
+        "passed": {"type": "integer"},
+        "failed": {"type": "integer"},
+        "score": {"type": "integer"},
+        "projected_score": {"type": "integer"},
+        "grade": {"type": "string"},
+        "min_score": {"type": "integer"}
+      }
+    },
+    "handlers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/handler"}
+    },
+    "top_fixes": {
+      "description": "The rules that cost the most, newest first",
+      "type": "array",
+      "items": {"$ref": "#/$defs/fix"}
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence"}
+    }
+  },
+  "$defs": {
+    "handler": {
+      "type": "object",
+      "required": ["package", "function", "file", "line", "framework", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "package": {"type": "string"},
+        "function": {"type": "string"},
+        "file": {"type": "string"},
+        "line": {"type": "integer"},
+        "framework": {"type": "string"},
+        "method": {"type": "string"},
+        "route": {"type": "string"},
+        "sensitive": {"type": "boolean"},
+        "class": {"type": "string"},
+        "checks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/check"}
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["id", "weight", "pass", "applicable"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "weight": {"type": "integer"},
+        "pass": {"type": "boolean"},
+        "applicable": {"type": "boolean"},
+        "detail": {"type": "string"},
+        "suggestion": {"type": "boolean"},
+        "suppressed": {"type": "boolean"},
+        "reason": {"type": "string"}
+      }
+    },
+    "fix": {
+      "description": "One rule worth fixing, and what it costs",
+      "type": "object",
+      "required": ["rule", "points", "handlers", "fix", "docs"],
+      "additionalProperties": false,
+      "properties": {
+        "rule": {"type": "string"},
+        "points": {"type": "integer"},
+        "handlers": {"type": "integer"},
+        "fix": {"type": "string"},
+        "docs": {"type": "string"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["rule", "file", "line", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "rule": {"type": "string"},
+        "file": {"type": "string"},
+        "line": {"type": "integer"},
+        "at": {"type": "string"}
+      }
+    }
+  }
+}

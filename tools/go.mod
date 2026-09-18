@@ -5,6 +5,7 @@ module github.com/jeremygprawira/wlog/tools
 go 1.26.0
 
 require (
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.org/x/perf v0.0.0-20260908200009-22c9c6c9d4da
 	golang.org/x/vuln v1.8.0
 )
@@ -15,5 +16,6 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.50.0 // indirect
 )

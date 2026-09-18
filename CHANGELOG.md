@@ -21,6 +21,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   `Extract` reads `traceparent`, `tracestate`, and `X-Request-ID`, and `Inject` writes
   them. `HeaderCarrier`, `MapCarrier`, and `BytesCarrier` cover HTTP headers, plain maps,
   and byte headers, and `WithB3` and `WithXRay` add the two read-only fallbacks.
+- `schema` embeds the JSON Schemas of the event shape and of the map report, and
+  `tools/cmd/schema` checks every golden document against the schema of its shape, so a
+  drift fails the build.
 - `work` opens one unit of work of a kind and writes the group of that kind.
   `work.Start` returns a handle, `Handle.Set` and `Handle.Status` write fields, `Handle.End`
   records the outcome and emits once, and `work.Run` wraps a handler function. A panic is

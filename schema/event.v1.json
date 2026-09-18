@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jeremygprawira/wlog/schema/event.v1.json",
+  "title": "wlog event v1",
+  "description": "One unit of work, as SPEC-core-v2 defines it. A key outside this schema is a user key, which a caller may name anything, so the object accepts them.",
+  "type": "object",
+  "required": ["timestamp", "level", "kind", "outcome"],
+  "additionalProperties": true,
+  "properties": {
+    "timestamp": {
+      "description": "The start of the work, in RFC 3339 UTC with nanoseconds",
+      "type": "string",
+      "format": "date-time"
+    },
+    "level": {
+      "description": "The level the event ended at",
+      "enum": ["debug", "info", "warn", "error"]
+    },
+    "summary": {
+      "description": "One sentence, built after redaction",
+      "type": "string",
+      "maxLength": 240
+    },
+    "operation": {
+      "description": "The operation name of the kind",
+      "type": "string"
+    },
+    "kind": {
+      "description": "The shape of the unit of work",
+      "enum": ["request", "rpc", "message", "job", "command", "function", "work", "log"]
+    },
+    "outcome": {
+      "description": "error for a level of error, and success otherwise",
+      "enum": ["success", "error"]
+    },
+    "duration_ms": {
+      "description": "The time the work took, absent for a log line",
+      "type": "number",
+      "minimum": 0
+    },
+    "message": {
+      "description": "The text of a plain log line",
+      "type": "string"
+    },
+    "error": {"$ref": "#/$defs/error"},
+    "event_id": {
+      "description": "The UUIDv7 that names this event",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "env": {"type": "string"},
+        "instance": {"type": "string"}
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trace_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "span_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+        "parent_span_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+        "request_id": {"type": "string"},
+        "parent_event_id": {"type": "string"},
+        "parent_operation": {"type": "string"}
+      }
+    },
+    "http": {"$ref": "#/$defs/http"},
+    "rpc": {"$ref": "#/$defs/rpc"},
+    "messaging": {"$ref": "#/$defs/messaging"},
+    "job": {"$ref": "#/$defs/job"},
+    "cli": {"$ref": "#/$defs/cli"},
+    "faas": {"$ref": "#/$defs/faas"},
+    "user": {"$ref": "#/$defs/group"},
+    "geo": {"$ref": "#/$defs/group"},
+    "client": {"$ref": "#/$defs/group"},
+    "host": {"$ref": "#/$defs/group"},
+    "deploy": {"$ref": "#/$defs/group"},
+    "llm": {"$ref": "#/$defs/llm"},
+    "audit": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/group"}},
+    "errors": {"type": "array", "maxItems": 10, "items": {"$ref": "#/$defs/error"}},
+    "logs": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/logLine"}},
+    "calls": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/call"}},
+    "call_stats": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/callStats"}
+    },
+    "feature_flags": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/group"}},
+    "wlog": {"$ref": "#/$defs/wlog"}
+  },
+  "$defs": {
+    "error": {
+      "description": "The ErrorInfo that decided the outcome",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "kind": {"type": "string"},
+        "type": {"type": "string"},
+        "status": {"type": "integer"},
+        "cause": {"type": "string"},
+        "causes": {"type": "array", "items": {"type": "string"}},
+        "caller": {"type": "string"},
+        "stack": {"type": "string"},
+        "why": {"type": "string"},
+        "fix": {"type": "string"},
+        "link": {"type": "string"},
+        "attrs": {"type": "object"},
+        "data": {"type": "object"},
+        "internal": {"type": "object"}
+      }
+    },
+    "group": {
+      "description": "A group of fields, or a library field under its system",
+      "type": "object"
+    },
+    "http": {
+      "type": "object",
+      "properties": {
+        "method": {"type": "string"},
+        "route": {"type": "string"},
+        "path": {"type": "string"},
+        "status": {"type": "integer"},
+        "protocol": {"type": "string"},
+        "scheme": {"type": "string"},
+        "host": {"type": "string"},
+        "bytes_in": {"type": "integer"},
+        "bytes_out": {"type": "integer"},
+        "client_ip": {"type": "string"},
+        "user_agent": {"type": "string"}
+      }
+    },
+    "rpc": {
+      "type": "object",
+      "properties": {
+        "system": {"type": "string"},
+        "service": {"type": "string"},
+        "method": {"type": "string"},
+        "status_code": {"type": ["string", "integer"]},
+        "protocol": {"type": "string"},
+        "peer": {"type": "string"},
+        "stream": {"type": "boolean"},
+        "messages_sent": {"type": "integer"},
+        "messages_received": {"type": "integer"},
+        "request_size": {"type": "integer"},
+        "response_size": {"type": "integer"}
+      }
+    },
+    "messaging": {
+      "type": "object",
+      "properties": {
+        "system": {"type": "string"},
+        "operation": {"type": "string"},
+        "destination": {"type": "string"},
+        "consumer_group": {"type": "string"},
+        "message_id": {"type": "string"},
+        "partition": {"type": ["string", "integer"]},
+        "offset": {"type": "integer"},
+        "delivery_count": {"type": "integer"},
+        "redelivered": {"type": "boolean"},
+        "result": {"type": "string"},
+        "lag_ms": {"type": "number"},
+        "batch_size": {"type": "integer"},
+        "body_size": {"type": "integer"}
+      }
+    },
+    "job": {
+      "type": "object",
+      "properties": {
+        "system": {"type": "string"},
+        "name": {"type": "string"},
+        "id": {"type": "string"},
+        "queue": {"type": "string"},
+        "schedule": {"type": "string"},
+        "attempt": {"type": "integer"},
+        "max_attempts": {"type": "integer"},
+        "result": {"type": "string"},
+        "scheduled_at": {"type": "string"},
+        "lag_ms": {"type": "number"},
+        "batch_size": {"type": "integer"},
+        "batch_failures": {"type": "integer"},
+        "ticker": {"type": "object"}
+      }
+    },
+    "cli": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "args_count": {"type": "integer"},
+        "flags": {"type": "array", "items": {"type": "string"}},
+        "exit_code": {"type": ["string", "integer"]}
+      }
+    },
+    "faas": {
+      "type": "object",
+      "properties": {
+        "system": {"type": "string"},
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "trigger": {"type": "string"},
+        "invocation_id": {"type": "string"},
+        "cold_start": {"type": "boolean"},
+        "remaining_ms": {"type": "number"},
+        "memory_mb": {"type": "number"},
+        "region": {"type": "string"},
+        "batch_size": {"type": "integer"},
+        "batch_failures": {"type": "integer"}
+      }
+    },
+    "llm": {
+      "type": "object",
+      "properties": {
+        "provider": {"type": "string"},
+        "request_model": {"type": "string"},
+        "operation": {"type": "string"},
+        "input_tokens": {"type": "integer"},
+        "output_tokens": {"type": "integer"},
+        "total_tokens": {"type": "integer"},
+        "cache_read_input_tokens": {"type": "integer"},
+        "cache_write_input_tokens": {"type": "integer"},
+        "reasoning_tokens": {"type": "integer"},
+        "tool_call_count": {"type": "integer"},
+        "tool_call_failures": {"type": "integer"},
+        "tool_calls": {"type": "array", "items": {"$ref": "#/$defs/group"}},
+        "time_to_first_chunk_ms": {"type": "number"},
+        "duration_ms": {"type": "number"},
+        "streamed": {"type": "boolean"},
+        "finish_reasons": {"type": "array", "items": {"type": "string"}},
+        "cost_micros": {"type": "integer"},
+        "calls": {"type": "array", "items": {"$ref": "#/$defs/group"}}
+      }
+    },
+    "logLine": {
+      "type": "object",
+      "required": ["level", "msg"],
+      "properties": {
+        "level": {"type": "string"},
+        "msg": {"type": "string"},
+        "attrs": {"type": "object"}
+      }
+    },
+    "call": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["http", "db", "cache", "queue", "rpc", "llm", "storage", "other"]},
+        "system": {"type": "string"},
+        "operation": {"type": "string"},
+        "target": {"type": "string"},
+        "status": {"type": ["string", "integer"]},
+        "duration_ms": {"type": "number"},
+        "span_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+        "rows": {"type": "integer"},
+        "attrs": {"type": "object"},
+        "error": {"$ref": "#/$defs/callError"}
+      }
+    },
+    "callError": {
+      "description": "A call holds a code and only the message an adapter marked safe",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    },
+    "callStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {"type": "integer"},
+        "errors": {"type": "integer"},
+        "duration_ms": {"type": "number"},
+        "max_ms": {"type": "number"}
+      }
+    },
+    "wlog": {
+      "description": "The metadata of this event: the schema version and the counters",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": 2},
+        "redact_fingerprint": {"type": "string"},
+        "sample_rate": {"type": "number", "minimum": 0, "maximum": 100},
+        "dropped_fields": {"type": "integer"},
+        "dropped_logs": {"type": "integer"},
+        "dropped_errors": {"type": "integer"},
+        "dropped_calls": {"type": "integer"},
+        "dropped_audit": {"type": "integer"},
+        "late_writes": {"type": "integer"},
+        "unknown_keys": {"type": "array", "items": {"type": "string"}},
+        "truncated": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
