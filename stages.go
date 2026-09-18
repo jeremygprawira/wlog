@@ -211,15 +211,17 @@ func (l *Logger) safeEnrich(ctx context.Context, en Enricher, event map[string]a
 // and records the name. The names become wlog.truncated, the drops join
 // wlog.dropped_fields, and a report names the code WLOG_EVENT_TOO_LARGE.
 //
-// It returns the event unchanged when it fits. The order is fixed by size and then by
-// name, so two events with the same fields trim the same way (gate G6).
+// It returns false when the event is still over the cap with no user field left, which
+// means only a reserved group holds the size. The caller drops that event with the
+// reason too_large. The order is fixed by size and then by name, so two events with the
+// same fields trim the same way (gate G6).
 //
 // ponytail: user fields only, so a reserved group stays over the cap. Each group is
 // bounded by its own field cap, so add reserved keys to the loop if that ceiling matters.
-func (l *Logger) finalizeSize(out map[string]any, wlogFields map[string]any) {
+func (l *Logger) finalizeSize(out map[string]any, wlogFields map[string]any) bool {
 	total := valueSize(out)
 	if total <= maxEventSize {
-		return
+		return true
 	}
 
 	// One size per user key, measured once, so the trim walks the event a fixed
@@ -249,12 +251,16 @@ func (l *Logger) finalizeSize(out map[string]any, wlogFields map[string]any) {
 		total -= sizes[key]
 		truncated = append(truncated, key)
 	}
+	if total > maxEventSize {
+		return false
+	}
 	if len(truncated) == 0 {
-		return
+		return true
 	}
 	wlogFields["truncated"] = truncated
 	dropped, _ := wlogFields["dropped_fields"].(int)
 	wlogFields["dropped_fields"] = dropped + len(truncated)
 	l.reportProblem(codeEventTooLarge, "finalize",
 		fmt.Errorf("dropped %d fields to fit the %d byte cap", len(truncated), maxEventSize))
+	return true
 }

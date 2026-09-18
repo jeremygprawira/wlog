@@ -14,11 +14,12 @@ type envWarning struct {
 	source string
 }
 
-// applyEnvDefaults reads WLOG_SERVICE, WLOG_VERSION, WLOG_ENV, WLOG_LEVEL, and
-// WLOG_FORMAT as the Logger's starting configuration. Called before any Option, so an
-// explicit option (WithService, WithLevel, WithFormat, ...) always overrides the
-// matching env var. An invalid WLOG_LEVEL or WLOG_FORMAT value is left at its default
-// and returned as a warning; it never panics and never blocks New from returning.
+// applyEnvDefaults reads WLOG_SERVICE, WLOG_VERSION, WLOG_ENV, WLOG_LEVEL,
+// WLOG_FORMAT, and WLOG_DEBUG as the Logger's starting configuration. Called before any
+// Option, so an explicit option (WithService, WithLevel, WithFormat, WithDebug, ...)
+// always overrides the matching env var. An invalid WLOG_LEVEL or WLOG_FORMAT value is
+// left at its default and returned as a warning; it never panics and never blocks New
+// from returning.
 func (l *Logger) applyEnvDefaults() []envWarning {
 	var warnings []envWarning
 
@@ -46,6 +47,11 @@ func (l *Logger) applyEnvDefaults() []envWarning {
 				source: "WLOG_FORMAT",
 			})
 		}
+	}
+
+	// WLOG_DEBUG=1 turns on debug mode: every dropped event reports its reason.
+	if v := os.Getenv("WLOG_DEBUG"); v == "1" || strings.EqualFold(v, "true") {
+		l.debug = true
 	}
 
 	return warnings

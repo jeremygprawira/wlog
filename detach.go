@@ -13,7 +13,11 @@ import (
 // or get merged into, the parent.
 func Detach(ctx context.Context, operation string) (context.Context, func()) {
 	l := loggerFrom(ctx)
-	if l == nil || !Enabled() {
+	if l == nil {
+		return ctx, func() {}
+	}
+	if !Enabled() {
+		l.dropEvent(dropDisabled)
 		return ctx, func() {}
 	}
 	e := &event{

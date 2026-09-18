@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Drain receives every emitted event, already redacted, alongside the built-in
@@ -59,12 +60,18 @@ func (l *Logger) sendToDrains(ctx context.Context, event map[string]any) {
 }
 
 func (l *Logger) safeSend(ctx context.Context, d Drain, event map[string]any) {
+	start := time.Now()
 	defer func() {
 		if r := recover(); r != nil {
 			l.reportProblem(codeDrainFailed, sourceName(d), fmt.Errorf("panic: %v", r))
 		}
 	}()
 	d.Send(ctx, event)
+	// A drain runs on the emitting goroutine, so a slow one blocks the request. Report
+	// the first one once, so a slow backend is visible without a line per event.
+	if took := time.Since(start); took > drainSlowThreshold {
+		l.slowDrain(d, took)
+	}
 }
 
 // Flush pushes the buffer of every drain that implements drainFlusher (a batched

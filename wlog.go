@@ -10,6 +10,7 @@ package wlog
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 
 	"github.com/jeremygprawira/wlog/redact"
@@ -46,6 +47,9 @@ type Logger struct {
 	starters          []Starter
 	finishers         []Finisher
 	measurers         []Measurer
+	stats             loggerStats
+	slowDrains        sync.Map // drain names that already reported WLOG_DRAIN_SLOW
+	debug             bool
 	fieldNames        FieldNames
 	plugins           []Plugin
 	strictKeys        map[string]bool
@@ -84,6 +88,11 @@ func New(opts ...Option) *Logger {
 	l.problems.flush()
 	return l
 }
+
+// WithDebug turns on debug mode: core reports WLOG_EVENT_DROPPED with the reason every
+// time it drops an event, so a reader learns why an event is missing (BET-10). The env
+// var WLOG_DEBUG=1 does the same.
+func WithDebug(on bool) Option { return func(l *Logger) { l.debug = on } }
 
 // WithSilent drops the stdout write while keeping every stage and every drain. A
 // service that ships events to a backend alone wants no duplicate console output.

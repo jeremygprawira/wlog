@@ -99,7 +99,11 @@ func HasEvent(ctx context.Context) bool {
 // event.
 func Start(ctx context.Context, operation string) (context.Context, func()) {
 	l := loggerFrom(ctx)
-	if l == nil || !Enabled() {
+	if l == nil {
+		return ctx, func() {}
+	}
+	if !Enabled() {
+		l.dropEvent(dropDisabled)
 		return ctx, func() {}
 	}
 	e := &event{
@@ -414,6 +418,7 @@ func (l *Logger) emit(e *event) {
 	// A closed drain would drop the event silently, so report it instead.
 	if l.closed.Load() {
 		l.reportProblem(codeLoggerClosed, "emit", fmt.Errorf("Logger.Close was called: the event was dropped"))
+		l.dropEvent(dropClosed)
 		return
 	}
 
@@ -440,6 +445,7 @@ func (l *Logger) emit(e *event) {
 	// logs still wants the record of who did what, and a dropped audit line is a
 	// hole in a chain that a reader must be able to verify.
 	if !audit && levelRank[level] < levelRank[l.minLevel] {
+		l.dropEvent(dropLevel)
 		return
 	}
 
@@ -511,6 +517,7 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 	// A head drop that no Keeper can rescue skips every later stage, so the enrich work
 	// is not spent on an event nobody reads.
 	if !keep && len(l.keepers) == 0 {
+		l.dropEvent(dropSampled)
 		return
 	}
 	l.runEnrichers(ctx, out)
@@ -522,6 +529,7 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 		keep = l.keepEvent(ctx, out) || keep
 	}
 	if !keep {
+		l.dropEvent(dropSampled)
 		return
 	}
 
@@ -547,8 +555,12 @@ func (l *Logger) pipeline(ctx context.Context, out map[string]any) {
 		wlogFields["sample_rate"] = rate
 	}
 	out = applyFieldNames(out, l.fieldNames)
-	l.finalizeSize(out, wlogFields)
+	if !l.finalizeSize(out, wlogFields) {
+		l.dropEvent(dropTooLarge)
+		return
+	}
 
+	l.stats.emitted.Add(1)
 	l.finishHooks(ctx, out)
 
 	// A drain makes network calls, so it must not inherit the request's cancellation:

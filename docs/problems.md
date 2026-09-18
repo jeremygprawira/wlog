@@ -147,9 +147,9 @@ This is usually a setup mistake.
 
 ## WLOG_EVENT_DROPPED
 
-**Why.** Debug mode only. An event was dropped, and `Why` names the reason: `sampled`,
+**Why.** Debug mode only. An event was dropped, and `Source` names the reason: `sampled`,
 `level`, `disabled`, `closed`, or `too_large`. Turn debug on with `WithDebug(true)` or
 `WLOG_DEBUG=1`.
 
-**Fix.** Nothing, unless the drop is unexpected. Then read `Why` and adjust the filter or
-the sample rate.
+**Fix.** Nothing, unless the drop is unexpected. Then read `Source` and adjust the filter
+or the sample rate.
