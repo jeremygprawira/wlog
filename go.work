@@ -23,7 +23,9 @@ use (
 	./middleware/fiber3
 	./middleware/gin
 	./middleware/gozero
+	./middleware/hertz
 	./middleware/httprouter
+	./middleware/kratos
 	./rpc/connect
 	./rpc/gqlgen
 	./rpc/grpc

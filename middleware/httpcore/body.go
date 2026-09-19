@@ -41,6 +41,10 @@ func (c *Core) CapturesBody(r Request) bool {
 	return bodyTypeAllowed(c.cfg.bodyTypes, r.Header("Content-Type"))
 }
 
+// EchoesRequestID reports whether the adapter echoes the request id into the response,
+// which an adapter that does not use NetHTTP reads before it writes the response.
+func (c *Core) EchoesRequestID() bool { return c.cfg.echoRequestID }
+
 // ReadBody reads at most MaxBody bytes of a body, and returns them with a reader that
 // carries every byte, so the handler still sees the whole body.
 //
