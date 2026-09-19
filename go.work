@@ -15,6 +15,7 @@ use (
 	./cmd/wlog
 	./examples
 	./examples/lambda
+	./log/logr
 	./log/logrus
 	./log/zap
 	./log/zerolog
