@@ -33,6 +33,7 @@ use (
 	./rpc/twirp
 	./store/gorm
 	./store/pgx
+	./store/redis
 	./store/sql/drivertest
 	./tools
 	./trace/otel
