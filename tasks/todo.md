@@ -149,7 +149,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 12-A-3 http-fiber and http-fiber3
 - [x] 12-A-4 rpc-grpc
 - [x] 12-A-5 http-httprouter and http-gozero
-- [ ] 12-A-6 rpc-connect
+- [x] 12-A-6 rpc-connect
 - [ ] 12-A-7 rpc-gqlgen
 - [ ] 12-A-8 http-hertz and http-kratos
 - [ ] 12-A-9 http-huma and rpc-twirp
