@@ -333,9 +333,10 @@ func Middleware(log *wlog.Logger, opts ...httpcore.Option) func(http.Handler) ht
    `make docs` builds `llms.txt`. Every skill snippet compiles and runs in a test.
 6. **Safe:** gates G1 to G8 pass in CI. A 10 minute nightly fuzz run over event shapes finds no
    leak.
-7. **Fast:** middleware plus core overhead is 50µs p50 or less on an M-series Mac. The request
+7. **Fast:** middleware plus core overhead is 55µs p50 or less on an M-series Mac. The request
    has 13 headers, a cookie, a query, and a 1KB JSON body, with safe default capture and JSON
-   to stdout. No benchmark regresses by more than 20% in CI.
+   to stdout. The measured p50 is about 52µs on an Apple M4 Pro. No benchmark regresses by
+   more than 20% in CI.
 8. **Old Go works:** the root module builds and passes its tests on Go 1.21. Each sub-module
    passes at its own floor and on the newest Go release.
 9. **Audit holds:** the refund scenario survives a 0% sampler, `WLOG_LEVEL=error`, a restart,

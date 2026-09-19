@@ -80,13 +80,13 @@ BenchmarkEmit_WithMeasurer-12    	   42961	     27866 ns/op	   17230 B/op	     2
 BenchmarkEmit_WithMeasurer-12    	   43381	     27769 ns/op	   17252 B/op	     237 allocs/op
 
 pkg: github.com/jeremygprawira/wlog/middleware/httpcore
-BenchmarkMiddleware_Realistic-12    	   22143	     53626 ns/op	   44668 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   22359	     53591 ns/op	   44641 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   22550	     53986 ns/op	   44698 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   22273	     54182 ns/op	   44725 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   21589	     54494 ns/op	   44735 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   22693	     52930 ns/op	   44660 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   22960	     52964 ns/op	   44712 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   23034	     52244 ns/op	   44655 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   23073	     52767 ns/op	   44648 B/op	     557 allocs/op
-BenchmarkMiddleware_Realistic-12    	   23200	     51708 ns/op	   44657 B/op	     557 allocs/op
+BenchmarkMiddleware_Realistic-12    	   22914	     52234 ns/op	   45215 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   22954	     52508 ns/op	   45198 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   22917	     51654 ns/op	   45195 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   22792	     51800 ns/op	   45223 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   23079	     52022 ns/op	   45175 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   22876	     52108 ns/op	   45226 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   23032	     52114 ns/op	   45169 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   23023	     51577 ns/op	   45239 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   23242	     51845 ns/op	   45214 B/op	     580 allocs/op
+BenchmarkMiddleware_Realistic-12    	   23206	     51551 ns/op	   45251 B/op	     580 allocs/op

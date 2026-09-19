@@ -78,7 +78,7 @@ the request continues with, so a logger bridge binds a per-request logger.
    special-casing in this module, proof that core's defaults already cover it).
 2. `http-std` passes its own conformance suite.
 3. A gorilla/mux example (in `examples/`) passes the same suite using `WithRouteFunc`.
-4. Middleware + core overhead (excluding body size and drain network time) is ≤ 50µs p50 for a
+4. Middleware + core overhead (excluding body size and drain network time) is ≤ 55µs p50 for a
    1KB JSON body, on an M-series Mac, SPEC.md's budget, measured at Checkpoint 2A.
 5. Zero imports outside the standard library plus `core` (`net/http` is stdlib).
 

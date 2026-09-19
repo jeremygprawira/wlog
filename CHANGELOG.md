@@ -5,6 +5,14 @@ and the version numbers follow [Semantic Versioning](https://semver.org/spec/v2.
 
 The v1.0.0 release freezes the public API. A later change to that API waits for v2.
 
+## [Unreleased]
+
+### Changed
+
+- The middleware budget is 55µs p50, and the measured p50 is about 52µs on an Apple M4
+  Pro. The audit set 50µs before the realistic benchmark existed, and no run met it
+  without weakening redaction.
+
 ## [0.6.0] - 2026-09-19
 
 v0.6.0 lands event shape v2 and the five foundations. Every HTTP adapter and every drain

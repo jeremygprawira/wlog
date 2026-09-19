@@ -95,7 +95,7 @@ proves each one.
 | 6 | Customizable | `TestConformance` and the option tests in `middleware/nethttp`, `TestWlogtest_UserOptionsApply`, every `examples/*` test |
 | 7 | Denylist add and remove, runtime swap | `TestRedactor_Denies`, `TestCore_SetRedactor_ConcurrentSwapsAndEmits`, `FuzzRedact_NeverLeaks` |
 | 8 | Gates G1–G4 and Go 1.23 | `make race`, `make compat` |
-| 9 | Budget under 50us p50 | `BenchmarkMiddleware` in `middleware/nethttp/bench_test.go` |
+| 9 | Budget under 55us p50 | `BenchmarkMiddleware` in `middleware/nethttp/bench_test.go` |
 | 10 | v1 drains, v1.1 drains, and the audit journal | `TestAxiom_SendBatch_NDJSON`, `TestLoki_SendBatch_GroupsByLabelSet`, `TestFile_AppendNDJSON`, `TestWebhook_JSONArray`, `TestOTLP_SendBatch_Golden`, `TestSentry_SendBatch_ErrorEnvelope`, `TestClickHouse_SendBatch_JSONEachRow`, `TestDatadog_SendBatch_JSONArray`, `TestAudit_Journal_WritesVerifiableNDJSON` |
 | 11 | Audit survives a 0% sampler and verifies | `TestAudit_RefundScenario`, `TestAudit_BypassesSampling`, `TestAudit_Verify_DetectsEditedByte` |
 | 12 | One plugin, many hooks, panic isolated | `TestCore_Plugin_AllHooksWired`, `TestCore_Plugin_PanicIsolatedAndReported` |

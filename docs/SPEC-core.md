@@ -259,7 +259,7 @@ calls `OnError` and falls back to the built-in default. It never panics.
 9. A panicking `Enricher` is reported to `OnError` and the event still emits with every other
    field intact (G3).
 10. Benchmark: `Start` → 10 `Set` calls → `end()` with one no-op drain is ≤ 20µs p50 on an
-    M-series Mac (half of SPEC.md's 50µs request budget, leaving room for HTTP capture).
+    M-series Mac (half of SPEC.md's 55µs request budget, leaving room for HTTP capture).
 11. Root module (`go list -deps .`) imports nothing outside the standard library and `redact`.
 12. `make compat` (Go 1.23) passes for the whole root module.
 

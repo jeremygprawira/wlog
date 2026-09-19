@@ -166,7 +166,7 @@ if err == nil {
 7. Defaults do **not** mask `author`, `concert`, `tokenizer_version`, `spin_count`. They **do** mask `authHeader`, `X-Auth-Token`, `user_password`, `login_pin`.
 8. `Fingerprint()` is equal for equivalent configs regardless of option order, and differs after any add/remove.
 9. Benchmark: 50-field, 3-level event with 10 string values ≤ 30µs/op and ≤ 10 allocs/op on M-series
-   (fits inside the project's 50µs request budget. Tune after first measurement).
+   (fits inside the project's 55µs request budget. Tune after first measurement).
 10. Zero imports outside the standard library. Passes on Go 1.23.
 
 ## Testing

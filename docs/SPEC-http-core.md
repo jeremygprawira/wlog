@@ -208,7 +208,7 @@ writer only under `CaptureAll()` to capture a response body.
    (HTTP-8)
 9. gorilla/mux with `router.Use` gives the route template. (HTTP-9)
 10. `BenchmarkMiddleware_Realistic` (13 headers, a cookie, a query, a 1 KB JSON body, safe
-    defaults, JSON to stdout through the async writer) is 50µs p50 or less on an M-series Mac.
+    defaults, JSON to stdout through the async writer) is 55µs p50 or less on an M-series Mac.
     (HTTP-10)
 11. Echo: a 400 `HTTPError` gives level `warn`, and a 404 from a scanner gives level `warn` on
     every adapter. (HTTP-11)

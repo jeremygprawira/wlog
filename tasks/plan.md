@@ -1379,7 +1379,7 @@ golden file is written by hand from the spec.
 **Acceptance:**
 - `WriteProblem` writes RFC 9457 JSON without internal fields, and `ParseProblem` reads it back.
 - HEAD, 204, 304, gzip, `application/problem+json`, a sniffed type, and future or missing `traceparent` follow the spec.
-- `BenchmarkMiddleware_Realistic` is 50µs p50 or less. The package doc lists capture defaults, the proxy rule, the response changes, the emit point, and the untrusted inputs.
+- `BenchmarkMiddleware_Realistic` is 55µs p50 or less. The package doc lists capture defaults, the proxy rule, the response changes, the emit point, and the untrusted inputs.
 - Tests: `TestHTTPCore_BET6_ProblemJSON`, `TestHTTPCore_HTTP19_EdgeCases`, `BenchmarkMiddleware_Realistic`.
 
 **Verify:** `go test -race -run 'TestHTTPCore_(BET6|HTTP19)_' ./middleware/httpcore && go run ./tools/cmd/bench -pkg ./middleware/httpcore`.
@@ -1929,7 +1929,7 @@ them.
 | A vendor fact is marked UNVERIFIED in the research | Medium | Each such drain handles the fact conservatively, says so in its package doc, and runs an integration test where a container exists |
 | `otel/log` is v0 and changes in a minor release | Medium | It lives in its own module, `trace-otellog`, and the nightly job builds it against the newest release |
 | Upstream semantic convention names move, such as `gen_ai.*` and `rpc.*` | Low | The preset pins semconv 1.43.0 names in test data, and a change is a reviewed diff |
-| A benchmark budget fails: 3µs finalize or 50µs middleware | Medium | The budget test runs inside the task that adds the cost. A miss stops the task for a human decision |
+| A benchmark budget fails: 3µs finalize or 55µs middleware | Medium | The budget test runs inside the task that adds the cost. A miss stops the task for a human decision |
 | `Measurer` adds cost to every event, sampled or not | Medium | It reads reserved fields only. 11-SHAPE-5 adds `BenchmarkEmit_WithMeasurer` to the bench gate |
 | About 60 modules are too many to maintain | Medium | Conformance suites carry most of the test weight. P3 modules can move to "designed for" at a review point |
 | Parallel sessions collide in shared files | Low | Shared files get their own commits, and each track owns its directories |

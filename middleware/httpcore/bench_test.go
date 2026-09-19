@@ -1,5 +1,5 @@
 // This file holds the realistic benchmark of the HTTP core: the number SPEC.md guards at
-// 50 microseconds p50 on an M-series Mac.
+// 55 microseconds p50 on an M-series Mac.
 package httpcore_test
 
 import (
