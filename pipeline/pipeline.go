@@ -43,6 +43,7 @@ type wrapped struct {
 	dropped  atomic.Int64
 	retries  atomic.Int64
 	batches  atomic.Int64
+	wake     chan struct{}
 	closeSig chan struct{}
 	done     chan struct{}
 }
@@ -58,6 +59,7 @@ func Wrap(next Sender, opts ...Option) wlog.Drain {
 	w := &wrapped{
 		next:     next,
 		cfg:      c,
+		wake:     make(chan struct{}, 1),
 		closeSig: make(chan struct{}),
 		done:     make(chan struct{}),
 	}
@@ -92,6 +94,10 @@ func (w *wrapped) Send(ctx context.Context, event map[string]any) {
 	w.buf = append(w.buf, event)
 	w.mu.Unlock()
 
+	// Wake the worker, so it recomputes when this event is due instead of sleeping for
+	// the rest of the old batch interval.
+	w.signal()
+
 	if dropped != nil {
 		// The report runs after the unlock, so a callback may call Send again
 		// without deadlocking on this lock, and the counter says an event was lost.
@@ -125,19 +131,36 @@ func levelOf(event map[string]any) string {
 	return level
 }
 
+// signal wakes the worker without blocking. A send that arrives while the worker is
+// busy leaves one token, so the worker looks again when it returns.
+func (w *wrapped) signal() {
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
+}
+
 func (w *wrapped) run() {
 	timer := time.NewTimer(w.nextWake())
 	defer timer.Stop()
 	for {
 		select {
+		case <-w.wake:
+			// Stop the old timer, so the reset below uses the newest oldest-time.
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 		case <-timer.C:
-			w.flushIfReady()
-			timer.Reset(w.nextWake())
 		case <-w.closeSig:
 			w.flushAll(context.Background())
 			close(w.done)
 			return
 		}
+		w.flushIfReady()
+		timer.Reset(w.nextWake())
 	}
 }
 
