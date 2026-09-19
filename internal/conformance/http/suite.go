@@ -13,6 +13,7 @@ package httpconformance
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,8 +62,8 @@ type TB interface {
 	Run(name string, fn func(TB)) bool
 }
 
-// Scenario is one request and the event it must produce. Golden holds the normalized
-// event, hand-written from the tables of SPEC-http-core.md.
+// Scenario is one request and the event it must produce. The golden event of a scenario
+// is a hand-written file under testdata, named after the scenario.
 type Scenario struct {
 	Name     string
 	Method   string
@@ -71,7 +72,6 @@ type Scenario struct {
 	Body     string
 	Handler  func(Routes) http.HandlerFunc
 	Settings Settings
-	Golden   map[string]any
 	Secret   string // a value that must never appear in the recorded output
 	NoEvents bool   // true for a scenario that starts no event at all
 }
@@ -122,8 +122,13 @@ func runScenario(t TB, factory Factory, scenario Scenario) {
 		t.Errorf("%s: events = %d, want 1", scenario.Name, len(events))
 		return
 	}
+	want, err := golden(scenario.Name)
+	if err != nil {
+		t.Errorf("%s: %v", scenario.Name, err)
+		return
+	}
 	got := conformance.Normalize(events[0])
-	if diff := conformance.Diff(scenario.Golden, got); diff != "" {
+	if diff := conformance.Diff(conformance.Normalize(want), got); diff != "" {
 		t.Errorf("%s: the event differs from the golden:\n%s", scenario.Name, diff)
 	}
 	if scenario.Secret != "" {
@@ -222,70 +227,48 @@ func routes() Routes {
 	}
 }
 
-// httpFields returns the http group of one golden event.
-func httpFields(golden map[string]any) map[string]any {
-	fields, _ := golden["http"].(map[string]any)
-	return fields
-}
+// goldens holds one hand-written golden event per scenario, named after the scenario.
+// tools/cmd/schema validates every file against schema/event.v1.json.
+//
+//go:embed testdata/*.json
+var goldens embed.FS
 
-// base is the event a matched route starts from, before a scenario adds its own fields.
-// The caller passes the level and the outcome the scenario expects.
-func base(method, operation, route, path string, status int, level, outcome string) map[string]any {
-	return map[string]any{
-		"level": level, "kind": "request", "outcome": outcome, "operation": operation,
-		"summary": fmt.Sprintf("%s %s %d in {d}", method, routeName(route), status),
-		"http": map[string]any{
-			"method": method, "route": route, "path": path,
-			"protocol": "HTTP/1.1", "scheme": "http", "host": "example.com", "status": status,
-			"bytes_in": 0, "bytes_out": 0, "client_ip": "192.0.2.1", "user_agent": "",
-		},
-		"trace": map[string]any{"request_id": requestID},
-		"wlog":  map[string]any{"schema_version": 2},
+// golden returns the hand-written golden event of one scenario.
+func golden(name string) (map[string]any, error) {
+	body, err := goldens.ReadFile("testdata/" + name + ".json")
+	if err != nil {
+		return nil, fmt.Errorf("load the golden of %s: %w", name, err)
 	}
-}
-
-// routeName returns the route text a summary carries, which is unmatched for an empty
-// route.
-func routeName(route string) string {
-	if route == "" {
-		return "unmatched"
+	event := map[string]any{}
+	if err := json.Unmarshal(body, &event); err != nil {
+		return nil, fmt.Errorf("parse the golden of %s: %w", name, err)
 	}
-	return route
+	return event, nil
 }
 
 // scenarios is every HTTP scenario of the suite. The golden of each one is hand-written
-// from the tables of SPEC-http-core.md and the summary rules of SPEC-core-v2.md.
+// from the tables of SPEC-http-core.md and the summary rules of SPEC-core-v2.md, and it
+// lives under testdata.
 var scenarios = []Scenario{
 	{
 		Name: "OKFields", Method: http.MethodGet, Path: "/ok",
 		Handler: func(r Routes) http.HandlerFunc { return r.OK },
-		Golden:  base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success"),
 	},
 	{
 		Name: "RouteTemplate", Method: http.MethodPost, Path: "/orders/42",
 		Handler: func(r Routes) http.HandlerFunc { return r.Order },
-		Golden:  base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success"),
 	},
 	{
 		Name: "UnmatchedRoute", Method: http.MethodGet, Path: "/nope",
 		Handler: func(r Routes) http.HandlerFunc { return r.OK },
-		Golden: func() map[string]any {
-			golden := base("GET", "GET unmatched", "", "/nope", http.StatusNotFound, "warn", "success")
-			// The mux answers an unmatched path itself, and its 404 carries a body.
-			httpFields(golden)["bytes_out"] = 19
-			httpFields(golden)["response_headers"] = map[string]any{"content-type": "text/plain; charset=utf-8"}
-			return golden
-		}(),
 	},
 	{
 		Name: "ServerErrorLevel", Method: http.MethodGet, Path: "/status/503",
 		Handler: func(r Routes) http.HandlerFunc { return r.Status },
-		Golden:  base("GET", "GET /status/{code}", "/status/{code}", "/status/503", http.StatusServiceUnavailable, "error", "error"),
 	},
 	{
 		Name: "ClientErrorLevel", Method: http.MethodGet, Path: "/status/429",
 		Handler: func(r Routes) http.HandlerFunc { return r.Status },
-		Golden:  base("GET", "GET /status/{code}", "/status/{code}", "/status/429", http.StatusTooManyRequests, "warn", "success"),
 	},
 	{
 		Name: "HandlerField", Method: http.MethodGet, Path: "/ok",
@@ -295,13 +278,6 @@ var scenarios = []Scenario{
 				w.WriteHeader(http.StatusOK)
 			}
 		},
-		Golden: func() map[string]any {
-			golden := base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success")
-			// The summary names up to two user keys that end in _id.
-			golden["order_id"] = "A-1"
-			golden["summary"] = "GET /ok 200 in {d} (order_id=A-1)"
-			return golden
-		}(),
 	},
 	{
 		Name: "SkippedPath", Method: http.MethodGet, Path: "/skip",
@@ -312,27 +288,12 @@ var scenarios = []Scenario{
 		Name: "SafeDefaults", Method: http.MethodGet, Path: "/ok?page=2",
 		Headers: map[string]string{"Accept": "application/json", "Authorization": "Bearer s3cret", "Cookie": "sid=abc"},
 		Handler: func(r Routes) http.HandlerFunc { return r.OK },
-		Golden: func() map[string]any {
-			golden := base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success")
-			fields := httpFields(golden)
-			fields["request_headers"] = map[string]any{"accept": "application/json"}
-			fields["request_query_keys"] = []any{"page"}
-			// The redactor masks the cookie-name field, because its key holds the word
-			// cookie. The names are still captured, and the values never are.
-			fields["request_cookie_names"] = "[REDACTED]"
-			return golden
-		}(),
-		Secret: "s3cret",
+		Secret:  "s3cret",
 	},
 	{
 		Name: "UserAgent", Method: http.MethodGet, Path: "/ok",
 		Headers: map[string]string{"User-Agent": "conformance/1.0"},
 		Handler: func(r Routes) http.HandlerFunc { return r.OK },
-		Golden: func() map[string]any {
-			golden := base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success")
-			httpFields(golden)["user_agent"] = "conformance/1.0"
-			return golden
-		}(),
 	},
 	{
 		Name: "JSONBody", Method: http.MethodPost, Path: "/orders/42",
@@ -340,15 +301,6 @@ var scenarios = []Scenario{
 		Body:     `{"order_id":"A-1"}`,
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.Order },
-		Golden: func() map[string]any {
-			golden := base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success")
-			fields := httpFields(golden)
-			fields["bytes_in"] = 18
-			fields["request_body"] = map[string]any{"order_id": "A-1"}
-			fields["request_headers"] = map[string]any{"content-type": "application/json", "x-request-id": requestID}
-			fields["response_headers"] = map[string]any{"x-request-id": requestID}
-			return golden
-		}(),
 	},
 	{
 		Name: "ArrayBody", Method: http.MethodPost, Path: "/orders/42",
@@ -356,16 +308,7 @@ var scenarios = []Scenario{
 		Body:     `[{"password":"hunter2"}]`,
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.Order },
-		Golden: func() map[string]any {
-			golden := base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success")
-			fields := httpFields(golden)
-			fields["bytes_in"] = 24
-			fields["request_body"] = []any{map[string]any{"password": "[REDACTED]"}}
-			fields["request_headers"] = map[string]any{"content-type": "application/json", "x-request-id": requestID}
-			fields["response_headers"] = map[string]any{"x-request-id": requestID}
-			return golden
-		}(),
-		Secret: "hunter2",
+		Secret:   "hunter2",
 	},
 	{
 		Name: "CutBody", Method: http.MethodPost, Path: "/orders/42",
@@ -373,58 +316,25 @@ var scenarios = []Scenario{
 		Body:     `{"pad":"xxxxxxxxxx"}`,
 		Settings: Settings{CaptureAll: true, MaxBody: 8},
 		Handler:  func(r Routes) http.HandlerFunc { return r.Order },
-		Golden: func() map[string]any {
-			golden := base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success")
-			fields := httpFields(golden)
-			fields["bytes_in"] = 20
-			// A body cut at the cap becomes a marker, and its text is never kept.
-			fields["request_body"] = map[string]any{"truncated": true, "bytes": 8}
-			fields["request_headers"] = map[string]any{"content-type": "application/json", "x-request-id": requestID}
-			fields["response_headers"] = map[string]any{"x-request-id": requestID}
-			return golden
-		}(),
 	},
 	{
 		Name: "NoContent", Method: http.MethodGet, Path: "/status/204",
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.Status },
-		Golden: func() map[string]any {
-			golden := base("GET", "GET /status/{code}", "/status/{code}", "/status/204", http.StatusNoContent, "info", "success")
-			fields := httpFields(golden)
-			fields["request_headers"] = map[string]any{"x-request-id": requestID}
-			fields["response_headers"] = map[string]any{"x-request-id": requestID}
-			return golden
-		}(),
 	},
 	{
 		Name: "NotModified", Method: http.MethodGet, Path: "/status/304",
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.Status },
-		Golden: func() map[string]any {
-			golden := base("GET", "GET /status/{code}", "/status/{code}", "/status/304", http.StatusNotModified, "info", "success")
-			fields := httpFields(golden)
-			fields["request_headers"] = map[string]any{"x-request-id": requestID}
-			fields["response_headers"] = map[string]any{"x-request-id": requestID}
-			return golden
-		}(),
 	},
 	{
 		Name: "SpoofedForwardedFor", Method: http.MethodGet, Path: "/ok",
 		Headers: map[string]string{"X-Forwarded-For": "10.0.0.1, 192.0.2.7"},
 		Handler: func(r Routes) http.HandlerFunc { return r.OK },
-		Golden:  base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success"),
 	},
 	{
 		Name: "HeadCapturesNoBody", Method: http.MethodHead, Path: "/ok",
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.OK },
-		Golden: func() map[string]any {
-			golden := base("HEAD", "HEAD /ok", "/ok", "/ok", http.StatusOK, "info", "success")
-			// CaptureAll keeps every header, and the middleware echoes the request id.
-			fields := httpFields(golden)
-			fields["request_headers"] = map[string]any{"x-request-id": requestID}
-			fields["response_headers"] = map[string]any{"x-request-id": requestID}
-			return golden
-		}(),
 	},
 }

@@ -1,5 +1,6 @@
 // Command schema validates every golden document of the repository against the JSON
-// Schema of the shape it claims to be.
+// Schema of the shape it claims to be. It covers the event goldens of the shape suite, the
+// golden of every conformance scenario, and the map report.
 //
 // A schema that nothing checks is a document nobody reads, and a golden that drifts from
 // its schema is a promise broken quietly. This command compiles the schemas of the schema
@@ -26,6 +27,9 @@ import (
 
 // eventGoldens is the directory that holds one event golden per kind.
 const eventGoldens = "testdata/shape"
+
+// suiteGoldens is the directory that holds one golden event per conformance scenario.
+const suiteGoldens = "internal/conformance/http/testdata"
 
 // mapGoldens lists the documents that follow the map report shape.
 var mapGoldens = []string{"wlog.map.json", "cmd/wlog/report/testdata/map_v2.json"}
@@ -84,9 +88,17 @@ func check(root string) ([]string, error) {
 		return nil, err
 	}
 	sort.Strings(kinds)
+	suite, err := filepath.Glob(filepath.Join(root, suiteGoldens, "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(suite)
 
-	documents := make([]document, 0, len(kinds)+len(mapGoldens))
+	documents := make([]document, 0, len(kinds)+len(suite)+len(mapGoldens))
 	for _, path := range kinds {
+		documents = append(documents, document{path: path, schema: events})
+	}
+	for _, path := range suite {
 		documents = append(documents, document{path: path, schema: events})
 	}
 	for _, name := range mapGoldens {
