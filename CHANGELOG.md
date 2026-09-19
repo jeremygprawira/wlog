@@ -50,6 +50,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   resource and the attributes onto the log record.
 - `wlog.IsReservedKey` tells a reserved event key from a user key, which a preset and a
   drain need to apply the collision rule.
+- `middleware/httpcore` holds the framework-neutral HTTP core that every wlog HTTP
+  adapter drives. One `Core` owns the operation name, the level, the route rules, and the
+  emit point, and an adapter passes what its framework knows.
 
 ### Changed
 

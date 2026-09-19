@@ -15,5 +15,6 @@ github.com/jeremygprawira/wlog/drain/posthog
 github.com/jeremygprawira/wlog/drain/sentry
 github.com/jeremygprawira/wlog/internal/httpdrain
 github.com/jeremygprawira/wlog/llm
+github.com/jeremygprawira/wlog/middleware/httpcore
 github.com/jeremygprawira/wlog/middleware/nethttp
 github.com/jeremygprawira/wlog/wlogtest
