@@ -87,6 +87,8 @@ func PropagateTrace(on bool) Option                                        // de
   `status.Message()` gives `why`. `Help.Links[0].Url` gives `link`. `RetryInfo` and
   `BadRequest` give `fix`. `data` holds domain, metadata, field violations, and retry delay.
   `DebugInfo` is never read.
+- `Extractor()` returns the `wlog.ErrorExtractor` that reads a status and its details into
+  the event error. Configure it with `wlog.WithErrorExtractor`.
 - Floor: grpc v1.67.3, the newest on Go 1.21. The package doc says v1.83.2 is the first version
   with no known vulnerability.
 
@@ -148,8 +150,10 @@ func ClientHooks(opts ...Option) *twirp.ClientHooks
 
 1. Every HTTP router module passes the `http` suite. The huma module passes it together with the
    chi adapter.
-2. `rpc-grpc`, `rpc-connect`, and `rpc-twirp` pass the `work` suite on the server side and the
-   `calls` suite on the client side, with unary and streaming fixtures where the library has them.
+2. `rpc-grpc`, `rpc-connect`, and `rpc-twirp` run the `work` and `calls` scenarios with their own
+   fixtures, because those suites take a generic unit that an RPC library cannot build. Each
+   module proves the server fields and the client call record, with unary and streaming fixtures
+   where the library has them.
 3. A gRPC call with `ErrorInfo`, `Help`, `LocalizedMessage`, and `BadRequest` details gives an
    event with code, message, why, link, fix, and data per this spec.
 4. A Connect request with a malformed body produces one event with status 400 through the HTTP

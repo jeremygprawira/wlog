@@ -22,6 +22,7 @@ use (
 	./middleware/fiber
 	./middleware/fiber3
 	./middleware/gin
+	./rpc/grpc
 	./tools
 	./trace/otel
 )
