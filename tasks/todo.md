@@ -154,7 +154,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 12-A-8 http-hertz and http-kratos
 - [ ] 12-A-9 http-huma and rpc-twirp
 - [ ] 12-A-10 Recipes: rest-api and grpc-service
-- [ ] 12-B-1 sqlshape
+- [x] 12-B-1 sqlshape
 - [ ] 12-B-2 client-http
 - [ ] 12-B-3 store-sql
 - [ ] 12-B-4 store-pgx and store-gorm
