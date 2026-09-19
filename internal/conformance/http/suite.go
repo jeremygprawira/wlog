@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/jeremygprawira/wlog"
-	"github.com/jeremygprawira/wlog/drain/memory"
 	"github.com/jeremygprawira/wlog/internal/conformance"
 )
 
@@ -54,12 +53,7 @@ type Factory interface {
 
 // TB is the part of testing.T the suite uses, so a test can run the suite against a broken
 // adapter and read the failures it reports.
-type TB interface {
-	Helper()
-	Errorf(format string, args ...any)
-	Fatalf(format string, args ...any)
-	Run(name string, fn func(TB)) bool
-}
+type TB = conformance.TB
 
 // Scenario is one request and the event it must produce. The golden event of a scenario
 // is a hand-written file under testdata, named after the scenario.
@@ -90,8 +84,8 @@ func Run(t TB, factory Factory) {
 // runScenario serves one request and checks the event it produced.
 func runScenario(t TB, factory Factory, scenario Scenario) {
 	t.Helper()
-	rec := newRecorder()
-	handler := factory.Build(rec.logger(), routesFor(scenario), scenario.Settings)
+	rec := conformance.NewMemoryRecorder()
+	handler := factory.Build(rec.Logger(), routesFor(scenario), scenario.Settings)
 
 	// The request is built here, not by httptest.NewRequest, because that helper carries
 	// no context and the module keeps a Go 1.21 floor.
@@ -110,13 +104,13 @@ func runScenario(t TB, factory Factory, scenario Scenario) {
 	handler.ServeHTTP(response, req)
 
 	if scenario.NoEvents {
-		if count := len(rec.events()); count != 0 {
+		if count := len(rec.Events()); count != 0 {
 			t.Errorf("%s: events = %d, want none", scenario.Name, count)
 		}
 		return
 	}
 
-	events := rec.events()
+	events := rec.Events()
 	if len(events) != 1 {
 		t.Errorf("%s: events = %d, want 1", scenario.Name, len(events))
 		return
@@ -136,28 +130,6 @@ func runScenario(t TB, factory Factory, scenario Scenario) {
 		}
 	}
 }
-
-// recorder collects the events of one run.
-type recorder struct {
-	mem *memory.Memory
-}
-
-// newRecorder builds an empty recorder.
-func newRecorder() *recorder {
-	return &recorder{mem: memory.New(0)}
-}
-
-// logger builds the Logger of one scenario. It is silent, so a suite run prints nothing.
-func (r *recorder) logger() *wlog.Logger {
-	return wlog.New(
-		wlog.WithSilent(),
-		wlog.WithDrains(r.mem),
-		wlog.WithRedactFingerprint(false),
-	)
-}
-
-// events returns every event the run recorded.
-func (r *recorder) events() []map[string]any { return r.mem.Snapshot() }
 
 // routesFor returns the route table of one scenario, with the handler of the scenario in
 // the place of the route it drives.

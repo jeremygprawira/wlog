@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/drain/memory"
 )
 
 // Recorder is what a suite reads back: the events an adapter emitted, and the problems the
@@ -19,6 +20,38 @@ import (
 type Recorder interface {
 	Events() []map[string]any
 	Problems() []wlog.Problem
+}
+
+// MemoryRecorder collects the events of one suite run. It is backed by drain-memory, so
+// every suite reads the same nested maps a real drain receives.
+type MemoryRecorder struct {
+	mem *memory.Memory
+}
+
+// NewMemoryRecorder builds an empty recorder.
+func NewMemoryRecorder() *MemoryRecorder { return &MemoryRecorder{mem: memory.New(0)} }
+
+// Logger builds a silent Logger that writes into this recorder. The caller adds options,
+// such as a plugin, and a later option wins over a default when both set one field.
+func (r *MemoryRecorder) Logger(opts ...wlog.Option) *wlog.Logger {
+	all := append([]wlog.Option{
+		wlog.WithSilent(),
+		wlog.WithDrains(r.mem),
+		wlog.WithRedactFingerprint(false),
+	}, opts...)
+	return wlog.New(all...)
+}
+
+// Events returns every event the run recorded.
+func (r *MemoryRecorder) Events() []map[string]any { return r.mem.Snapshot() }
+
+// Last returns the most recent event, or nil when the run recorded none.
+func (r *MemoryRecorder) Last() map[string]any {
+	events := r.Events()
+	if len(events) == 0 {
+		return nil
+	}
+	return events[len(events)-1]
 }
 
 // normalizeKeys are the keys whose value changes between two runs of one scenario.
@@ -125,16 +158,16 @@ func Diff(want, got map[string]any) string {
 			lines = append(lines, fmt.Sprintf("- %s: want %v", key, wantValue))
 		case !inWant && inGot:
 			lines = append(lines, fmt.Sprintf("+ %s: got %v", key, gotValue))
-		case !equalValue(wantValue, gotValue):
+		case !Equal(wantValue, gotValue):
 			lines = append(lines, fmt.Sprintf("! %s: want %v, got %v", key, wantValue, gotValue))
 		}
 	}
 	return strings.Join(lines, "\n")
 }
 
-// equalValue reports whether two values are the same. A number compares by value, so the
-// int64 an event carries equals the int a golden holds.
-func equalValue(want, got any) bool {
+// Equal reports whether two values are the same. A number compares by value, so the int64
+// an event carries equals the int a scenario names.
+func Equal(want, got any) bool {
 	if reflect.DeepEqual(want, got) {
 		return true
 	}
