@@ -7,6 +7,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -81,8 +82,12 @@ func load(dir string, patterns ...string) ([]*packages.Package, error) {
 
 // loadConfig is the mode every load shares. dir becomes Config.Dir, or the process's own
 // working directory when dir is empty.
+//
+// A non-empty dir also loads with GOWORK=off, because a workspace above dir would
+// otherwise name a workspace that holds no module for dir. The target then resolves
+// through its own go.mod.
 func loadConfig(dir string) *packages.Config {
-	return &packages.Config{
+	cfg := &packages.Config{
 		Dir: dir,
 		// NeedImports gives every package its direct imports; NeedDeps is what would add their
 		// syntax, and it is the setting the memory budget cannot afford.
@@ -90,6 +95,24 @@ func loadConfig(dir string) *packages.Config {
 			packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo |
 			packages.NeedModule,
 	}
+	if dir != "" {
+		cfg.Env = envWithoutWork()
+	}
+	return cfg
+}
+
+// envWithoutWork returns the process environment with GOWORK off, so the go command
+// resolves the loaded directory through its own go.mod and not through a workspace above
+// it.
+func envWithoutWork() []string {
+	env := os.Environ()
+	out := make([]string, 0, len(env)+1)
+	for _, item := range env {
+		if !strings.HasPrefix(item, "GOWORK=") {
+			out = append(out, item)
+		}
+	}
+	return append(out, "GOWORK=off")
 }
 
 // loadLocal loads the module's own packages that the named ones reach, with syntax, so a handler
