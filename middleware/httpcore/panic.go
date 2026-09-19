@@ -24,6 +24,10 @@ const (
 // always continues, whatever the policy says, because net/http reads it.
 func PanicPolicy(p Policy) Option { return func(c *config) { c.panicPolicy = p } }
 
+// PanicPolicy returns the policy of this Core. An adapter whose framework does not
+// recover applies the policy itself, because net/http is not the one that sees the panic.
+func (c *Core) PanicPolicy() Policy { return c.cfg.panicPolicy }
+
 // panicError carries a recovered panic value and its stack, which the default extractor
 // reads through the Stack method.
 type panicError struct {

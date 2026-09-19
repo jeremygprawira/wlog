@@ -19,6 +19,8 @@ use (
 	./log/zerolog
 	./middleware/chi
 	./middleware/fasthttp
+	./middleware/fiber
+	./middleware/fiber3
 	./middleware/gin
 	./tools
 	./trace/otel

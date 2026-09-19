@@ -112,6 +112,17 @@ func TestHTTPCore_HTTP6_PanicPolicies(t *testing.T) {
 	}
 }
 
+// TestHTTPCore_HTTP6_PanicPolicyAccessor proves that an adapter reads back the panic
+// policy it configured, because a framework without recovery applies the policy itself.
+func TestHTTPCore_HTTP6_PanicPolicyAccessor(t *testing.T) {
+	if got := httpcore.New(nil, httpcore.PanicPolicy(httpcore.Repanic)).PanicPolicy(); got != httpcore.Repanic {
+		t.Errorf("PanicPolicy() = %v, want Repanic", got)
+	}
+	if got := httpcore.New(nil).PanicPolicy(); got != httpcore.Recover500 {
+		t.Errorf("the default PanicPolicy() = %v, want Recover500", got)
+	}
+}
+
 // TestHTTPCore_HTTP6_AbortHandlerRepanics proves that a handler which panics with
 // http.ErrAbortHandler still emits its event, and that the panic reaches net/http.
 func TestHTTPCore_HTTP6_AbortHandlerRepanics(t *testing.T) {

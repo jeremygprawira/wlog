@@ -39,7 +39,7 @@ has a one-line setup. An adapter that adds to an open event reads the Logger fro
 | `http-chi` | `r.Use(Middleware(log))`, before any route. `Setup(r chi.Router)` | `chi.RouteContext(ctx).RoutePattern()` after `next`, read before return. A `/*` pattern on 404 or 405 becomes `""` | `NetHTTP` writer | chi v5.0.0, Go 1.21 |
 | `http-fasthttp` | `Middleware(log)(next fasthttp.RequestHandler)`. Exports `RequestView` and `ResponseView` over `*fasthttp.RequestCtx` for the Fiber modules | `RouteFunc(func(*fasthttp.RequestCtx) string)`, none by default | Final status and body after `next`. Unknown size for a body stream. Emits before return | fasthttp v1.63.0 (iterators), Go 1.23 |
 | `http-fiber` | `app.Use(Middleware(log))` first. `Setup(app *fiber.App)` | Before `Next`, keeps its own route pointer. After `Next`, a different `c.Route()` pointer means an endpoint matched. `.Path` gives the template | A `Next` error goes to `app.ErrorHandler(c, err)`, then the middleware returns nil, like Fiber's logger. `c.SetUserContext` carries the context | fiber v2.20.0 with fasthttp v1.63.0, Go 1.23 |
-| `http-fiber3` | same as `http-fiber`. With `SkipUnmatchedRoutes` set, 404s skip middleware, so `Setup` reports a problem | `c.FullPath()` with `c.Matched()` after `Next` | same, with `c.SetContext` | fiber v3.0.0, Go 1.25 |
+| `http-fiber3` | same as `http-fiber`. With `SkipUnmatchedRoutes` set, 404s skip middleware, so `Setup` reports a problem | `c.FullPath()` with `c.Matched()` after `Next` | same, with `c.SetContext` | fiber v3.5.0, Go 1.25 |
 | `http-httprouter` | `wloghttprouter.New(log, *httprouter.Router)` returns a wrapper whose `Handle`, `Handler`, and method helpers record the template. Its `ServeHTTP` covers redirects, 404, 405, and OPTIONS | the registered path | `NetHTTP` writer | httprouter v1.3.0, Go 1.21 |
 | `http-gozero` | `rest.WithRouter(RouterOption(log, inner))`, passed before `rest.WithNotFoundHandler`. It records each template in `Handle` and wraps `ServeHTTP` | the path given to `Handle` | Sees Recover 500, Timeout 503, 404, 405, and native rejections. A handler still running after a timeout adds nothing, because the event already emitted | go-zero v1.3.0, Go 1.21 |
 | `http-hertz` | `server.WithTracer(Tracer(log))` for every request, including redirects and 400s. `Setup` also adds `Middleware(log)` for panics and `c.Errors` | `ctx.FullPath()` in `Finish` | `ctx.Response.StatusCode()` in `Finish`, after Hertz writes default bodies. Context passes through `ctx.Next(newCtx)` | hertz v0.4.0, Go 1.21 |
@@ -51,6 +51,7 @@ has a one-line setup. An adapter that adds to an open event reads the Logger fro
 - fasthttp family: `Immutable` off means every string is a view over a reused buffer. The views
   call `strings.Clone` on each value.
 - huma autopatch sub-requests find the open event and add to it. They start no new event.
+- `SkipUnmatchedRoutes` arrives in fiber v3.5.0, so `http-fiber3` has that library floor.
 - A Kratos gRPC server takes the `rpc-grpc` interceptors through the Kratos `transport/grpc`
   options `UnaryInterceptor` and `StreamInterceptor`. They run inside the Kratos interceptor, so
   they see `transport.FromServerContext`.
