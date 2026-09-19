@@ -26,6 +26,10 @@ func TestConformance_HTTP22_NormalizeRemovesRunValues(t *testing.T) {
 		},
 		"http": map[string]any{"host": "127.0.0.1:54321", "status": 200},
 		"job":  map[string]any{"lag_ms": 12.5},
+		"error": map[string]any{
+			"code": "INTERNAL", "message": "panic: boom",
+			"caller": "exchange.go:108", "stack": "goroutine 20 [running]:\n...",
+		},
 	}
 
 	got := conformance.Normalize(event)
@@ -53,6 +57,15 @@ func TestConformance_HTTP22_NormalizeRemovesRunValues(t *testing.T) {
 	}
 	if job, _ := got["job"].(map[string]any); job["lag_ms"] != nil {
 		t.Errorf("Normalize kept a nested _ms key: %v", got["job"])
+	}
+	errorGroup, _ := got["error"].(map[string]any)
+	for _, key := range []string{"caller", "stack"} {
+		if _, present := errorGroup[key]; present {
+			t.Errorf("Normalize kept error.%s: %v", key, errorGroup)
+		}
+	}
+	if errorGroup["code"] != "INTERNAL" || errorGroup["message"] != "panic: boom" {
+		t.Errorf("Normalize dropped a stable error field: %v", errorGroup)
 	}
 	if got["summary"] != "GET /ok 200 in {d}" {
 		t.Errorf("summary = %q, want the duration text replaced", got["summary"])

@@ -44,6 +44,10 @@ func Normalize(event map[string]any) map[string]any {
 	return out
 }
 
+// runValues are the keys of an error object that change between two runs. The stack holds
+// absolute paths and line numbers, and the caller names one line of one file.
+var runValues = map[string]bool{"stack": true, "caller": true}
+
 // normalizeValue copies one value, and drops what a later run would change.
 func normalizeValue(value any, parent string) any {
 	switch typed := value.(type) {
@@ -51,6 +55,9 @@ func normalizeValue(value any, parent string) any {
 		out := make(map[string]any, len(typed))
 		for key, child := range typed {
 			if normalizeKeys[key] || strings.HasSuffix(key, "_ms") {
+				continue
+			}
+			if (parent == "error" || parent == "errors") && runValues[key] {
 				continue
 			}
 			if parent == "service" && key == "instance" {
