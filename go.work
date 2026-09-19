@@ -11,6 +11,7 @@ use ./middleware/echo
 use ./middleware/echo5
 
 use (
+	./client/aws
 	./cmd/wlog
 	./examples
 	./examples/lambda
@@ -32,6 +33,7 @@ use (
 	./rpc/grpc
 	./rpc/twirp
 	./store/gorm
+	./store/mongo
 	./store/pgx
 	./store/redis
 	./store/sql/drivertest
