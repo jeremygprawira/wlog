@@ -31,6 +31,7 @@ use (
 	./rpc/gqlgen
 	./rpc/grpc
 	./rpc/twirp
+	./store/sql/drivertest
 	./tools
 	./trace/otel
 )
