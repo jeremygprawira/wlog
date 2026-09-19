@@ -118,11 +118,36 @@ func Diff(want, got map[string]any) string {
 			lines = append(lines, fmt.Sprintf("- %s: want %v", key, wantValue))
 		case !inWant && inGot:
 			lines = append(lines, fmt.Sprintf("+ %s: got %v", key, gotValue))
-		case !reflect.DeepEqual(wantValue, gotValue):
+		case !equalValue(wantValue, gotValue):
 			lines = append(lines, fmt.Sprintf("! %s: want %v, got %v", key, wantValue, gotValue))
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// equalValue reports whether two values are the same. A number compares by value, so the
+// int64 an event carries equals the int a golden holds.
+func equalValue(want, got any) bool {
+	if reflect.DeepEqual(want, got) {
+		return true
+	}
+	wantNumber, wantIsNumber := numberOf(want)
+	gotNumber, gotIsNumber := numberOf(got)
+	return wantIsNumber && gotIsNumber && wantNumber == gotNumber
+}
+
+// numberOf reads a value as a number, and reports whether it is one.
+func numberOf(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	default:
+		return 0, false
+	}
 }
 
 // flattenEvent returns every leaf of an event under its dotted path, so a difference names

@@ -58,6 +58,9 @@ func (c *Core) Start(ctx context.Context, r Request) (context.Context, *Exchange
 		return ctx, x
 	}
 	ctx, end := wlog.Start(c.log.WithContext(ctx), operation)
+	// The event kind names the shape, and it decides the summary template. A request is
+	// its own kind, so the summary names the status and not the outcome.
+	wlog.Set(ctx, "kind", "request")
 	ctx = propagate.Extract(ctx, c.requestIDCarrier(r))
 	x := &Exchange{core: c, ctx: ctx, end: end, owned: true, method: r.Method(), request: r}
 	x.writeRequest(r)
