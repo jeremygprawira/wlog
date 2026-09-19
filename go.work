@@ -24,6 +24,7 @@ use (
 	./middleware/gin
 	./middleware/gozero
 	./middleware/httprouter
+	./rpc/connect
 	./rpc/grpc
 	./tools
 	./trace/otel
