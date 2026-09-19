@@ -17,6 +17,7 @@ use (
 	./log/logrus
 	./log/zap
 	./log/zerolog
+	./middleware/chi
 	./middleware/gin
 	./tools
 	./trace/otel
