@@ -82,7 +82,7 @@ func (c *capture) reports(name string) bool {
 type netHTTPFactory struct{}
 
 // Build returns the middleware around the mux.
-func (netHTTPFactory) Build(log *wlog.Logger, routes httpconformance.Routes) http.Handler {
+func (netHTTPFactory) Build(log *wlog.Logger, routes httpconformance.Routes, settings httpconformance.Settings) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ok", routes.OK)
 	mux.HandleFunc("/orders/", routes.Order)
@@ -90,10 +90,14 @@ func (netHTTPFactory) Build(log *wlog.Logger, routes httpconformance.Routes) htt
 	mux.HandleFunc("/status/", routes.Status)
 	mux.HandleFunc("/stream", routes.Stream)
 	mux.HandleFunc("/fail", routes.Fail)
-	return httpcore.NetHTTP(log,
-		httpcore.RouteFunc(template),
-		httpcore.SkipPaths("/skip"),
-	)(mux)
+	opts := []httpcore.Option{httpcore.RouteFunc(template), httpcore.SkipPaths("/skip")}
+	if settings.CaptureAll {
+		opts = append(opts, httpcore.CaptureAll())
+	}
+	if settings.MaxBody > 0 {
+		opts = append(opts, httpcore.MaxBody(settings.MaxBody))
+	}
+	return httpcore.NetHTTP(log, opts...)(mux)
 }
 
 // template returns the route template a router would report, and an empty string for a
@@ -117,7 +121,7 @@ func template(r *http.Request) string {
 type brokenFactory struct{}
 
 // Build returns one handler for every path.
-func (brokenFactory) Build(log *wlog.Logger, _ httpconformance.Routes) http.Handler {
+func (brokenFactory) Build(log *wlog.Logger, _ httpconformance.Routes, _ httpconformance.Settings) http.Handler {
 	return httpcore.NetHTTP(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

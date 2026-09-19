@@ -39,10 +39,17 @@ type Routes struct {
 	Fail   http.HandlerFunc // GET /fail
 }
 
+// Settings is what one scenario asks an adapter to change. The suite names the behavior,
+// and the adapter maps it to its own option.
+type Settings struct {
+	CaptureAll bool
+	MaxBody    int
+}
+
 // Factory builds one adapter around the route table. The adapter applies its own skip rule
 // to /skip, and its own route function, so the suite sees the template the router gave it.
 type Factory interface {
-	Build(log *wlog.Logger, routes Routes) http.Handler
+	Build(log *wlog.Logger, routes Routes, settings Settings) http.Handler
 }
 
 // TB is the part of testing.T the suite uses, so a test can run the suite against a broken
@@ -63,7 +70,7 @@ type Scenario struct {
 	Headers  map[string]string
 	Body     string
 	Handler  func(Routes) http.HandlerFunc
-	Options  []wlog.Option
+	Settings Settings
 	Golden   map[string]any
 	Secret   string // a value that must never appear in the recorded output
 	NoEvents bool   // true for a scenario that starts no event at all
@@ -85,7 +92,7 @@ func Run(t TB, factory Factory) {
 func runScenario(t TB, factory Factory, scenario Scenario) {
 	t.Helper()
 	rec := newRecorder()
-	handler := factory.Build(rec.logger(scenario.Options...), routesFor(scenario))
+	handler := factory.Build(rec.logger(), routesFor(scenario), scenario.Settings)
 
 	// The request is built here, not by httptest.NewRequest, because that helper carries
 	// no context and the module keeps a Go 1.21 floor.
@@ -300,5 +307,44 @@ var scenarios = []Scenario{
 		Name: "SkippedPath", Method: http.MethodGet, Path: "/skip",
 		Handler:  func(r Routes) http.HandlerFunc { return r.OK },
 		NoEvents: true,
+	},
+	{
+		Name: "SafeDefaults", Method: http.MethodGet, Path: "/ok?page=2",
+		Headers: map[string]string{"Accept": "application/json", "Authorization": "Bearer s3cret", "Cookie": "sid=abc"},
+		Handler: func(r Routes) http.HandlerFunc { return r.OK },
+		Golden: func() map[string]any {
+			golden := base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success")
+			fields := httpFields(golden)
+			fields["request_headers"] = map[string]any{"accept": "application/json"}
+			fields["request_query_keys"] = []any{"page"}
+			// The redactor masks the cookie-name field, because its key holds the word
+			// cookie. The names are still captured, and the values never are.
+			fields["request_cookie_names"] = "[REDACTED]"
+			return golden
+		}(),
+		Secret: "s3cret",
+	},
+	{
+		Name: "UserAgent", Method: http.MethodGet, Path: "/ok",
+		Headers: map[string]string{"User-Agent": "conformance/1.0"},
+		Handler: func(r Routes) http.HandlerFunc { return r.OK },
+		Golden: func() map[string]any {
+			golden := base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success")
+			httpFields(golden)["user_agent"] = "conformance/1.0"
+			return golden
+		}(),
+	},
+	{
+		Name: "HeadCapturesNoBody", Method: http.MethodHead, Path: "/ok",
+		Settings: Settings{CaptureAll: true, MaxBody: 64},
+		Handler:  func(r Routes) http.HandlerFunc { return r.OK },
+		Golden: func() map[string]any {
+			golden := base("HEAD", "HEAD /ok", "/ok", "/ok", http.StatusOK, "info", "success")
+			// CaptureAll keeps every header, and the middleware echoes the request id.
+			fields := httpFields(golden)
+			fields["request_headers"] = map[string]any{"x-request-id": requestID}
+			fields["response_headers"] = map[string]any{"x-request-id": requestID}
+			return golden
+		}(),
 	},
 }
