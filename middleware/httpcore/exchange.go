@@ -82,16 +82,18 @@ func (c *Core) requestIDCarrier(r Request) propagate.Carrier {
 // Exchange tracks one request from Start to End. It is not safe for concurrent use,
 // because one request is one sequence of events.
 type Exchange struct {
-	core        *Core
-	ctx         context.Context
-	end         func()
-	owned       bool // true when this Exchange started the event and must end it
-	method      string
-	request     Request
-	route       string
-	matched     bool
-	operationID string
-	ended       bool
+	core              *Core
+	ctx               context.Context
+	end               func()
+	owned             bool // true when this Exchange started the event and must end it
+	method            string
+	request           Request
+	responseBody      []byte
+	responseTruncated bool
+	route             string
+	matched           bool
+	operationID       string
+	ended             bool
 }
 
 // Route records the route template the router matched, and whether it matched one at all.
@@ -102,6 +104,17 @@ func (x *Exchange) Route(template string, matched bool) {
 
 // OperationID records the framework's own operation id, such as the huma operation id.
 func (x *Exchange) OperationID(id string) { x.operationID = id }
+
+// Panic records a recovered panic with its stack, so the event explains the failure.
+func (x *Exchange) Panic(value any, stack []byte) {
+	wlog.Error(x.ctx, &panicError{value: value, stack: string(stack)})
+}
+
+// ResponseBody stores the response body an adapter captured. End parses it when the
+// policy and the response allow it.
+func (x *Exchange) ResponseBody(body []byte, truncated bool) {
+	x.responseBody, x.responseTruncated = body, truncated
+}
 
 // End writes the response fields, records the framework error, picks the level, and emits
 // the event. A second End does nothing.
@@ -168,6 +181,7 @@ func (x *Exchange) finish(resp Response, status int, written int64, err error) {
 		wlog.SetGroup(x.ctx, "http", "operation_id", x.operationID)
 	}
 	x.core.responseHeaders(x.ctx, x.core.routeConfig(x.method, route), resp)
+	x.core.captureResponseBody(x.ctx, x.request, resp, status, x.responseBody, x.responseTruncated)
 
 	if err != nil {
 		wlog.Error(x.ctx, err)

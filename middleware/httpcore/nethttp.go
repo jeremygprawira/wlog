@@ -27,8 +27,18 @@ func NetHTTP(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handler {
 					w.Header().Set("X-Request-ID", trace.RequestID)
 				}
 			}
-			// The body is read before the handler, and the reader hands every byte back,
-			// so the handler still reads the whole body.
+
+			// The response body is captured only when the policy asks for it, and only
+			// up to the cap, so a large download is never held.
+			var capture []byte
+			if core.cfg.captureBody && r.Method != http.MethodHead {
+				capture = core.pool.get()[:0]
+				defer core.ReturnBody(capture)
+			}
+			sw := newStatusWriter(w, capture, core.cfg.maxBody)
+
+			// The request body is read before the handler, and the reader hands every
+			// byte back, so the handler still reads the whole body.
 			if x.owned && core.CapturesBody(view) {
 				body, rest, truncated := core.ReadBody(r.Body)
 				if rest != nil {
@@ -38,46 +48,23 @@ func NetHTTP(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handler {
 				defer core.ReturnBody(body)
 			}
 
-			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 			// req, not r: net/http.ServeMux sets Pattern on the request it actually
 			// dispatches, which WithContext made a shallow copy of, so reading the
 			// pattern off the original r would always see the zero value.
 			req := r.WithContext(ctx)
-			next.ServeHTTP(sw, req)
+			again := core.runHandler(x, sw, req, next)
 
 			template, matched := core.cfg.route(req)
 			x.Route(template, matched)
+			if body, truncated := sw.captured(); body != nil {
+				x.ResponseBody(body, truncated)
+			}
 			x.End(netHTTPResponse{sw}, nil)
+
+			// The event is out, so a panic that net/http reads continues now.
+			if again != nil {
+				panic(again)
+			}
 		})
 	}
-}
-
-// statusWriter observes the status and the body size of one response, and forwards every
-// call to the writer the app gave.
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-	bytes  int64
-	wrote  bool
-}
-
-// WriteHeader records the first status the handler writes, and forwards it. A second
-// call is dropped, the same as net/http.
-func (w *statusWriter) WriteHeader(code int) {
-	if w.wrote {
-		return
-	}
-	w.wrote = true
-	w.status = code
-	w.ResponseWriter.WriteHeader(code)
-}
-
-// Write records the size of the body, and forwards the bytes.
-func (w *statusWriter) Write(b []byte) (int, error) {
-	if !w.wrote {
-		w.WriteHeader(http.StatusOK)
-	}
-	n, err := w.ResponseWriter.Write(b)
-	w.bytes += int64(n)
-	return n, err
 }

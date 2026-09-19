@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -103,37 +104,41 @@ func TestHTTPCore_HTTP16_MaxBodyClamp(t *testing.T) {
 		t.Errorf("a cap beyond the limit captured %v bytes, want one MiB", body["bytes"])
 	}
 
+	// A small body must not allocate the cap. A collection clears a sync.Pool, so the
+	// measurement turns the collector off: with it off, a later request reuses the buffer
+	// the first one put back. Without the pool every request allocates the cap.
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
 	pooled, _ := wlogtest.New(t)
 	pooledHandler := httpcore.NetHTTP(pooled, httpcore.CaptureAll(), httpcore.MaxBody(1<<20))(okHandler())
-	baseline, _ := wlogtest.New(t)
-	baselineHandler := httpcore.NetHTTP(baseline, httpcore.CaptureAll(), httpcore.MaxBody(0))(okHandler())
-
-	// Without the pool, each of the 50 requests allocates the cap, which is 50 MiB. The
-	// race detector adds its own overhead, so the test compares the two runs and asks
-	// the pooled run to stay under half of that.
-	const runs = 50
-	naive := uint64(runs) * (1 << 20)
-	withCap := allocatedBy(t, pooledHandler, runs)
-	withoutBody := allocatedBy(t, baselineHandler, runs)
-	if delta := withCap - withoutBody; delta > naive/2 {
-		t.Errorf("50 small bodies allocated %d bytes over the baseline, want far less than %d", delta, naive)
+	best := ^uint64(0)
+	for i := 0; i < 10; i++ {
+		best = min(best, allocatedBy(t, pooledHandler, 1))
+	}
+	if best > 256<<10 {
+		t.Errorf("the smallest of ten small bodies allocated %d bytes, want the pooled buffer", best)
 	}
 }
 
 // allocatedBy returns the bytes the heap allocated while the handler served n requests
-// with a small JSON body.
+// with a small JSON body. A warm-up request runs first, so the pool already holds a
+// buffer when the measurement starts.
 func allocatedBy(t *testing.T, handler http.Handler, n int) uint64 {
 	t.Helper()
+	serveSmallBody(handler)
 	var before, after runtime.MemStats
-	runtime.GC()
 	runtime.ReadMemStats(&before)
 	for i := 0; i < n; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(`{"a":1}`))
-		req.Header.Set("Content-Type", "application/json")
-		handler.ServeHTTP(httptest.NewRecorder(), req)
+		serveSmallBody(handler)
 	}
 	runtime.ReadMemStats(&after)
 	return after.TotalAlloc - before.TotalAlloc
+}
+
+// serveSmallBody serves one request with a small JSON body.
+func serveSmallBody(handler http.Handler) {
+	req := httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(`{"a":1}`))
+	req.Header.Set("Content-Type", "application/json")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
 }
 
 // TestHTTPCore_HTTP1_ArrayBodyRedacted proves that a JSON array body reaches the event as

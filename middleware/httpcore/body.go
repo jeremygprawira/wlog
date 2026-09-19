@@ -5,6 +5,7 @@ package httpcore
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime"
@@ -124,6 +125,34 @@ func bodyValue(body []byte, truncated bool, contentType string) any {
 		return string(body)
 	}
 	return nil
+}
+
+// captureResponseBody records the response body when the policy and the response allow
+// it. A HEAD request, a 204, and a 304 carry no body, and an encoded body is skipped.
+func (c *Core) captureResponseBody(ctx context.Context, req Request, resp Response, status int, body []byte, truncated bool) {
+	if !c.cfg.captureBody || len(body) == 0 || req == nil {
+		return
+	}
+	if req.Method() == http.MethodHead || status == http.StatusNoContent || status == http.StatusNotModified {
+		return
+	}
+	contentType, encoding := "", ""
+	if resp != nil {
+		resp.EachHeader(func(name, value string) {
+			switch {
+			case strings.EqualFold(name, "Content-Type"):
+				contentType = value
+			case strings.EqualFold(name, "Content-Encoding"):
+				encoding = value
+			}
+		})
+	}
+	if encoding != "" && !strings.EqualFold(encoding, "identity") {
+		return
+	}
+	if value := bodyValue(body, truncated, contentType); value != nil {
+		wlog.SetGroup(ctx, "http", "response_body", value)
+	}
 }
 
 // truncatedMarker is the value a cut or unparsable body becomes. It holds no body text.

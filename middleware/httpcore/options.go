@@ -26,6 +26,7 @@ type config struct {
 	bodySet         bool // true once CaptureBody named the answer itself
 	maxBody         int
 	bodyTypes       []string
+	panicPolicy     Policy
 	requestHeaders  map[string]bool // lowercase allow-list
 	responseHeaders map[string]bool // lowercase allow-list
 	cookieValues    map[string]bool // cookie names kept unmasked
