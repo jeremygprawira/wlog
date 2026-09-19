@@ -36,10 +36,10 @@ func captureDrain(t *testing.T, emit func(ctx context.Context)) map[string]any {
 	return rec
 }
 
-// TestLogrusOutput_FlattensNestedGroups proves one wlog event becomes one logrus record,
-// message from operation, level mapped, and a nested map flattened to dotted keys,
-// since logrus has no native nesting.
-func TestLogrusOutput_FlattensNestedGroups(t *testing.T) {
+// TestLogrusOutput_KeepsNestedGroups proves one wlog event becomes one logrus record,
+// message from operation, level mapped, and a nested map kept as one field that a JSON
+// formatter renders as an object.
+func TestLogrusOutput_KeepsNestedGroups(t *testing.T) {
 	rec := captureDrain(t, func(ctx context.Context) {
 		wlog.SetGroup(ctx, "http", "status", 200)
 		wlog.Set(ctx, "user_id", "u1")
@@ -48,11 +48,9 @@ func TestLogrusOutput_FlattensNestedGroups(t *testing.T) {
 	if rec["msg"] != "op" || rec["level"] != "info" {
 		t.Errorf("msg/level = %v/%v, want op/info", rec["msg"], rec["level"])
 	}
-	if rec["http.status"] != float64(200) {
-		t.Errorf("flattened http.status = %v, want 200", rec["http.status"])
-	}
-	if _, nested := rec["http"]; nested {
-		t.Errorf("logrus record still has a nested http object: %v", rec["http"])
+	http, _ := rec["http"].(map[string]any)
+	if http["status"] != float64(200) {
+		t.Errorf("nested http = %v, want a status of 200", rec["http"])
 	}
 	if rec["user_id"] != "u1" {
 		t.Errorf("user_id = %v, want u1", rec["user_id"])
