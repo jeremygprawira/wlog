@@ -5,7 +5,12 @@ and the version numbers follow [Semantic Versioning](https://semver.org/spec/v2.
 
 The v1.0.0 release freezes the public API. A later change to that API waits for v2.
 
-## [Unreleased]
+## [0.6.0] - 2026-09-19
+
+v0.6.0 lands event shape v2 and the five foundations. Every HTTP adapter and every drain
+passes one shared conformance suite, so a backend emits the same event shape on every
+framework. A deploy picks its drains and its service identity through environment
+variables alone.
 
 ### Added
 

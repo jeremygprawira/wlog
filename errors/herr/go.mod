@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/jeremygprawira/herr v0.2.0
-	github.com/jeremygprawira/wlog v0.5.0
+	github.com/jeremygprawira/wlog v0.6.0
 )
 
 replace github.com/jeremygprawira/wlog => ../..
