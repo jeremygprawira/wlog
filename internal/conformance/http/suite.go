@@ -337,4 +337,13 @@ var scenarios = []Scenario{
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.OK },
 	},
+	{
+		Name: "PanicRecovered", Method: http.MethodGet, Path: "/panic",
+	},
+	{
+		Name: "StreamFlushes", Method: http.MethodGet, Path: "/stream",
+	},
+	{
+		Name: "ErrorAfterCommit", Method: http.MethodGet, Path: "/fail",
+	},
 }

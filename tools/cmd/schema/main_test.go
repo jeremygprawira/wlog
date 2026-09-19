@@ -37,6 +37,14 @@ func TestSchema_BET7_GoldensValid(t *testing.T) {
 		t.Errorf("event goldens = %d, want one for each of the eight kinds", len(kinds))
 	}
 
+	suite, err := filepath.Glob(filepath.Join(root, suiteGoldens, "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(suite) != 18 {
+		t.Errorf("http suite goldens = %d, want one for each scenario that starts an event", len(suite))
+	}
+
 	found, err := check(root)
 	if err != nil {
 		t.Fatal(err)
