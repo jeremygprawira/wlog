@@ -151,7 +151,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 12-A-5 http-httprouter and http-gozero
 - [x] 12-A-6 rpc-connect
 - [x] 12-A-7 rpc-gqlgen
-- [ ] 12-A-8 http-hertz and http-kratos
+- [x] 12-A-8 http-hertz and http-kratos
 - [ ] 12-A-9 http-huma and rpc-twirp
 - [ ] 12-A-10 Recipes: rest-api and grpc-service
 - [x] 12-B-1 sqlshape
