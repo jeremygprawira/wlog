@@ -43,7 +43,7 @@ func Middleware(log *wlog.Logger, opts ...Option) echo.MiddlewareFunc {
 			// from the request net/http's own router actually dispatched to, not the
 			// original).
 			routeFunc := func(*http.Request) string { return c.Path() }
-			allOpts := append([]wlogstd.Option{wlogstd.WithRouteFunc(routeFunc), wlogstd.CaptureAll()}, opts...)
+			allOpts := append([]wlogstd.Option{wlogstd.WithRouteFunc(routeFunc)}, opts...)
 			mw := wlogstd.Middleware(log, allOpts...)
 
 			h := func(w http.ResponseWriter, r *http.Request) {

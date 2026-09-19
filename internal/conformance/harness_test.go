@@ -96,3 +96,25 @@ func TestConformance_HTTP22_DiffNamesFields(t *testing.T) {
 		t.Errorf("Diff of two equal events = %q, want an empty string", missing)
 	}
 }
+
+// TestConformance_HTTP22_NormalizeCanonicalRoute proves that Normalize rewrites every
+// route to the braced form, so a suite compares the shape of a route and not the dialect
+// of one router.
+func TestConformance_HTTP22_NormalizeCanonicalRoute(t *testing.T) {
+	got := conformance.Normalize(map[string]any{
+		"operation": "POST /orders/:id",
+		"summary":   "POST /orders/:id 201 in 0.5ms",
+		"http":      map[string]any{"route": "/orders/:id"},
+	})
+
+	if got["operation"] != "POST /orders/{id}" {
+		t.Errorf("operation = %q, want the braced route", got["operation"])
+	}
+	httpFields, _ := got["http"].(map[string]any)
+	if httpFields["route"] != "/orders/{id}" {
+		t.Errorf("http.route = %q, want the braced route", httpFields["route"])
+	}
+	if got["summary"] != "POST /orders/{id} 201 in {d}" {
+		t.Errorf("summary = %q, want the braced route and the duration placeholder", got["summary"])
+	}
+}

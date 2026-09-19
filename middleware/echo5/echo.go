@@ -41,18 +41,23 @@ func Middleware(log *wlog.Logger, opts ...Option) echo.MiddlewareFunc {
 			// request: net/http's WithContext returns a copy, so a change inside next
 			// never reaches the caller's variable.
 			routeFunc := func(*http.Request) string { return c.Path() }
-			allOpts := append([]wlogstd.Option{wlogstd.WithRouteFunc(routeFunc), wlogstd.CaptureAll()}, opts...)
+			allOpts := append([]wlogstd.Option{wlogstd.WithRouteFunc(routeFunc)}, opts...)
 			mw := wlogstd.Middleware(log, allOpts...)
 
 			h := func(w http.ResponseWriter, r *http.Request) {
 				c.SetRequest(r)
-				c.SetResponse(w)
+				tracked := &trackingWriter{ResponseWriter: w}
+				c.SetResponse(tracked)
 				if err := next(c); err != nil {
-					// Reported and handled here, before http-std's own deferred
+					// Reported and handled here, before http-core's own deferred
 					// stages run, so the event's recorded status matches whatever
 					// Echo's error handler actually writes to the client.
 					wlog.Error(r.Context(), err)
-					c.Echo().HTTPErrorHandler(c, err)
+					// A committed response keeps its body: a second write would append
+					// to a body the client already received a length for.
+					if !tracked.wrote {
+						c.Echo().HTTPErrorHandler(c, err)
+					}
 				}
 			}
 			mw(http.HandlerFunc(h)).ServeHTTP(c.Response(), c.Request())
@@ -60,3 +65,25 @@ func Middleware(log *wlog.Logger, opts ...Option) echo.MiddlewareFunc {
 		}
 	}
 }
+
+// trackingWriter remembers whether the handler already committed a response, so a later
+// error never appends a second body.
+type trackingWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+// WriteHeader records the commit and forwards it.
+func (w *trackingWriter) WriteHeader(code int) {
+	w.wrote = true
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// Write records the commit and forwards the bytes.
+func (w *trackingWriter) Write(b []byte) (int, error) {
+	w.wrote = true
+	return w.ResponseWriter.Write(b)
+}
+
+// Unwrap returns the writer underneath, so http.ResponseController reaches it.
+func (w *trackingWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }

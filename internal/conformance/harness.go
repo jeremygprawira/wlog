@@ -131,12 +131,24 @@ func normalizeValue(value any, parent string) any {
 func normalizeString(text, key string) string {
 	switch key {
 	case "summary":
-		return durationText.ReplaceAllString(text, "{d}")
+		return canonicalRoute(durationText.ReplaceAllString(text, "{d}"))
 	case "host":
 		return withoutPort(text)
+	case "operation", "route":
+		return canonicalRoute(text)
 	default:
 		return text
 	}
+}
+
+// routeParam matches a path parameter in the colon form of Echo and in the braced form of
+// net/http and gorilla/mux.
+var routeParam = regexp.MustCompile(`[:{](\w+)\}?`)
+
+// canonicalRoute rewrites a route to the braced form, so a suite compares the shape of a
+// route and not the dialect of one router.
+func canonicalRoute(text string) string {
+	return routeParam.ReplaceAllString(text, `{$1}`)
 }
 
 // withoutPort removes the port from an address, and keeps the value when it carries none.
