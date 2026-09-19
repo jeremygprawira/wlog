@@ -169,7 +169,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 12-C-6 errors-cockroach and flag-openfeature
 - [x] 12-F-1 `wlog query` filters and output
 - [x] 12-F-2 Group, stats, size, and tail
-- [ ] 12-F-3 drain-memory query endpoint and SSE v2
+- [x] 12-F-3 drain-memory query endpoint and SSE v2
 - [ ] 12-F-4 `wlog explain`, `rules`, `schema`, and `version`
 - [ ] 12-F-5 Agent docs
 - [ ] 12-F-6 Search recipes
