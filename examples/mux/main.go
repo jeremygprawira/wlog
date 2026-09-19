@@ -24,11 +24,13 @@ func main() {
 	wlogger := wlog.New(wlog.WithService("mux-example", "0.0.1", "local"))
 
 	r := mux.NewRouter()
+	// Use registers the middleware inside the router, so the request the middleware
+	// reads already carries the route that gorilla/mux matched.
+	r.Use(wlogstd.Middleware(wlogger, wlogstd.WithRouteFunc(routeFunc)))
 	r.HandleFunc("/orders/{id}", func(w http.ResponseWriter, r *http.Request) {
 		wlog.Set(r.Context(), "order_id", mux.Vars(r)["id"])
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet)
 
-	handler := wlogstd.Middleware(wlogger, wlogstd.WithRouteFunc(routeFunc))(r)
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	log.Fatal(http.ListenAndServe(":8080", r))
 }

@@ -1,107 +1,41 @@
+// This file holds the options of the net/http adapter. The pipeline owns the behavior, so
+// this package re-exports the http-core options under one import, and adds the default
+// route reader.
 package wlogstd
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
 
-// Option configures Middleware.
-type Option func(*config)
+	"github.com/jeremygprawira/wlog/middleware/httpcore"
+)
 
-type config struct {
-	routeFunc        func(*http.Request) string
-	captureHeaders   bool
-	captureQuery     bool
-	captureCookies   bool
-	captureBody      bool
-	maxBodyCapture   int
-	bodyContentTypes []string
-	skipPaths        map[string]bool
-	userFunc         func(*http.Request) string
-}
+// Option is an http-core option, re-exported so a caller needs one import.
+type Option = httpcore.Option
 
-func newConfig(opts []Option) *config {
-	c := &config{
-		routeFunc:        defaultRoute,
-		captureHeaders:   true,
-		captureQuery:     true,
-		captureCookies:   true,
-		captureBody:      true,
-		maxBodyCapture:   defaultMaxBodyCapture,
-		bodyContentTypes: defaultBodyContentTypes,
-		skipPaths:        map[string]bool{},
-	}
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c
-}
+// The http-core options this adapter passes through.
+var (
+	SkipPaths      = httpcore.SkipPaths
+	CaptureAll     = httpcore.CaptureAll
+	CaptureBody    = httpcore.CaptureBody
+	MaxBody        = httpcore.MaxBody
+	BodyTypes      = httpcore.BodyTypes
+	CaptureHeaders = httpcore.CaptureHeaders
+	WithUserFunc   = httpcore.User
+	WithRouteFunc  = httpcore.RouteFunc
+)
 
-// CaptureBody toggles capturing both the request and response body. Default true.
-func CaptureBody(on bool) Option { return func(c *config) { c.captureBody = on } }
-
-// MaxBodyCapture caps how many bytes of each body direction are logged. The handler
-// still receives the complete, untruncated request body regardless of this cap.
-// Default 10KB.
-func MaxBodyCapture(n int) Option { return func(c *config) { c.maxBodyCapture = n } }
-
-// BodyContentTypes sets which Content-Types are captured; anything else is skipped
-// entirely (never read or buffered), so a binary upload/download is never corrupted
-// or needlessly held in memory. An entry ending in "/" matches a whole top-level type
-// (e.g. "text/"). Default: "application/json", "text/".
-func BodyContentTypes(types ...string) Option {
-	return func(c *config) { c.bodyContentTypes = types }
-}
-
-// CaptureHeaders toggles capturing request headers under http.request_headers.
-// Default true.
-func CaptureHeaders(on bool) Option { return func(c *config) { c.captureHeaders = on } }
-
-// CaptureQuery toggles capturing the query string under http.request_query.
-// Default true.
-func CaptureQuery(on bool) Option { return func(c *config) { c.captureQuery = on } }
-
-// CaptureCookies toggles capturing cookies under http.request_cookies. Default true.
-func CaptureCookies(on bool) Option { return func(c *config) { c.captureCookies = on } }
-
-// SkipPaths excludes exact paths from logging entirely — no event is emitted at all
-// (the handler still runs). Typical use: health checks.
-func SkipPaths(paths ...string) Option {
-	return func(c *config) {
-		for _, p := range paths {
-			c.skipPaths[p] = true
-		}
-	}
-}
-
-func (c *config) route(r *http.Request) string {
-	return c.routeFunc(r)
-}
-
-// defaultRoute uses the pattern of the request when the router set one, else it
-// falls back to the raw path. requestPattern holds the version split, because
-// the Pattern field exists only in Go 1.22 and later.
-func defaultRoute(r *http.Request) string {
-	if pattern := requestPattern(r); pattern != "" {
-		return pattern
-	}
-	return r.URL.Path
-}
-
-// WithRouteFunc overrides how the route name is derived — needed for any router
-// other than net/http.ServeMux, e.g. gorilla/mux:
+// route returns the route template the router matched, and an empty string when no route
+// matched. net/http writes the pattern as "METHOD /path", so the method leaves here.
 //
-//	wlogstd.WithRouteFunc(func(r *http.Request) string {
-//		if route := mux.CurrentRoute(r); route != nil {
-//			if tmpl, err := route.GetPathTemplate(); err == nil {
-//				return tmpl
-//			}
-//		}
-//		return r.URL.Path
-//	})
-func WithRouteFunc(fn func(*http.Request) string) Option {
-	return func(c *config) { c.routeFunc = fn }
-}
-
-// WithUserFunc extracts the authenticated user id from a request into user.id.
-// Unset by default (user.id is never set).
-func WithUserFunc(fn func(*http.Request) string) Option {
-	return func(c *config) { c.userFunc = fn }
+// The Pattern field of net/http.Request carries the template, and it needs Go 1.23. The
+// build tag selects the reader: r.Pattern on Go 1.23 and later, and an empty string
+// before that. An empty route makes the operation {METHOD} unmatched, which is what an
+// unmatched request deserves.
+func route(r *http.Request) string {
+	pattern := requestPattern(r)
+	if _, path, ok := strings.Cut(pattern, " "); ok {
+		return path
+	}
+	return pattern
 }

@@ -21,12 +21,11 @@ type Option = wlogstd.Option
 var (
 	WithUserFunc     = wlogstd.WithUserFunc
 	SkipPaths        = wlogstd.SkipPaths
+	CaptureAll       = wlogstd.CaptureAll
 	CaptureHeaders   = wlogstd.CaptureHeaders
-	CaptureQuery     = wlogstd.CaptureQuery
-	CaptureCookies   = wlogstd.CaptureCookies
 	CaptureBody      = wlogstd.CaptureBody
-	MaxBodyCapture   = wlogstd.MaxBodyCapture
-	BodyContentTypes = wlogstd.BodyContentTypes
+	MaxBodyCapture   = wlogstd.MaxBody
+	BodyContentTypes = wlogstd.BodyTypes
 )
 
 // Middleware wraps http-std's Middleware for Echo v5. It runs http-std's whole pipeline
@@ -42,7 +41,7 @@ func Middleware(log *wlog.Logger, opts ...Option) echo.MiddlewareFunc {
 			// request: net/http's WithContext returns a copy, so a change inside next
 			// never reaches the caller's variable.
 			routeFunc := func(*http.Request) string { return c.Path() }
-			allOpts := append([]wlogstd.Option{wlogstd.WithRouteFunc(routeFunc)}, opts...)
+			allOpts := append([]wlogstd.Option{wlogstd.WithRouteFunc(routeFunc), wlogstd.CaptureAll()}, opts...)
 			mw := wlogstd.Middleware(log, allOpts...)
 
 			h := func(w http.ResponseWriter, r *http.Request) {
