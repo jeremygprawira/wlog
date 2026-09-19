@@ -1,12 +1,16 @@
-// This file holds the options of one Core, and the trusted-proxy rules that read a
-// forwarded header only from a proxy the app named.
+// This file holds the options of one Core, the path and route globs, and the
+// trusted-proxy rules that read a forwarded header only from a proxy the app named.
 package httpcore
 
 import (
+	"maps"
 	"net"
 	"net/http"
 	"net/netip"
+	pathpkg "path"
 	"strings"
+
+	"github.com/jeremygprawira/wlog"
 )
 
 // Option configures one Core.
@@ -16,15 +20,53 @@ type Option func(*config)
 type config struct {
 	route          func(*http.Request) (string, bool)
 	trustedProxies []netip.Prefix
+
+	captureAll      bool
+	requestHeaders  map[string]bool // lowercase allow-list
+	responseHeaders map[string]bool // lowercase allow-list
+	cookieValues    map[string]bool // cookie names kept unmasked
+	skipPaths       []string
+	skip            func(Request) bool
+	routes          []routeRule
+	trustRequestID  bool
+	echoRequestID   bool
+	user            func(Request) string
 }
 
-// newConfig resolves the options of one Core.
-func newConfig(opts []Option) config {
-	cfg := config{route: requestPattern}
+// routeRule is one ForRoute rule: the "METHOD template" pattern, and the options it
+// applies to a request whose route matches.
+type routeRule struct {
+	pattern string
+	opts    []Option
+}
+
+// newConfig resolves the options of one Core. A development service environment captures
+// everything by default, and an explicit option still wins.
+func newConfig(log *wlog.Logger, opts []Option) config {
+	cfg := config{
+		route:           requestPattern,
+		requestHeaders:  headerSet(defaultRequestHeaders),
+		responseHeaders: headerSet(defaultResponseHeaders),
+		cookieValues:    map[string]bool{},
+		trustRequestID:  true,
+		echoRequestID:   true,
+	}
+	if log != nil && isLocalEnv(log.ServiceEnv()) {
+		cfg.captureAll = true
+	}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 	return cfg
+}
+
+// isLocalEnv reports whether a service environment is a development one.
+func isLocalEnv(env string) bool {
+	switch env {
+	case "local", "dev", "development":
+		return true
+	}
+	return false
 }
 
 // RouteFunc sets how the adapter reads the route template of a finished request. The
@@ -40,6 +82,65 @@ func RouteFunc(fn func(*http.Request) string) Option {
 		}
 	}
 }
+
+// CaptureAll captures every header, the query values, the cookie values, the path
+// parameter values, and the bodies. A development service environment turns it on.
+func CaptureAll() Option { return func(c *config) { c.captureAll = true } }
+
+// CaptureHeaders adds names to the request header allow-list of safe defaults.
+func CaptureHeaders(names ...string) Option {
+	return func(c *config) {
+		for _, name := range names {
+			c.requestHeaders[strings.ToLower(name)] = true
+		}
+	}
+}
+
+// CaptureResponseHeaders adds names to the response header allow-list of safe defaults.
+func CaptureResponseHeaders(names ...string) Option {
+	return func(c *config) {
+		for _, name := range names {
+			c.responseHeaders[strings.ToLower(name)] = true
+		}
+	}
+}
+
+// CookieValues names the cookies whose values stay unmasked under CaptureAll. Every other
+// cookie value is masked, so a session token cannot leak.
+func CookieValues(names ...string) Option {
+	return func(c *config) {
+		for _, name := range names {
+			c.cookieValues[name] = true
+		}
+	}
+}
+
+// SkipPaths skips a path entirely, so no event starts for it. A pattern is exact, or a
+// glob where * matches one path segment and ** matches zero or more segments.
+func SkipPaths(patterns ...string) Option {
+	return func(c *config) { c.skipPaths = append(c.skipPaths, patterns...) }
+}
+
+// Skip skips a request the function rejects, so no event starts for it.
+func Skip(fn func(Request) bool) Option {
+	return func(c *config) { c.skip = fn }
+}
+
+// ForRoute adds a rule that applies to a matched route. The pattern is "METHOD template",
+// and it may be a glob. The rule changes the response fields of a matching request.
+func ForRoute(pattern string, opts ...Option) Option {
+	return func(c *config) { c.routes = append(c.routes, routeRule{pattern: pattern, opts: opts}) }
+}
+
+// TrustRequestID keeps an incoming X-Request-ID header at 128 characters or fewer from
+// the allowed alphabet. Default true.
+func TrustRequestID(on bool) Option { return func(c *config) { c.trustRequestID = on } }
+
+// EchoRequestID writes the request id on the X-Request-ID response header. Default true.
+func EchoRequestID(on bool) Option { return func(c *config) { c.echoRequestID = on } }
+
+// User sets user.id from the request, such as the authenticated subject.
+func User(fn func(Request) string) Option { return func(c *config) { c.user = fn } }
 
 // TrustedProxies names the proxy addresses whose forwarded headers count. An address may
 // be one address or a CIDR. With none set, every forwarded header from a client is
@@ -134,6 +235,60 @@ func (c *Core) schemeHost(r Request) (string, string) {
 		host = forwarded
 	}
 	return scheme, host
+}
+
+// routeConfig returns the policy of one finished request. A ForRoute rule whose pattern
+// matches "METHOD template" replaces the base policy, on its own copy of the allow-lists.
+func (c *Core) routeConfig(method, route string) config {
+	if route == "" || len(c.cfg.routes) == 0 {
+		return c.cfg
+	}
+	target := method + " " + route
+	for _, rule := range c.cfg.routes {
+		if !globMatch(rule.pattern, target) {
+			continue
+		}
+		cfg := c.cfg
+		cfg.requestHeaders = maps.Clone(cfg.requestHeaders)
+		cfg.responseHeaders = maps.Clone(cfg.responseHeaders)
+		cfg.cookieValues = maps.Clone(cfg.cookieValues)
+		for _, opt := range rule.opts {
+			opt(&cfg)
+		}
+		return cfg
+	}
+	return c.cfg
+}
+
+// globMatch reports whether a value matches a pattern. A pattern with no wildcard matches
+// one value. A * matches one segment and a ** matches zero or more segments, so a **
+// crosses a slash.
+func globMatch(pattern, target string) bool {
+	return matchSegments(strings.Split(pattern, "/"), strings.Split(target, "/"))
+}
+
+// matchSegments matches the segments of a pattern against the segments of a value.
+func matchSegments(pattern, target []string) bool {
+	for len(pattern) > 0 {
+		if pattern[0] == "**" {
+			if matchSegments(pattern[1:], target) {
+				return true
+			}
+			if len(target) == 0 {
+				return false
+			}
+			target = target[1:]
+			continue
+		}
+		if len(target) == 0 {
+			return false
+		}
+		if ok, _ := pathpkg.Match(pattern[0], target[0]); !ok {
+			return false
+		}
+		pattern, target = pattern[1:], target[1:]
+	}
+	return len(target) == 0
 }
 
 // hostOf returns the address part of an ip:port string, and the whole string when it

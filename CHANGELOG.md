@@ -51,8 +51,12 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 - `wlog.IsReservedKey` tells a reserved event key from a user key, which a preset and a
   drain need to apply the collision rule.
 - `middleware/httpcore` holds the framework-neutral HTTP core that every wlog HTTP
-  adapter drives. One `Core` owns the operation name, the level, the route rules, and the
-  emit point, and an adapter passes what its framework knows.
+  adapter drives. One `Core` owns the operation name, the level, the route rules, the
+  capture policy, and the emit point. An adapter passes what its framework knows.
+  Safe defaults keep the allow-listed headers and the query and cookie names. `CaptureAll`
+  adds the values and the bodies, and a local, dev, or development environment turns it on.
+- `wlog.Logger.ServiceEnv` returns the service environment the Logger resolved, which the
+  HTTP capture policy reads to decide whether to capture everything.
 
 ### Changed
 

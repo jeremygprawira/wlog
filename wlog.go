@@ -24,6 +24,10 @@ func (l *Logger) SetEnabled(on bool) { l.disabled.Store(!on) }
 // Enabled reports whether this Logger is on.
 func (l *Logger) Enabled() bool { return !l.disabled.Load() }
 
+// ServiceEnv returns the service environment this Logger resolved, such as "prod" or
+// "local". An HTTP capture policy reads it to decide whether to capture everything.
+func (l *Logger) ServiceEnv() string { return l.service.env }
+
 // Logger holds the configuration every event is built and emitted with. Build one with
 // New at startup; attach it to request/job contexts with WithContext.
 type Logger struct {

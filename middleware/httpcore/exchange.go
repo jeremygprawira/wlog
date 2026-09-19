@@ -30,8 +30,22 @@ func New(log *wlog.Logger, opts ...Option) *Core {
 	if log == nil {
 		log = wlog.Default()
 	}
-	cfg := newConfig(opts)
+	cfg := newConfig(log, opts)
 	return &Core{log: log, cfg: cfg}
+}
+
+// Skip reports whether this request starts no event at all. A skipped request still runs
+// the handler, and it runs no plugin.
+func (c *Core) Skip(r Request) bool {
+	if c.cfg.skip != nil && c.cfg.skip(r) {
+		return true
+	}
+	for _, pattern := range c.cfg.skipPaths {
+		if globMatch(pattern, r.Path()) {
+			return true
+		}
+	}
+	return false
 }
 
 // Start opens one request event, or joins the event that this context already holds.
@@ -48,10 +62,20 @@ func (c *Core) Start(ctx context.Context, r Request) (context.Context, *Exchange
 		return ctx, x
 	}
 	ctx, end := wlog.Start(c.log.WithContext(ctx), operation)
-	ctx = propagate.Extract(ctx, requestCarrier{r})
+	ctx = propagate.Extract(ctx, c.requestIDCarrier(r))
 	x := &Exchange{core: c, ctx: ctx, end: end, owned: true, method: r.Method()}
 	x.writeRequest(r)
 	return ctx, x
+}
+
+// requestIDCarrier returns the carrier that propagate reads. An app that does not trust
+// an incoming request id passes a carrier that hides the header, so core generates one.
+func (c *Core) requestIDCarrier(r Request) propagate.Carrier {
+	carrier := requestCarrier{r}
+	if c.cfg.trustRequestID {
+		return carrier
+	}
+	return untrustedRequestID{carrier}
 }
 
 // Exchange tracks one request from Start to End. It is not safe for concurrent use,
@@ -91,13 +115,14 @@ func (x *Exchange) End(resp Response, err error) {
 		status = resp.Status()
 		written = resp.BytesWritten()
 	}
-	x.finish(status, written, err)
+	x.finish(resp, status, written, err)
 	if x.owned && x.end != nil {
 		x.end()
 	}
 }
 
-// writeRequest records the request fields that safe defaults capture.
+// writeRequest records the request fields that safe defaults capture, plus the fields the
+// policy allows.
 func (x *Exchange) writeRequest(r Request) {
 	fields := []any{
 		"method", r.Method(),
@@ -112,6 +137,7 @@ func (x *Exchange) writeRequest(r Request) {
 		fields = append(fields, "bytes_in", length)
 	}
 	wlog.SetGroup(x.ctx, "http", fields...)
+	x.core.captureRequest(x.ctx, r)
 }
 
 // finish writes the response fields and the level of one finished request.
@@ -119,7 +145,7 @@ func (x *Exchange) writeRequest(r Request) {
 // The route is empty when the router matched nothing, and when the status is 404 or 405
 // and the template ends in /*, which is the wildcard template a group reports for an
 // unmatched path. An empty route makes the operation {METHOD} unmatched.
-func (x *Exchange) finish(status int, written int64, err error) {
+func (x *Exchange) finish(resp Response, status int, written int64, err error) {
 	route := x.route
 	if !x.matched || ((status == http.StatusNotFound || status == http.StatusMethodNotAllowed) &&
 		strings.HasSuffix(route, "/*")) {
@@ -139,6 +165,7 @@ func (x *Exchange) finish(status int, written int64, err error) {
 	if x.operationID != "" {
 		wlog.SetGroup(x.ctx, "http", "operation_id", x.operationID)
 	}
+	x.core.responseHeaders(x.ctx, x.core.routeConfig(x.method, route), resp)
 
 	if err != nil {
 		wlog.Error(x.ctx, err)
@@ -181,6 +208,20 @@ func (c requestCarrier) Get(name string) string { return c.r.Header(name) }
 
 // Set does nothing, because an incoming request is read-only.
 func (requestCarrier) Set(string, string) {}
+
+// untrustedRequestID hides the X-Request-ID header, so propagate generates an id instead
+// of keeping a value the client chose.
+type untrustedRequestID struct {
+	requestCarrier
+}
+
+// Get returns an empty string for the request id header, and the real value otherwise.
+func (c untrustedRequestID) Get(name string) string {
+	if strings.EqualFold(name, "X-Request-ID") {
+		return ""
+	}
+	return c.requestCarrier.Get(name)
+}
 
 // Keys returns the header names, which a read-only fallback format reads.
 func (c requestCarrier) Keys() []string {

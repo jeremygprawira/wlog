@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/propagate"
 )
 
 // NetHTTP wraps next so every request becomes one wlog request event. Build the returned
@@ -14,7 +15,17 @@ func NetHTTP(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handler {
 	core := New(log, opts...)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, x := core.Start(r.Context(), netHTTPRequest{r})
+			view := netHTTPRequest{r}
+			if core.Skip(view) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			ctx, x := core.Start(r.Context(), view)
+			if core.cfg.echoRequestID {
+				if trace, ok := propagate.FromContext(ctx); ok && trace.RequestID != "" {
+					w.Header().Set("X-Request-ID", trace.RequestID)
+				}
+			}
 
 			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 			// req, not r: net/http.ServeMux sets Pattern on the request it actually
