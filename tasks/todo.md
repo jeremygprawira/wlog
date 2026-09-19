@@ -156,7 +156,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 12-A-10 Recipes: rest-api and grpc-service
 - [x] 12-B-1 sqlshape
 - [x] 12-B-2 client-http
-- [ ] 12-B-3 store-sql
+- [x] 12-B-3 store-sql
 - [ ] 12-B-4 store-pgx and store-gorm
 - [ ] 12-B-5 store-redis
 - [ ] 12-B-6 store-mongo and client-aws
