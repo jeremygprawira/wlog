@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/memory"
@@ -138,11 +137,9 @@ func runScenario(t TB, factory Factory, scenario Scenario) {
 	}
 }
 
-// recorder collects the events and the problems of one run.
+// recorder collects the events of one run.
 type recorder struct {
-	mem      *memory.Memory
-	mu       sync.Mutex
-	problems []wlog.Problem
+	mem *memory.Memory
 }
 
 // newRecorder builds an empty recorder.
@@ -150,20 +147,13 @@ func newRecorder() *recorder {
 	return &recorder{mem: memory.New(0)}
 }
 
-// logger builds the Logger of one scenario. It is silent, so a suite run prints nothing,
-// and it reports a problem into the recorder rather than to stderr.
-func (r *recorder) logger(opts ...wlog.Option) *wlog.Logger {
-	all := append([]wlog.Option{
+// logger builds the Logger of one scenario. It is silent, so a suite run prints nothing.
+func (r *recorder) logger() *wlog.Logger {
+	return wlog.New(
 		wlog.WithSilent(),
 		wlog.WithDrains(r.mem),
 		wlog.WithRedactFingerprint(false),
-		wlog.OnProblem(func(p wlog.Problem) {
-			r.mu.Lock()
-			defer r.mu.Unlock()
-			r.problems = append(r.problems, p)
-		}),
-	}, opts...)
-	return wlog.New(all...)
+	)
 }
 
 // events returns every event the run recorded.
@@ -182,12 +172,6 @@ func routesFor(scenario Scenario) Routes {
 		table.Order = handler
 	case strings.HasPrefix(scenario.Path, "/status/"):
 		table.Status = handler
-	case scenario.Path == "/panic":
-		table.Panic = handler
-	case scenario.Path == "/stream":
-		table.Stream = handler
-	case scenario.Path == "/fail":
-		table.Fail = handler
 	default:
 		table.OK = handler
 	}
