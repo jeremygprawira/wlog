@@ -71,7 +71,14 @@ func TestSetup_PAR19_AliasOrder(t *testing.T) {
 
 // TestSetup_BET16_BuildInfoService proves that with no service variables the module path
 // names the service.
+//
+// A Go 1.21 test binary carries no build info, so the test runs only on a toolchain that
+// gives one. The fallback itself reads the build info of a real binary, which carries the
+// module path on every release.
 func TestSetup_BET16_BuildInfoService(t *testing.T) {
+	if info, ok := debug.ReadBuildInfo(); !ok || info.Main.Path == "" {
+		t.Skip("this Go release reports no build info inside a test binary")
+	}
 	mem := memory.New(0)
 	log := wlog.New(
 		wlog.WithSilent(),
