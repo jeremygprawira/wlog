@@ -164,7 +164,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 12-C-1 log-slog
 - [ ] 12-C-2 log-logr and log-zap
 - [ ] 12-C-3 log-zerolog, log-logrus, and log-hclog
-- [ ] 12-C-4 log-std
+- [x] 12-C-4 log-std
 - [ ] 12-C-5 errors-validator and errors-oops
 - [ ] 12-C-6 errors-cockroach and flag-openfeature
 - [ ] 12-F-1 `wlog query` filters and output
