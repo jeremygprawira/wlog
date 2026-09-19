@@ -32,6 +32,7 @@ use (
 	./rpc/gqlgen
 	./rpc/grpc
 	./rpc/twirp
+	./store/bun
 	./store/gorm
 	./store/mongo
 	./store/pgx
