@@ -11,6 +11,7 @@ const maxLogLines = 50
 type LogLine struct {
 	Level string         `json:"level"`
 	Msg   string         `json:"msg"`
+	Time  string         `json:"time,omitempty"`
 	Attrs map[string]any `json:"attrs,omitempty"`
 }
 

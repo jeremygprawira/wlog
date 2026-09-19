@@ -243,6 +243,7 @@
       "properties": {
         "level": {"type": "string"},
         "msg": {"type": "string"},
+        "time": {"type": "string"},
         "attrs": {"type": "object"}
       }
     },
