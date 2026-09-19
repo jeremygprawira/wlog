@@ -1,10 +1,5 @@
 // This file holds the exchange: the shared HTTP pipeline that every adapter drives. One
 // Core is built per middleware, and one Exchange tracks one request from Start to End.
-
-// Package httpcore is the framework-neutral HTTP core that every wlog HTTP adapter
-// drives. One Core owns capture, the operation name, the level, the route rules, trace
-// context, and the emit point. An adapter passes only what its framework knows, at the
-// moment it knows it.
 package httpcore
 
 import (

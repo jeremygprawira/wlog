@@ -58,7 +58,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   A JSON body of any shape parses into the event, and a body cut at `MaxBody` becomes a
   marker with no text. A panic still emits its event, and `http.ErrAbortHandler` reaches
   net/http. The response writer forwards `Unwrap`, `Flush`, `Hijack`, and `ReadFrom`, so a
-  deadline and a large download still work.
+  deadline and a large download still work. `WriteProblem` writes an RFC 9457 document
+  with no internal field, and `ParseProblem` reads it back.
 - `wlog.Logger.ServiceEnv` returns the service environment the Logger resolved, which the
   HTTP capture policy reads to decide whether to capture everything.
 

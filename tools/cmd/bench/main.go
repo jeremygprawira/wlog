@@ -37,6 +37,7 @@ var delta = regexp.MustCompile(`([+-][\d.]+)%`)
 func main() {
 	baseline := flag.String("baseline", defaultBaseline, "the file that holds the baseline")
 	maxSlowdown := flag.Float64("max-slowdown", 20, "the largest slowdown in percent that passes")
+	pkg := flag.String("pkg", "./...", "the package pattern to benchmark")
 	flag.Parse()
 
 	wd, err := os.Getwd()
@@ -51,9 +52,14 @@ func main() {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, path)
 	}
-	if err := check(root, path, *maxSlowdown, runBench, runBenchstat, os.Stdout); err != nil {
+	if err := check(root, path, *maxSlowdown, benchRunner(*pkg), runBenchstat, os.Stdout); err != nil {
 		fail(err)
 	}
+}
+
+// benchRunner returns the benchmark run of one package pattern.
+func benchRunner(pkg string) func(dir string) ([]byte, error) {
+	return func(dir string) ([]byte, error) { return runBench(dir, pkg) }
 }
 
 // fail prints the error on stderr and exits 1.
@@ -122,12 +128,12 @@ func slowLines(report string, maxSlowdown float64) []string {
 	return out
 }
 
-// runBench runs every benchmark of the root module ten times.
+// runBench runs the benchmarks of one package pattern ten times.
 //
 // Ten runs give benchstat enough numbers to report a change that is real rather
 // than the noise of one measurement.
-func runBench(dir string) ([]byte, error) {
-	cmd := exec.CommandContext(context.Background(), "go", "test", "-run=xxx", "-bench=.", "-benchmem", "-count=10", "./...")
+func runBench(dir, pkg string) ([]byte, error) {
+	cmd := exec.CommandContext(context.Background(), "go", "test", "-run=xxx", "-bench=.", "-benchmem", "-count=10", pkg)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	return cmd.CombinedOutput()
