@@ -4,6 +4,7 @@ package query
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -122,7 +123,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			continue
 		}
 		if *url != "" && source == *url {
-			if err := readURL(source, read); err != nil {
+			if err := readURL(source, filter, window); err != nil {
 				_, _ = fmt.Fprintf(stderr, "wlog query: %v\n", err)
 				return 2
 			}
@@ -308,8 +309,9 @@ func readFile(path string, read func(io.Reader, string) error) error {
 	return read(file, path)
 }
 
-// readURL reads the memory endpoint of one live app.
-func readURL(address string, read func(io.Reader, string) error) error {
+// readURL reads the memory endpoint of one live app. The endpoint answers a JSON array
+// of events, and any other body is read line by line, like a file.
+func readURL(address string, filter *query.Filter, sink matchSink) error {
 	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, address, nil)
 	if err != nil {
 		return err
@@ -322,7 +324,26 @@ func readURL(address string, read func(io.Reader, string) error) error {
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s answered %s", address, response.Status)
 	}
-	return read(response.Body, address)
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	var events []map[string]any
+	if err := json.Unmarshal(body, &events); err == nil {
+		// The endpoint answers newest first, and a reader takes the events in
+		// event order, so the newest- and oldest-limits behave as they do on a
+		// file.
+		for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+			events[i], events[j] = events[j], events[i]
+		}
+		for _, event := range events {
+			if filter.Match(event) {
+				sink.add(event)
+			}
+		}
+		return nil
+	}
+	return scan(bytes.NewReader(body), filter, sink, func(string) {})
 }
 
 // matchSink receives the matches of one scan.

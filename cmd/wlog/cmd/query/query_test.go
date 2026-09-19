@@ -4,12 +4,16 @@ package query_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	wlogquery "github.com/jeremygprawira/wlog/cmd/wlog/cmd/query"
+	"github.com/jeremygprawira/wlog/drain/memory"
 )
 
 // fixture returns the path of the event fixture.
@@ -188,5 +192,49 @@ func TestQuery_Size(t *testing.T) {
 	}
 	if !strings.HasPrefix(lines[1], "request") || !strings.Contains(lines[1], "POST /orders/{id}") {
 		t.Errorf("first row = %q, want the busiest request", lines[1])
+	}
+}
+
+// TestQuery_URL proves that the same query against a live app's memory endpoint returns
+// the same events as the query against the same events in a file.
+func TestQuery_URL(t *testing.T) {
+	events := []map[string]any{
+		{"level": "info", "timestamp": "2026-09-16T08:00:00Z", "summary": "one"},
+		{"level": "error", "timestamp": "2026-09-16T08:00:01Z", "summary": "two"},
+		{"level": "error", "timestamp": "2026-09-16T08:00:02Z", "summary": "three"},
+	}
+
+	mem := memory.New(10)
+	file := &bytes.Buffer{}
+	for _, event := range events {
+		mem.Send(context.Background(), event)
+		body, err := json.Marshal(event)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		file.Write(body)
+		file.WriteByte('\n')
+	}
+	path := filepath.Join(t.TempDir(), "events.ndjson")
+	if err := os.WriteFile(path, file.Bytes(), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	server := httptest.NewServer(mem.QueryHandler(memory.WithAnyAddress()))
+	defer server.Close()
+
+	code, fromURL, _ := run("--level", "error", "--oldest", "--format", "json", "--url", server.URL)
+	if code != 0 {
+		t.Fatalf("url exit = %d, want 0", code)
+	}
+	code, fromFile, _ := run("--level", "error", "--oldest", "--format", "json", path)
+	if code != 0 {
+		t.Fatalf("file exit = %d, want 0", code)
+	}
+	if fromURL != fromFile {
+		t.Errorf("the URL query answered\n%s\nand the file query answered\n%s", fromURL, fromFile)
+	}
+	if strings.Contains(fromURL, "one") {
+		t.Errorf("the info event reached the answer: %s", fromURL)
 	}
 }

@@ -2,6 +2,9 @@ package memory_test
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -68,5 +71,67 @@ func TestMemory_Clear(t *testing.T) {
 	sendEvent(t, m, "info", time.Now(), nil)
 	if got := m.Snapshot(); len(got) != 1 {
 		t.Errorf("Snapshot after a new send = %d, want 1", len(got))
+	}
+}
+
+// TestMemory_QueryHandler proves that GET /events answers a JSON array of the matching
+// events, newest first, with a limit.
+func TestMemory_QueryHandler(t *testing.T) {
+	m := memory.New(10)
+	at := time.Date(2026, 9, 16, 8, 0, 0, 0, time.UTC)
+	sendEvent(t, m, "info", at, map[string]any{"event_id": "e-1"})
+	sendEvent(t, m, "error", at.Add(time.Second), map[string]any{"event_id": "e-2"})
+	sendEvent(t, m, "error", at.Add(2*time.Second), map[string]any{"event_id": "e-3"})
+
+	request := httptest.NewRequest(http.MethodGet, "/events?level=error&limit=1", nil)
+	request.RemoteAddr = "127.0.0.1:1234"
+	response := httptest.NewRecorder()
+	m.QueryHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	var events []map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &events); err != nil {
+		t.Fatalf("the answer is not a JSON array: %v", err)
+	}
+	if len(events) != 1 || events[0]["event_id"] != "e-3" {
+		t.Errorf("events = %v, want the newest error e-3", events)
+	}
+}
+
+// TestMemory_QueryHandler_Access proves the loopback rule and the token rule.
+func TestMemory_QueryHandler_Access(t *testing.T) {
+	m := memory.New(10)
+	nonLoopback := func() *http.Request {
+		request := httptest.NewRequest(http.MethodGet, "/events", nil)
+		request.RemoteAddr = "203.0.113.7:1234"
+		return request
+	}
+
+	response := httptest.NewRecorder()
+	m.QueryHandler().ServeHTTP(response, nonLoopback())
+	if response.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-loopback client", response.Code)
+	}
+
+	guarded := m.QueryHandler(memory.WithToken("s3cret"))
+	response = httptest.NewRecorder()
+	guarded.ServeHTTP(response, nonLoopback())
+	if response.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 without the token", response.Code)
+	}
+	request := nonLoopback()
+	request.Header.Set("Authorization", "Bearer s3cret")
+	response = httptest.NewRecorder()
+	guarded.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 with the token", response.Code)
+	}
+
+	response = httptest.NewRecorder()
+	m.QueryHandler(memory.WithAnyAddress()).ServeHTTP(response, nonLoopback())
+	if response.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 with WithAnyAddress", response.Code)
 	}
 }

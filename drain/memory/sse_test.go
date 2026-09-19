@@ -95,3 +95,53 @@ func TestSSE_NoGoroutineLeakAfterDisconnect(t *testing.T) {
 		t.Errorf("goroutines before=%d after=%d, suspect a leak", before, after)
 	}
 }
+
+// TestMemory_SSE_V2Frames proves the hello frame and the since replay of the v2 stream.
+func TestMemory_SSE_V2Frames(t *testing.T) {
+	m := memory.New(10)
+	at := time.Date(2026, 9, 16, 8, 0, 0, 0, time.UTC)
+	sendEvent(t, m, "info", at, map[string]any{"event_id": "e-1"})
+	sendEvent(t, m, "error", at.Add(time.Second), map[string]any{"event_id": "e-2"})
+
+	server := httptest.NewServer(m.StreamHandler(memory.WithAnyAddress()))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"?since=e-1", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	reader := bufio.NewReader(response.Body)
+
+	if line := readFrameLine(t, reader); line != "event: hello" {
+		t.Fatalf("first frame = %q, want the hello frame", line)
+	}
+	if data := readFrameLine(t, reader); !strings.Contains(data, `"size":2`) {
+		t.Errorf("hello data = %q, want the store size", data)
+	}
+	if blank := readFrameLine(t, reader); blank != "" {
+		t.Fatalf("frame separator = %q, want a blank line", blank)
+	}
+	if line := readFrameLine(t, reader); line != "event: event" {
+		t.Fatalf("second frame = %q, want the replayed event", line)
+	}
+	if data := readFrameLine(t, reader); !strings.Contains(data, "e-2") || strings.Contains(data, "e-1") {
+		t.Errorf("event data = %q, want only the event after e-1", data)
+	}
+}
+
+// readFrameLine reads one line of the SSE stream, and it fails the test after a timeout.
+func readFrameLine(t *testing.T, reader *bufio.Reader) string {
+	t.Helper()
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read the stream: %v", err)
+	}
+	return strings.TrimRight(line, "\n")
+}

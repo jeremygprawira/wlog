@@ -46,9 +46,7 @@ func followSources(sources []string, url string, filter *query.Filter, print fun
 			continue
 		}
 		if url != "" && source == url {
-			if err := readURL(source, func(reader io.Reader, _ string) error {
-				return scan(reader, filter, &followWindow{print: counted}, func(string) {})
-			}); err != nil {
+			if err := readURL(source, filter, &followWindow{print: counted}); err != nil {
 				_, _ = fmt.Fprintf(stderr, "wlog query: %v\n", err)
 				return 2
 			}
