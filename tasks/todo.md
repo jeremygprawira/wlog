@@ -133,7 +133,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-HTTP-4 Panics and the writer wrapper
 - [x] 11-HTTP-5 Problem responses, edge cases, benchmark, and docs
 - [x] 11-CONF-1 Shared test helpers and the http suite
-- [ ] 11-CONF-2 work, calls, and log suites
+- [x] 11-CONF-2 work, calls, and log suites
 - [ ] 11-CONF-3 drain suite and drain migration
 - [ ] 11-SET-1 setup.FromEnv
 - [ ] 11-ADP-1 http-std rebuilt
