@@ -135,7 +135,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-CONF-1 Shared test helpers and the http suite
 - [x] 11-CONF-2 work, calls, and log suites
 - [x] 11-CONF-3 drain suite and drain migration
-- [ ] 11-SET-1 setup.FromEnv
+- [x] 11-SET-1 setup.FromEnv
 - [ ] 11-ADP-1 http-std rebuilt
 - [ ] 11-ADP-2 http-echo and http-echo5 rebuilt
 - [ ] 11-ADP-3 http-gin rebuilt

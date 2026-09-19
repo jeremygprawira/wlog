@@ -14,18 +14,18 @@ type envWarning struct {
 	source string
 }
 
-// applyEnvDefaults reads WLOG_SERVICE, WLOG_VERSION, WLOG_ENV, WLOG_LEVEL,
-// WLOG_FORMAT, and WLOG_DEBUG as the Logger's starting configuration. Called before any
-// Option, so an explicit option (WithService, WithLevel, WithFormat, WithDebug, ...)
-// always overrides the matching env var. An invalid WLOG_LEVEL or WLOG_FORMAT value is
-// left at its default and returned as a warning; it never panics and never blocks New
-// from returning.
+// applyEnvDefaults reads the logger vars and the service identity as the Logger's
+// starting configuration. Called before any Option, so an explicit option (WithService,
+// WithLevel, WithFormat, WithDebug, ...) always overrides the matching env var. An
+// invalid WLOG_LEVEL or WLOG_FORMAT value is left at its default and returned as a
+// warning; it never panics and never blocks New from returning.
 func (l *Logger) applyEnvDefaults() []envWarning {
 	var warnings []envWarning
 
-	l.service.name = os.Getenv("WLOG_SERVICE")
-	l.service.version = os.Getenv("WLOG_VERSION")
-	l.service.env = os.Getenv("WLOG_ENV")
+	l.service.name = firstEnv("WLOG_SERVICE", "OTEL_SERVICE_NAME", "SERVICE_NAME")
+	l.service.version = firstEnv("WLOG_VERSION", "APP_VERSION", "SERVICE_VERSION")
+	l.service.env = firstEnv("WLOG_ENV", "APP_ENV", "ENVIRONMENT",
+		otelResourceValue("deployment.environment.name"))
 
 	if v := os.Getenv("WLOG_LEVEL"); v != "" {
 		if lvl, ok := parseLevel(v); ok {
@@ -83,4 +83,26 @@ func parseFormat(s string) (Format, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// firstEnv returns the first name that holds a non-empty value.
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if value := os.Getenv(name); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// otelResourceValue reads one key from OTEL_RESOURCE_ATTRIBUTES, which holds pairs of a
+// key and a value separated by commas.
+func otelResourceValue(key string) string {
+	for _, pair := range strings.Split(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"), ",") {
+		name, value, found := strings.Cut(pair, "=")
+		if found && strings.TrimSpace(name) == key {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
