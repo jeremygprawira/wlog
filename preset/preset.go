@@ -27,6 +27,10 @@ func ByName(name string) (wlog.OutputPreset, bool) {
 		return Flat(), true
 	case "otel":
 		return OTel(), true
+	case "ecs":
+		return ECS(), true
+	case "datadog":
+		return Datadog(), true
 	}
 	return nil, false
 }
@@ -131,6 +135,54 @@ func pathValue(event map[string]any, path string) (any, bool) {
 		}
 	}
 	return current, true
+}
+
+// setPath writes value at a dotted path, and creates the objects the path needs.
+func setPath(out map[string]any, path string, value any) {
+	parts := strings.Split(path, ".")
+	object := out
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := object[part].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			object[part] = next
+		}
+		object = next
+	}
+	object[parts[len(parts)-1]] = value
+}
+
+// deletePath removes the value at a dotted path, and the empty objects it leaves.
+func deletePath(out map[string]any, path string) {
+	parts := strings.Split(path, ".")
+	parents := make([]map[string]any, 0, len(parts))
+	object := out
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := object[part].(map[string]any)
+		if !ok {
+			return
+		}
+		parents = append(parents, object)
+		object = next
+	}
+	delete(object, parts[len(parts)-1])
+	// A parent that lost its last child goes too, so the output holds no empty object.
+	for i := len(parents) - 1; i >= 0; i-- {
+		if len(object) == 0 {
+			delete(parents[i], parts[i])
+		}
+		object = parents[i]
+	}
+}
+
+// movePath moves the value at one dotted path to another.
+func movePath(out map[string]any, from, to string) {
+	value, ok := pathValue(out, from)
+	if !ok {
+		return
+	}
+	deletePath(out, from)
+	setPath(out, to, value)
 }
 
 // stringOf reads a string value, and treats a missing or wrong-typed value as "".

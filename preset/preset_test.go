@@ -106,6 +106,9 @@ func TestPreset_ByName(t *testing.T) {
 		{"", "default", true},
 		{"default", "default", true},
 		{"FLAT", "flat", true},
+		{"otel", "otel", true},
+		{"ecs", "ecs", true},
+		{"datadog", "datadog", true},
 		{"yaml", "", false},
 	} {
 		got, ok := preset.ByName(tc.name)
