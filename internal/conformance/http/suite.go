@@ -335,6 +335,86 @@ var scenarios = []Scenario{
 		}(),
 	},
 	{
+		Name: "JSONBody", Method: http.MethodPost, Path: "/orders/42",
+		Headers:  map[string]string{"Content-Type": "application/json"},
+		Body:     `{"order_id":"A-1"}`,
+		Settings: Settings{CaptureAll: true, MaxBody: 64},
+		Handler:  func(r Routes) http.HandlerFunc { return r.Order },
+		Golden: func() map[string]any {
+			golden := base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success")
+			fields := httpFields(golden)
+			fields["bytes_in"] = 18
+			fields["request_body"] = map[string]any{"order_id": "A-1"}
+			fields["request_headers"] = map[string]any{"content-type": "application/json", "x-request-id": requestID}
+			fields["response_headers"] = map[string]any{"x-request-id": requestID}
+			return golden
+		}(),
+	},
+	{
+		Name: "ArrayBody", Method: http.MethodPost, Path: "/orders/42",
+		Headers:  map[string]string{"Content-Type": "application/json"},
+		Body:     `[{"password":"hunter2"}]`,
+		Settings: Settings{CaptureAll: true, MaxBody: 64},
+		Handler:  func(r Routes) http.HandlerFunc { return r.Order },
+		Golden: func() map[string]any {
+			golden := base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success")
+			fields := httpFields(golden)
+			fields["bytes_in"] = 24
+			fields["request_body"] = []any{map[string]any{"password": "[REDACTED]"}}
+			fields["request_headers"] = map[string]any{"content-type": "application/json", "x-request-id": requestID}
+			fields["response_headers"] = map[string]any{"x-request-id": requestID}
+			return golden
+		}(),
+		Secret: "hunter2",
+	},
+	{
+		Name: "CutBody", Method: http.MethodPost, Path: "/orders/42",
+		Headers:  map[string]string{"Content-Type": "application/json"},
+		Body:     `{"pad":"xxxxxxxxxx"}`,
+		Settings: Settings{CaptureAll: true, MaxBody: 8},
+		Handler:  func(r Routes) http.HandlerFunc { return r.Order },
+		Golden: func() map[string]any {
+			golden := base("POST", "POST /orders/{id}", "/orders/{id}", "/orders/42", http.StatusCreated, "info", "success")
+			fields := httpFields(golden)
+			fields["bytes_in"] = 20
+			// A body cut at the cap becomes a marker, and its text is never kept.
+			fields["request_body"] = map[string]any{"truncated": true, "bytes": 8}
+			fields["request_headers"] = map[string]any{"content-type": "application/json", "x-request-id": requestID}
+			fields["response_headers"] = map[string]any{"x-request-id": requestID}
+			return golden
+		}(),
+	},
+	{
+		Name: "NoContent", Method: http.MethodGet, Path: "/status/204",
+		Settings: Settings{CaptureAll: true, MaxBody: 64},
+		Handler:  func(r Routes) http.HandlerFunc { return r.Status },
+		Golden: func() map[string]any {
+			golden := base("GET", "GET /status/{code}", "/status/{code}", "/status/204", http.StatusNoContent, "info", "success")
+			fields := httpFields(golden)
+			fields["request_headers"] = map[string]any{"x-request-id": requestID}
+			fields["response_headers"] = map[string]any{"x-request-id": requestID}
+			return golden
+		}(),
+	},
+	{
+		Name: "NotModified", Method: http.MethodGet, Path: "/status/304",
+		Settings: Settings{CaptureAll: true, MaxBody: 64},
+		Handler:  func(r Routes) http.HandlerFunc { return r.Status },
+		Golden: func() map[string]any {
+			golden := base("GET", "GET /status/{code}", "/status/{code}", "/status/304", http.StatusNotModified, "info", "success")
+			fields := httpFields(golden)
+			fields["request_headers"] = map[string]any{"x-request-id": requestID}
+			fields["response_headers"] = map[string]any{"x-request-id": requestID}
+			return golden
+		}(),
+	},
+	{
+		Name: "SpoofedForwardedFor", Method: http.MethodGet, Path: "/ok",
+		Headers: map[string]string{"X-Forwarded-For": "10.0.0.1, 192.0.2.7"},
+		Handler: func(r Routes) http.HandlerFunc { return r.OK },
+		Golden:  base("GET", "GET /ok", "/ok", "/ok", http.StatusOK, "info", "success"),
+	},
+	{
 		Name: "HeadCapturesNoBody", Method: http.MethodHead, Path: "/ok",
 		Settings: Settings{CaptureAll: true, MaxBody: 64},
 		Handler:  func(r Routes) http.HandlerFunc { return r.OK },
