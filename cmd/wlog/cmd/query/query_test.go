@@ -137,3 +137,56 @@ func TestQuery_BadFlags(t *testing.T) {
 		t.Errorf("exit = %d, want 2 for a zero limit", code)
 	}
 }
+
+// TestQuery_Group proves the count per group, with hand-computed values.
+func TestQuery_Group(t *testing.T) {
+	code, stdout, _ := run("--group-by", "http.route", "--count", fixture("events.ndjson"))
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	want := "3  \n1  /orders/{id}\n"
+	if stdout != want {
+		t.Errorf("group counts = %q, want %q", stdout, want)
+	}
+}
+
+// TestQuery_Stats proves the nearest-rank percentiles of the fixture, with hand-computed
+// values.
+func TestQuery_Stats(t *testing.T) {
+	code, stdout, _ := run("--stats", "duration_ms", fixture("events.ndjson"))
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	if want := "4  5.0  840.2  840.2  840.2\n"; stdout != want {
+		t.Errorf("stats = %q, want %q", stdout, want)
+	}
+
+	code, stdout, _ = run("--group-by", "kind", "--stats", "duration_ms", fixture("events.ndjson"))
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	want := "request  2  12.5  840.2  840.2  840.2\n" +
+		"job  1  5.0  5.0  5.0  5.0\n" +
+		"message  1  3.0  3.0  3.0  3.0\n"
+	if stdout != want {
+		t.Errorf("group stats = %q, want %q", stdout, want)
+	}
+}
+
+// TestQuery_Size proves that the size report holds one row per kind and operation.
+func TestQuery_Size(t *testing.T) {
+	code, stdout, _ := run("--size", fixture("events.ndjson"))
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	if len(lines) != 5 {
+		t.Fatalf("size lines = %d, want a header and four rows:\n%s", len(lines), stdout)
+	}
+	if !strings.HasPrefix(lines[0], "kind") || !strings.Contains(lines[0], "gb_per_month") {
+		t.Errorf("header = %q, want the size columns", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "request") || !strings.Contains(lines[1], "POST /orders/{id}") {
+		t.Errorf("first row = %q, want the busiest request", lines[1])
+	}
+}

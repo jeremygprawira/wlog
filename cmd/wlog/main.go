@@ -46,6 +46,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "query" {
 		return wlogquery.Run(args[1:], stdout, stderr)
 	}
+	if len(args) > 0 && args[0] == "tail" {
+		return wlogquery.Run(append([]string{"--follow"}, args[1:]...), stdout, stderr)
+	}
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		_, _ = fmt.Fprint(stdout, usage())
 		return 0

@@ -51,6 +51,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	limit := flags.Int("limit", 100, "keep the newest N matches")
 	oldest := flags.Bool("oldest", false, "keep the oldest N matches")
 	url := flags.String("url", "", "read the memory endpoint of a live app")
+	groupBy := flags.String("group-by", "", "count or measure one field per group")
+	countFlag := flags.Bool("count", false, "print the count, per group with --group-by")
+	statsField := flags.String("stats", "", "print count, p50, p95, p99, and max of one numeric field")
+	sizeFlag := flags.Bool("size", false, "print the bytes per event and the monthly rate")
+	follow := flags.Bool("follow", false, "keep reading appended lines and rotated files")
 	where := &whereFlag{}
 	flags.Var(where, "where", "a condition, repeatable, such as llm.cost_micros>1000")
 	if err := flags.Parse(args); err != nil {
@@ -86,6 +91,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "wlog query: %v\n", err)
 		return 2
+	}
+
+	if *follow {
+		return followSources(flags.Args(), *url, filter, print, stderr)
 	}
 
 	sources := flags.Args()
@@ -129,10 +138,41 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	matches := window.events()
-	for _, event := range matches {
-		if err := print(event); err != nil {
+	switch {
+	case *sizeFlag:
+		if err := printSizes(stdout, matches); err != nil {
 			_, _ = fmt.Fprintf(stderr, "wlog query: %v\n", err)
 			return 2
+		}
+	case *groupBy != "" && *countFlag:
+		for _, bucket := range query.Counts(matches, *groupBy) {
+			if _, err := fmt.Fprintf(stdout, "%d  %s\n", bucket.Count, bucket.Key); err != nil {
+				return 2
+			}
+		}
+	case *groupBy != "" && *statsField != "":
+		for _, bucket := range query.GroupStats(matches, *groupBy, *statsField) {
+			if _, err := fmt.Fprintf(stdout, "%s  %d  %.1f  %.1f  %.1f  %.1f\n",
+				bucket.Key, bucket.Stats.Count, bucket.Stats.P50, bucket.Stats.P95, bucket.Stats.P99, bucket.Stats.Max); err != nil {
+				return 2
+			}
+		}
+	case *statsField != "":
+		stats := query.Statistics(matches, *statsField)
+		if _, err := fmt.Fprintf(stdout, "%d  %.1f  %.1f  %.1f  %.1f\n",
+			stats.Count, stats.P50, stats.P95, stats.P99, stats.Max); err != nil {
+			return 2
+		}
+	case *countFlag:
+		if _, err := fmt.Fprintf(stdout, "%d matches\n", len(matches)); err != nil {
+			return 2
+		}
+	default:
+		for _, event := range matches {
+			if err := print(event); err != nil {
+				_, _ = fmt.Fprintf(stderr, "wlog query: %v\n", err)
+				return 2
+			}
 		}
 	}
 	if skipped > 0 {
@@ -285,9 +325,15 @@ func readURL(address string, read func(io.Reader, string) error) error {
 	return read(response.Body, address)
 }
 
+// matchSink receives the matches of one scan.
+type matchSink interface {
+	add(map[string]any)
+	full() bool
+}
+
 // scan reads one line per event, keeps the matches, and counts a line that is not a JSON
 // object.
-func scan(reader io.Reader, filter *query.Filter, window *window, skip func(string)) error {
+func scan(reader io.Reader, filter *query.Filter, window matchSink, skip func(string)) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, 64<<10), maxLine)
 	for scanner.Scan() {
