@@ -41,7 +41,7 @@ func Run(path string) error {
 	)
 	ctx := log.WithContext(context.Background())
 
-	ctx, end := wlog.Start(ctx, "http.request")
+	ctx, end := wlog.Start(ctx, "refund.approve")
 	refund(ctx, "ord-1", 12.50)
 	end()
 

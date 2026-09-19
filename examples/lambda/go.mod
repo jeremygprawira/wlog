@@ -7,4 +7,6 @@ require (
 	github.com/jeremygprawira/wlog v0.5.0
 )
 
+require github.com/stretchr/testify v1.12.1 // indirect
+
 replace github.com/jeremygprawira/wlog => ../..

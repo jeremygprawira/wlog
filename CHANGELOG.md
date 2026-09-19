@@ -72,6 +72,20 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   silent drop becomes visible. `wlog.Error` with no event writes one `log` event at level
   `error`, and it carries the `ErrorInfo`.
 
+- The `Keeper` hook reads the enriched, read-only event:
+  `Keep(ctx context.Context, event wlog.Event) bool`. `KeeperFunc` takes the same shape. A
+  keeper reads a field through `event.Get("path")` and not by indexing a map. The tail keep
+  runs after the enrichers, so a keeper sees every enriched field.
+- `WithSampler` is replaced by `WithKeepers`, which takes `Keeper` values. A head decision
+  uses `WithHeadSampler` and the new `HeadSampler` interface. `sample.New` implements both,
+  so an existing sampler still works as a `Keeper`.
+- The event shape is v2. The metadata is one nested `wlog` object, `duration_ms` is a float
+  with microsecond precision, and every event carries an `event_id`. A reader changes
+  `event["wlog.schema_version"]` to `event["wlog"].(map[string]any)["schema_version"]` and
+  reads `duration_ms` as a float.
+- The failure of a stage reports through `OnProblem`, so a problem hook sees every dropped
+  field, disabled drain, and hook panic in one place.
+
 ### Removed
 
 - The package-level `wlog.SetEnabled` and `wlog.Enabled` are gone. Each Logger has
@@ -80,6 +94,9 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   gone. `wlog.WithOutput` with a preset replaces them.
 - `memory.Named`, `memory.Remove`, and `memory.Stores` are gone. They held a second
   package-level registry, and a caller passes the store it wants instead.
+
+- `WithSampler` is gone. `WithKeepers` and `WithHeadSampler` replace it, because a head
+  decision and a tail keep are different questions.
 
 ### Fixed
 

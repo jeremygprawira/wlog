@@ -282,9 +282,9 @@ func TestInit_CLI4_GeneratedAppServes(t *testing.T) {
 	}
 
 	// The event is written when the request ends, so it may arrive a moment later.
-	// The setup runs with env "local", so the console prints its tree rather than JSON; either
-	// way the request produced one event, named by its operation.
-	if !waitFor(t, 5*time.Second, func() bool { return strings.Contains(events.String(), "http.request") }) {
+	// The setup runs with env "local", so the console prints its tree rather than JSON;
+	// either way the request produced one event, named by its operation.
+	if !waitFor(t, 5*time.Second, func() bool { return strings.Contains(events.String(), "GET /") }) {
 		t.Errorf("no event was logged:\n%s", events.String())
 	}
 }
