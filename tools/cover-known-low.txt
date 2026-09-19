@@ -13,6 +13,7 @@ github.com/jeremygprawira/wlog/drain/file
 github.com/jeremygprawira/wlog/drain/hyperdx
 github.com/jeremygprawira/wlog/drain/posthog
 github.com/jeremygprawira/wlog/drain/sentry
+github.com/jeremygprawira/wlog/internal/conformance
 github.com/jeremygprawira/wlog/internal/httpdrain
 github.com/jeremygprawira/wlog/llm
 github.com/jeremygprawira/wlog/middleware/nethttp
