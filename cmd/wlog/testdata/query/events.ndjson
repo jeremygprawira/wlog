@@ -1,0 +1,5 @@
+{"timestamp":"2026-09-16T08:16:25Z","level":"error","kind":"request","operation":"POST /orders/{id}","duration_ms":840.2,"summary":"POST /orders/{id} 502 in 840.2ms: PAYMENT_DECLINED card declined","http":{"status":502,"route":"/orders/{id}"},"error":{"code":"PAYMENT_DECLINED","message":"card declined","fix":"Ask the customer for another card."}}
+{"timestamp":"2026-09-16T08:16:26Z","level":"info","kind":"request","operation":"GET /orders/{id}","duration_ms":12.5,"summary":"GET /orders/{id} 200 in 12.5ms","http":{"status":200}}
+{"timestamp":"2026-09-16T08:16:27Z","level":"warn","kind":"job","operation":"job cleanup","duration_ms":5,"summary":"job cleanup 0 in 5ms","job":{"name":"cleanup"}}
+not json at all
+{"timestamp":"2026-09-16T08:16:28Z","level":"debug","kind":"message","operation":"orders consume","duration_ms":3,"summary":"orders consume ok","messaging":{"system":"kafka"}}

@@ -19,6 +19,7 @@ import (
 	wlogagents "github.com/jeremygprawira/wlog/cmd/wlog/cmd/agents"
 	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
 	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
+	wlogquery "github.com/jeremygprawira/wlog/cmd/wlog/cmd/query"
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
 	"github.com/jeremygprawira/wlog/cmd/wlog/internal/term"
 	"github.com/jeremygprawira/wlog/cmd/wlog/report"
@@ -41,6 +42,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "agents" {
 		return wlogagents.Run(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "query" {
+		return wlogquery.Run(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		_, _ = fmt.Fprint(stdout, usage())
