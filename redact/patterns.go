@@ -71,10 +71,24 @@ var allBuiltinPatterns = []builtinPattern{
 	{"nik", reNIK, valueMasker(maskNIK), false, hasDigit, false},
 }
 
+// identityPaths names the reserved fields whose value is a system identifier. A value
+// pattern never scans one, because a run of digits inside a UUID can pass the card
+// checksum, and hiding half an event id or a trace id breaks the event.
+var identityPaths = map[string]bool{
+	"event_id":              true,
+	"trace.trace_id":        true,
+	"trace.span_id":         true,
+	"trace.parent_span_id":  true,
+	"trace.parent_event_id": true,
+}
+
 // applyPatterns runs every active pattern over s and returns the result. path is the
 // field's full path from the event root: it becomes Match.Path/Key, and it is used to
 // exempt http.client_ip from the ipv4 pattern unless MaskClientIP was set.
 func (r *Redactor) applyPatterns(s string, path []string) string {
+	if len(path) > 0 && identityPaths[strings.Join(path, ".")] {
+		return s
+	}
 	isClientIP := len(path) == 2 && path[0] == "http" && path[1] == "client_ip"
 	for _, p := range r.patterns {
 		if p.name == "ipv4" && isClientIP && !r.maskClientIP {

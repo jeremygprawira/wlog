@@ -91,3 +91,34 @@ func TestRedact_RED3_OneWordKeysMasked(t *testing.T) {
 		}
 	}
 }
+
+// TestRedact_IdentityFieldsNeverScanned proves that a value pattern never scans a
+// reserved identity field. A UUID can hold a run of digits that passes the card checksum,
+// so scanning an event id would sometimes hide half of it.
+func TestRedact_IdentityFieldsNeverScanned(t *testing.T) {
+	const card = "4111111111111111"
+	event := map[string]any{
+		"event_id": card,
+		"trace": map[string]any{
+			"trace_id":        card,
+			"span_id":         card,
+			"parent_span_id":  card,
+			"parent_event_id": card,
+		},
+		"note": card,
+	}
+	redact.Default().Apply(event)
+
+	if event["event_id"] != card {
+		t.Errorf("event_id = %v, want it unchanged", event["event_id"])
+	}
+	trace := event["trace"].(map[string]any)
+	for _, key := range []string{"trace_id", "span_id", "parent_span_id", "parent_event_id"} {
+		if trace[key] != card {
+			t.Errorf("trace.%s = %v, want it unchanged", key, trace[key])
+		}
+	}
+	if event["note"] != "****1111" {
+		t.Errorf("note = %v, want the same value masked outside an identity field", event["note"])
+	}
+}
