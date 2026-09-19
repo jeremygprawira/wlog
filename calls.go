@@ -33,6 +33,9 @@ type CallResult struct {
 	ErrMessage string         // only a message the adapter knows is safe
 	Rows       int64          // rows or items affected, 0 means unknown
 	Attrs      map[string]any // fields of this call, copied and redacted like any other
+	// Duration is the duration the driver measured, for a driver that reports one.
+	// Zero means the measured duration of the call, from StartCall to its end func.
+	Duration time.Duration
 }
 
 // openCall is the state one started call carries on the context, so an adapter inside
@@ -119,6 +122,9 @@ func (e *event) reportHookPanic(source string, recovered any) {
 // stops at maxCalls records, and every call still counts in call_stats.
 func (e *event) recordCall(call openCall, result CallResult) {
 	duration := float64(time.Since(call.start).Microseconds()) / 1000
+	if result.Duration > 0 {
+		duration = float64(result.Duration.Microseconds()) / 1000
+	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()

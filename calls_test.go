@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/wlogtest"
@@ -65,6 +66,33 @@ func startUnit(t *testing.T, opts ...wlog.Option) (context.Context, func(), *wlo
 	log, rec := wlogtest.New(t, opts...)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "unit")
 	return ctx, end, rec
+}
+
+// TestCalls_DurationFromTheDriver proves that a call reports the duration its driver
+// measured, and that a call without one keeps the measured duration.
+func TestCalls_DurationFromTheDriver(t *testing.T) {
+	ctx, end, rec := startUnit(t)
+
+	_, callEnd := wlog.StartCall(ctx, wlog.Call{Kind: "db", Operation: "insert"})
+	callEnd(wlog.CallResult{Status: "ok", Duration: 25 * time.Millisecond})
+	_, measuredEnd := wlog.StartCall(ctx, wlog.Call{Kind: "cache", Operation: "get"})
+	measuredEnd(wlog.CallResult{Status: "ok"})
+	end()
+
+	event := rec.Last()
+	record := recordOfKind(t, callsOf(t, event), "db")
+	if record["duration_ms"] != float64(25) {
+		t.Errorf("calls[db].duration_ms = %v, want 25", record["duration_ms"])
+	}
+	stats := kindStatsOf(t, event, "db")
+	if stats["duration_ms"] != float64(25) {
+		t.Errorf("call_stats.db.duration_ms = %v, want 25", stats["duration_ms"])
+	}
+	cacheRecord := recordOfKind(t, callsOf(t, event), "cache")
+	measured, ok := cacheRecord["duration_ms"].(float64)
+	if !ok || measured < 0 {
+		t.Errorf("calls[cache].duration_ms = %v, want a measured duration", cacheRecord["duration_ms"])
+	}
 }
 
 // TestCalls_ErrTextNeverCopied proves that a record holds the error code and only the
