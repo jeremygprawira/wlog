@@ -25,10 +25,12 @@ use (
 	./middleware/gozero
 	./middleware/hertz
 	./middleware/httprouter
+	./middleware/huma
 	./middleware/kratos
 	./rpc/connect
 	./rpc/gqlgen
 	./rpc/grpc
+	./rpc/twirp
 	./tools
 	./trace/otel
 )
