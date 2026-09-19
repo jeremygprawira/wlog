@@ -22,6 +22,10 @@ type config struct {
 	trustedProxies []netip.Prefix
 
 	captureAll      bool
+	captureBody     bool
+	bodySet         bool // true once CaptureBody named the answer itself
+	maxBody         int
+	bodyTypes       []string
 	requestHeaders  map[string]bool // lowercase allow-list
 	responseHeaders map[string]bool // lowercase allow-list
 	cookieValues    map[string]bool // cookie names kept unmasked
@@ -45,6 +49,8 @@ type routeRule struct {
 func newConfig(log *wlog.Logger, opts []Option) config {
 	cfg := config{
 		route:           requestPattern,
+		maxBody:         defaultMaxBody,
+		bodyTypes:       defaultBodyTypes,
 		requestHeaders:  headerSet(defaultRequestHeaders),
 		responseHeaders: headerSet(defaultResponseHeaders),
 		cookieValues:    map[string]bool{},
@@ -53,6 +59,7 @@ func newConfig(log *wlog.Logger, opts []Option) config {
 	}
 	if log != nil && isLocalEnv(log.ServiceEnv()) {
 		cfg.captureAll = true
+		cfg.captureBody = true
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -84,8 +91,50 @@ func RouteFunc(fn func(*http.Request) string) Option {
 }
 
 // CaptureAll captures every header, the query values, the cookie values, the path
-// parameter values, and the bodies. A development service environment turns it on.
-func CaptureAll() Option { return func(c *config) { c.captureAll = true } }
+// parameter values, and the bodies. A development service environment turns it on. An
+// explicit CaptureBody wins over this option.
+func CaptureAll() Option {
+	return func(c *config) {
+		c.captureAll = true
+		if !c.bodySet {
+			c.captureBody = true
+		}
+	}
+}
+
+// CaptureBody captures the request and the response body without the rest of CaptureAll.
+// A body is captured only for the content types of BodyTypes, and never for a HEAD
+// request or for a response with no body.
+func CaptureBody(on bool) Option {
+	return func(c *config) {
+		c.captureBody = on
+		c.bodySet = true
+	}
+}
+
+// MaxBody caps the bytes captured in each direction. The handler still reads the whole
+// request body. The default is 16 KiB, and the value is clamped to 0 through 1 MiB.
+func MaxBody(bytes int) Option {
+	return func(c *config) {
+		if bytes < 0 {
+			bytes = 0
+		}
+		if bytes > maxBodyLimit {
+			bytes = maxBodyLimit
+		}
+		c.maxBody = bytes
+	}
+}
+
+// BodyTypes sets the content types whose bodies are captured. A type ending in /* matches
+// a whole top-level type, and one ending in /*+json matches a structured suffix.
+func BodyTypes(types ...string) Option {
+	return func(c *config) {
+		if len(types) > 0 {
+			c.bodyTypes = types
+		}
+	}
+}
 
 // CaptureHeaders adds names to the request header allow-list of safe defaults.
 func CaptureHeaders(names ...string) Option {

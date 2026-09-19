@@ -55,6 +55,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   capture policy, and the emit point. An adapter passes what its framework knows.
   Safe defaults keep the allow-listed headers and the query and cookie names. `CaptureAll`
   adds the values and the bodies, and a local, dev, or development environment turns it on.
+  A JSON body of any shape parses into the event, and a body cut at `MaxBody` becomes a
+  marker with no text.
 - `wlog.Logger.ServiceEnv` returns the service environment the Logger resolved, which the
   HTTP capture policy reads to decide whether to capture everything.
 

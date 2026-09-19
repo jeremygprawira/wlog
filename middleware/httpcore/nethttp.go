@@ -3,6 +3,7 @@
 package httpcore
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/jeremygprawira/wlog"
@@ -25,6 +26,16 @@ func NetHTTP(log *wlog.Logger, opts ...Option) func(http.Handler) http.Handler {
 				if trace, ok := propagate.FromContext(ctx); ok && trace.RequestID != "" {
 					w.Header().Set("X-Request-ID", trace.RequestID)
 				}
+			}
+			// The body is read before the handler, and the reader hands every byte back,
+			// so the handler still reads the whole body.
+			if x.owned && core.CapturesBody(view) {
+				body, rest, truncated := core.ReadBody(r.Body)
+				if rest != nil {
+					r.Body = io.NopCloser(rest)
+				}
+				x.RequestBody(body, truncated, false)
+				defer core.ReturnBody(body)
 			}
 
 			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}

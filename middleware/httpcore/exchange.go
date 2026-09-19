@@ -21,8 +21,9 @@ import (
 // Core is the shared HTTP pipeline of one middleware. Build it once with New, and drive
 // one Exchange per request.
 type Core struct {
-	log *wlog.Logger
-	cfg config
+	log  *wlog.Logger
+	cfg  config
+	pool *bodyPool
 }
 
 // New builds the Core of one middleware. A nil Logger means wlog.Default.
@@ -31,7 +32,7 @@ func New(log *wlog.Logger, opts ...Option) *Core {
 		log = wlog.Default()
 	}
 	cfg := newConfig(log, opts)
-	return &Core{log: log, cfg: cfg}
+	return &Core{log: log, cfg: cfg, pool: newBodyPool(cfg.maxBody + 1)}
 }
 
 // Skip reports whether this request starts no event at all. A skipped request still runs
@@ -57,13 +58,13 @@ func (c *Core) Skip(r Request) bool {
 func (c *Core) Start(ctx context.Context, r Request) (context.Context, *Exchange) {
 	operation := r.Method() + " unmatched"
 	if wlog.HasEvent(ctx) {
-		x := &Exchange{core: c, ctx: ctx, method: r.Method()}
+		x := &Exchange{core: c, ctx: ctx, method: r.Method(), request: r}
 		x.writeRequest(r)
 		return ctx, x
 	}
 	ctx, end := wlog.Start(c.log.WithContext(ctx), operation)
 	ctx = propagate.Extract(ctx, c.requestIDCarrier(r))
-	x := &Exchange{core: c, ctx: ctx, end: end, owned: true, method: r.Method()}
+	x := &Exchange{core: c, ctx: ctx, end: end, owned: true, method: r.Method(), request: r}
 	x.writeRequest(r)
 	return ctx, x
 }
@@ -86,6 +87,7 @@ type Exchange struct {
 	end         func()
 	owned       bool // true when this Exchange started the event and must end it
 	method      string
+	request     Request
 	route       string
 	matched     bool
 	operationID string

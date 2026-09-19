@@ -129,7 +129,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-PRE-4 GCP and EMF presets
 - [x] 11-HTTP-1 Views, Exchange, and route rules
 - [x] 11-HTTP-2 Capture policy
-- [ ] 11-HTTP-3 Bodies
+- [x] 11-HTTP-3 Bodies
 - [ ] 11-HTTP-4 Panics and the writer wrapper
 - [ ] 11-HTTP-5 Problem responses, edge cases, benchmark, and docs
 - [ ] 11-CONF-1 Shared test helpers and the http suite
