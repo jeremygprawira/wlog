@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/memory"
@@ -22,10 +23,12 @@ type Recorder interface {
 	Problems() []wlog.Problem
 }
 
-// MemoryRecorder collects the events of one suite run. It is backed by drain-memory, so
-// every suite reads the same nested maps a real drain receives.
+// MemoryRecorder collects the events and the problems of one suite run. It is backed by
+// drain-memory, so every suite reads the same nested maps a real drain receives.
 type MemoryRecorder struct {
-	mem *memory.Memory
+	mem      *memory.Memory
+	mu       sync.Mutex
+	problems []wlog.Problem
 }
 
 // NewMemoryRecorder builds an empty recorder.
@@ -38,6 +41,11 @@ func (r *MemoryRecorder) Logger(opts ...wlog.Option) *wlog.Logger {
 		wlog.WithSilent(),
 		wlog.WithDrains(r.mem),
 		wlog.WithRedactFingerprint(false),
+		wlog.OnProblem(func(p wlog.Problem) {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			r.problems = append(r.problems, p)
+		}),
 	}, opts...)
 	return wlog.New(all...)
 }
@@ -52,6 +60,13 @@ func (r *MemoryRecorder) Last() map[string]any {
 		return nil
 	}
 	return events[len(events)-1]
+}
+
+// Problems returns every problem the run reported.
+func (r *MemoryRecorder) Problems() []wlog.Problem {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]wlog.Problem(nil), r.problems...)
 }
 
 // normalizeKeys are the keys whose value changes between two runs of one scenario.
