@@ -4,12 +4,18 @@ go 1.26.0
 
 require (
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-chi/chi/v5 v5.3.2
+	github.com/jeremygprawira/wlog/middleware/chi v0.6.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/labstack/echo/v5 v5.3.1
 	go.uber.org/zap v1.28.0
+	google.golang.org/grpc v1.67.3
 )
 
-require go.uber.org/multierr v1.10.0 // indirect
+require (
+	go.uber.org/multierr v1.10.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
+)
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
@@ -28,6 +34,7 @@ require (
 	github.com/jeremygprawira/wlog/middleware/echo v0.6.0
 	github.com/jeremygprawira/wlog/middleware/echo5 v0.6.0
 	github.com/jeremygprawira/wlog/middleware/gin v0.6.0
+	github.com/jeremygprawira/wlog/rpc/grpc v0.6.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
@@ -56,8 +63,12 @@ replace github.com/jeremygprawira/wlog => ..
 
 replace github.com/jeremygprawira/wlog/log/zap => ../log/zap
 
+replace github.com/jeremygprawira/wlog/middleware/chi => ../middleware/chi
+
 replace github.com/jeremygprawira/wlog/middleware/echo => ../middleware/echo
 
 replace github.com/jeremygprawira/wlog/middleware/echo5 => ../middleware/echo5
 
 replace github.com/jeremygprawira/wlog/middleware/gin => ../middleware/gin
+
+replace github.com/jeremygprawira/wlog/rpc/grpc => ../rpc/grpc

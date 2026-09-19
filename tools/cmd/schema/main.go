@@ -31,6 +31,12 @@ const eventGoldens = "testdata/shape"
 // suiteGoldens is the directory that holds one golden event per conformance scenario.
 const suiteGoldens = "internal/conformance/http/testdata"
 
+// recipeGoldens lists the hand-written golden event of each recipe example.
+var recipeGoldens = []string{
+	"examples/rest-api/testdata/event.json",
+	"examples/grpc-service/testdata/event.json",
+}
+
 // mapGoldens lists the documents that follow the map report shape.
 var mapGoldens = []string{"wlog.map.json", "cmd/wlog/report/testdata/map_v2.json"}
 
@@ -100,6 +106,9 @@ func check(root string) ([]string, error) {
 	}
 	for _, path := range suite {
 		documents = append(documents, document{path: path, schema: events})
+	}
+	for _, name := range recipeGoldens {
+		documents = append(documents, document{path: filepath.Join(root, name), schema: events})
 	}
 	for _, name := range mapGoldens {
 		documents = append(documents, document{path: filepath.Join(root, name), schema: maps})
