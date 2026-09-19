@@ -161,7 +161,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 12-B-5 store-redis
 - [x] 12-B-6 store-mongo and client-aws
 - [x] 12-B-7 store-bun
-- [ ] 12-C-1 log-slog
+- [x] 12-C-1 log-slog
 - [ ] 12-C-2 log-logr and log-zap
 - [ ] 12-C-3 log-zerolog, log-logrus, and log-hclog
 - [x] 12-C-4 log-std
