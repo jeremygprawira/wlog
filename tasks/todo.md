@@ -145,7 +145,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 ## Phase 12, v0.7: everyday stack, search, and agents
 
 - [x] 12-A-1 http-chi
-- [ ] 12-A-2 http-fasthttp
+- [x] 12-A-2 http-fasthttp
 - [ ] 12-A-3 http-fiber and http-fiber3
 - [ ] 12-A-4 rpc-grpc
 - [ ] 12-A-5 http-httprouter and http-gozero
