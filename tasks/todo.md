@@ -138,7 +138,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-SET-1 setup.FromEnv
 - [x] 11-ADP-1 http-std rebuilt
 - [x] 11-ADP-2 http-echo and http-echo5 rebuilt
-- [ ] 11-ADP-3 http-gin rebuilt
+- [x] 11-ADP-3 http-gin rebuilt
 - [ ] 11-MIG-1 Migrate log outputs, trace-otel, examples, and the CLI to v2 names
 - [ ] Review point 11, v0.6.0: human review, then ask before tagging
 
