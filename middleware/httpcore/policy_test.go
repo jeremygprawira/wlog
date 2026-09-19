@@ -248,7 +248,8 @@ func TestHTTPCore_PAR15_SafeDefaults(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/orders?page=2&limit=10", nil)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer secret")
-	req.AddCookie(&http.Cookie{Name: "sid", Value: "abc"})
+	// The value holds no short run of hex, so no random event id can hold it too.
+	req.AddCookie(&http.Cookie{Name: "sid", Value: "cookie-secret-1"})
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
 	fields := httpFields(t, rec.Last())
@@ -267,7 +268,7 @@ func TestHTTPCore_PAR15_SafeDefaults(t *testing.T) {
 	if _, kept := fields["request_cookie_names"]; !kept {
 		t.Errorf("request_cookie_names is absent: %v", fields)
 	}
-	if strings.Contains(eventJSON(t, rec.Last()), "abc") {
+	if strings.Contains(eventJSON(t, rec.Last()), "cookie-secret-1") {
 		t.Errorf("the cookie value reached the event: %v", rec.Last())
 	}
 	if _, kept := fields["request_query"]; kept {
