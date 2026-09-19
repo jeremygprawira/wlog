@@ -126,7 +126,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 11-PRE-1 Preset contract and flat
 - [x] 11-PRE-2 OTel preset
 - [x] 11-PRE-3 ECS and Datadog presets
-- [ ] 11-PRE-4 GCP and EMF presets
+- [x] 11-PRE-4 GCP and EMF presets
 - [ ] 11-HTTP-1 Views, Exchange, and route rules
 - [ ] 11-HTTP-2 Capture policy
 - [ ] 11-HTTP-3 Bodies

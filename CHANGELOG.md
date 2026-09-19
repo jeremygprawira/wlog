@@ -41,8 +41,10 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   backend. `preset.Flat` writes every nested object as dotted keys. `preset.OTel` writes
   the OTel log data model with semantic conventions v1.43.0. `preset.ECS` writes the
   Elastic Common Schema, and `preset.Datadog` writes the Datadog log attributes.
-  `preset.ByName` resolves a name, and `preset.Rename` renames a top-level key. A preset
-  changes the printed line only, and every drain still receives the canonical event.
+  `preset.GCP` writes the Cloud Logging fields, and `preset.EMF` writes CloudWatch
+  Embedded Metric Format. `preset.ByName` resolves a name, and `preset.Rename` renames a
+  top-level key. A preset changes the printed line only, and every drain still receives
+  the canonical event.
 - `integrations/search/collectors/otel-filelog.yaml` holds a tested OTel Collector config.
   A filelog receiver reads the `otel` preset output, and a transform processor moves the
   resource and the attributes onto the log record.

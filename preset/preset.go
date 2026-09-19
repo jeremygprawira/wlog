@@ -31,6 +31,10 @@ func ByName(name string) (wlog.OutputPreset, bool) {
 		return ECS(), true
 	case "datadog":
 		return Datadog(), true
+	case "gcp":
+		return GCP(), true
+	case "emf":
+		return EMF(), true
 	}
 	return nil, false
 }
@@ -189,4 +193,26 @@ func movePath(out map[string]any, from, to string) {
 func stringOf(value any) string {
 	text, _ := value.(string)
 	return text
+}
+
+// textOf renders a string or a number as text, which a label or a dimension needs.
+func textOf(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return numberString(value)
+}
+
+// floatValue reads a number, and treats a missing or wrong-typed value as zero.
+func floatValue(value any) float64 {
+	switch number := value.(type) {
+	case int:
+		return float64(number)
+	case int64:
+		return float64(number)
+	case float64:
+		return number
+	default:
+		return 0
+	}
 }
