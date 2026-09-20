@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # CLAUDE.md, wlog
 
 Read order: [CAPABILITIES.md](docs/CAPABILITIES.md), then [SPEC.md](docs/SPEC.md), then the

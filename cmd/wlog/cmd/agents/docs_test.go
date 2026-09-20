@@ -36,3 +36,39 @@ func TestAgentDocs_Files(t *testing.T) {
 		t.Errorf("llms-full.txt is %d bytes and llms.txt is %d, want the full text larger", len(full), len(index))
 	}
 }
+
+// TestAgentDocs_Skills proves that every skill folder holds a SKILL.md with its own
+// name, and that the index names each one.
+func TestAgentDocs_Skills(t *testing.T) {
+	skills := filepath.Join(root(), "cmd", "wlog", "internal", "templates", "skills")
+	entries, err := os.ReadDir(skills)
+	if err != nil {
+		t.Fatalf("read the skills folder: %v", err)
+	}
+	index, err := os.ReadFile(filepath.Join(skills, "index.md"))
+	if err != nil {
+		t.Fatalf("read the skills index: %v", err)
+	}
+
+	count := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		count++
+		body, err := os.ReadFile(filepath.Join(skills, entry.Name(), "SKILL.md"))
+		if err != nil {
+			t.Errorf("skill %s: %v", entry.Name(), err)
+			continue
+		}
+		if !strings.Contains(string(body), "name: "+entry.Name()) {
+			t.Errorf("skill %s does not name itself in its front matter", entry.Name())
+		}
+		if !strings.Contains(string(index), entry.Name()+"/SKILL.md") {
+			t.Errorf("the index does not name the skill %s", entry.Name())
+		}
+	}
+	if count == 0 {
+		t.Error("the skills folder holds no skill")
+	}
+}
