@@ -35,6 +35,7 @@ const suiteGoldens = "internal/conformance/http/testdata"
 var recipeGoldens = []string{
 	"examples/rest-api/testdata/event.json",
 	"examples/grpc-service/testdata/event.json",
+	"examples/cli-tool/testdata/event.json",
 }
 
 // mapGoldens lists the documents that follow the map report shape.
