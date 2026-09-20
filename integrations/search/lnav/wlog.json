@@ -1,0 +1,21 @@
+{
+  "$schema": "https://lnav.org/schemas/format-v1.schema.json",
+  "wlog": {
+    "title": "wlog",
+    "description": "Wide events written by wlog as one JSON object per line.",
+    "json": true,
+    "file-pattern": "\\.ndjson$|\\.jsonl$|\\.log$",
+    "timestamp-field": "timestamp",
+    "line-format": [
+      {"field": "timestamp"},
+      {"field": "level", "text-transform": "uppercase", "min-width": 5},
+      {"field": "operation", "auto-width": true},
+      {"field": "summary", "auto-width": true}
+    ],
+    "value": {
+      "operation": {"kind": "string", "identifier": true},
+      "error.code": {"kind": "string", "identifier": true},
+      "level": {"kind": "string", "identifier": true}
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "facets": [
+    {"name": "operation", "path": "operation", "type": "string", "groups": ["wlog"]},
+    {"name": "level", "path": "level", "type": "string", "groups": ["wlog"]},
+    {"name": "kind", "path": "kind", "type": "string", "groups": ["wlog"]},
+    {"name": "error_code", "path": "error.code", "type": "string", "groups": ["wlog"]},
+    {"name": "http_status", "path": "http.status", "type": "number", "groups": ["wlog"]},
+    {"name": "duration_ms", "path": "duration_ms", "type": "number", "groups": ["wlog"]},
+    {"name": "trace_id", "path": "trace.trace_id", "type": "string", "groups": ["wlog"]},
+    {"name": "request_id", "path": "trace.request_id", "type": "string", "groups": ["wlog"]}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "title": "wlog on ClickHouse",
+  "uid": "wlog-clickhouse",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Errors by operation",
+      "type": "table",
+      "targets": [
+        {"rawSql": "SELECT operation, code, events FROM wlog_errors_by_operation LIMIT 20", "format": "table", "refId": "A"}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "p95 by operation",
+      "type": "table",
+      "targets": [
+        {"rawSql": "SELECT operation, p95_ms, events FROM wlog_p95_by_operation LIMIT 20", "format": "table", "refId": "A"}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Calls by system",
+      "type": "table",
+      "targets": [
+        {"rawSql": "SELECT system, kind, calls, total_ms FROM wlog_calls_by_system LIMIT 20", "format": "table", "refId": "A"}
+      ]
+    }
+  ]
+}

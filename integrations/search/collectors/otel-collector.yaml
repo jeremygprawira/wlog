@@ -1,0 +1,26 @@
+# The OpenTelemetry collector reads the wlog JSON lines and forwards them as log records.
+receivers:
+  filelog:
+    include: [/var/log/wlog/*.ndjson, /var/log/wlog/*.jsonl]
+    start_at: beginning
+    operators:
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+        severity:
+          parse_from: attributes.level
+
+processors:
+  batch:
+
+exporters:
+  otlphttp:
+    endpoint: https://otlp.example.com
+
+service:
+  pipelines:
+    logs:
+      receivers: [filelog]
+      processors: [batch]
+      exporters: [otlphttp]

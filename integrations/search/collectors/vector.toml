@@ -1,0 +1,18 @@
+# Vector reads the wlog JSON lines from stdout or a file and forwards them unchanged.
+[sources.wlog]
+type = "file"
+include = ["/var/log/wlog/*.ndjson", "/var/log/wlog/*.jsonl"]
+read_from = "beginning"
+
+[transforms.keep]
+type = "remap"
+inputs = ["wlog"]
+source = '''
+. = parse_json!(.message)
+'''
+
+[sinks.backend]
+type = "http"
+inputs = ["keep"]
+uri = "https://logs.example.com/ingest"
+encoding.codec = "json"
