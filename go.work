@@ -17,6 +17,7 @@ use (
 	./errors/validator
 	./examples
 	./examples/lambda
+	./flag/openfeature
 	./log/hclog
 	./log/logr
 	./log/logrus
