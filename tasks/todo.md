@@ -172,7 +172,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 12-F-3 drain-memory query endpoint and SSE v2
 - [x] 12-F-4 `wlog explain`, `rules`, `schema`, and `version`
 - [x] 12-F-5 Agent docs
-- [ ] 12-F-6 Search recipes
+- [x] 12-F-6 Search recipes
 - [ ] 12-F-7 `wlog mcp`
 - [ ] 12-F-8 Recipe: cli-tool
 - [ ] 12-F-9 `wlog doctor` additions
