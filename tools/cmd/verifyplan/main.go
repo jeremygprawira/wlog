@@ -185,12 +185,11 @@ func isGoTest(command string) bool {
 }
 
 // addVerbose asks the go command for the verbose form, so a test that never ran
-// shows up in the output.
+// shows up in the output. Every go test of a compound command gets the flag,
+// because the test that runs may not be the first one: a command that checks a
+// package with no tests and then runs the pattern would otherwise look empty.
 func addVerbose(command string) string {
-	if signal := "go test "; strings.Contains(command, signal) {
-		return strings.Replace(command, signal, signal+"-v ", 1)
-	}
-	return command
+	return strings.ReplaceAll(command, "go test ", "go test -v ")
 }
 
 // indent puts four spaces before every line of a command output, so a report

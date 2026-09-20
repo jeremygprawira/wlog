@@ -147,7 +147,7 @@ Specs: [SPEC-repo-ci.md](../docs/SPEC-repo-ci.md), [SPEC-hardening.md](../docs/S
 - `examples/mux/mux` is untracked, and `.gitignore` covers module binaries.
 - `CHANGELOG.md`, `SECURITY.md`, and `CONTRIBUTING.md` exist. `tools release -dry-run` prints the tag order and apidiff results.
 
-**Verify:** `go test -race -run 'TestRelease_' ./tools/... && go test -race ./internal/... ./internal/httpdrain`.
+**Verify:** `go test -race -run 'TestRelease_' ./tools/... && go test -race ./internal/... ./pipeline/httpdrain`.
 **Deps:** 10-CI-2. **Size:** M. **Closes:** REL-7, REL-8, PIPE-23.
 **Files:**
 
@@ -1276,7 +1276,7 @@ golden file is written by hand from the spec.
 - `integrations/search/collectors/otel-filelog.yaml` parses the preset. The integration test runs the collector with it and receives one log record per golden line.
 - Tests: `TestPreset_BET14_OTelGoldens`, `TestPreset_BET14_SemconvNamesExist`, `TestPreset_BET14_GenAINames`.
 
-**Verify:** `go test -race -run 'TestPreset_BET14_' ./preset && make integration`.
+**Verify:** `go test -race -run 'TestPreset_BET14_' ./preset`. The `make integration` run needs a Docker daemon, so it stays a manual step.
 **Deps:** 11-PRE-1. **Size:** M. **Closes:** BET-14, CORE-13.
 **Files:**
 

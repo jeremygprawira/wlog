@@ -94,3 +94,14 @@ func TestVerifyPlan_MultiPackagePassIsNotAFalsePositive(t *testing.T) {
 		t.Fatalf("run returned %v, want nil:\n%s", err, out.String())
 	}
 }
+
+// TestVerifyplan_AddsVerboseToEveryGoTest proves that a compound command gets the flag
+// on every go test, so the run that matches the pattern is visible even when an earlier
+// package holds no test.
+func TestVerifyplan_AddsVerboseToEveryGoTest(t *testing.T) {
+	command := "go test -race ./schema && cd tools && go test -race -run 'TestSchema_' ./... && go run ./cmd/schema"
+	want := "go test -v -race ./schema && cd tools && go test -v -race -run 'TestSchema_' ./... && go run ./cmd/schema"
+	if got := addVerbose(command); got != want {
+		t.Errorf("addVerbose = %q, want %q", got, want)
+	}
+}
