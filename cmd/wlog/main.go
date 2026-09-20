@@ -18,6 +18,7 @@ import (
 
 	wlogagents "github.com/jeremygprawira/wlog/cmd/wlog/cmd/agents"
 	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
+	wlogexplain "github.com/jeremygprawira/wlog/cmd/wlog/cmd/explain"
 	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
 	wlogquery "github.com/jeremygprawira/wlog/cmd/wlog/cmd/query"
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
@@ -48,6 +49,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "tail" {
 		return wlogquery.Run(append([]string{"--follow"}, args[1:]...), stdout, stderr)
+	}
+	if len(args) > 0 && (args[0] == "explain" || args[0] == "rules" || args[0] == "schema" || args[0] == "version") {
+		return wlogexplain.Run(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		_, _ = fmt.Fprint(stdout, usage())

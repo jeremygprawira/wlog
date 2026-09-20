@@ -287,3 +287,11 @@ func isZeroCounter(value any) bool {
 	}
 	return false
 }
+
+// ReservedFields returns every reserved field path of the event shape, in output order,
+// so wlog explain can name each one. A key that is not listed here is a user key.
+func ReservedFields() []string {
+	out := make([]string, 0, len(reservedKeyOrder))
+	out = append(out, reservedKeyOrder...)
+	return out
+}
