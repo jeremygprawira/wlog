@@ -173,7 +173,7 @@ func plan(root, old, version string) ([]step, error) {
 	for _, m := range order {
 		// A sub-module carries its directory in its git tag, and the proxy
 		// knows it by the plain version, so the step holds both.
-		s := step{module: m, lastTag: lastTag(m, old), lastVersion: oldVersion(old)}
+		s := step{module: m, lastTag: lastTag(root, m, old), lastVersion: oldVersion(old)}
 		for _, req := range m.Requires {
 			if !siblings[req] {
 				continue
@@ -255,19 +255,32 @@ func oldVersion(old string) string {
 	return old
 }
 
-// lastTag returns the tag of the previous release for a module.
-func lastTag(m workspace.Module, old string) string {
+// lastTag returns the tag of the previous release for a module, or an empty
+// string when the repository never tagged that module. A module that the
+// previous release did not ship has no API to break, so it must not be read
+// through the proxy.
+func lastTag(root string, m workspace.Module, old string) string {
 	if old == "" || old == "dev" {
 		return ""
 	}
-	return tag(m, old)
+	name := tag(m, old)
+	if !tagExists(root, name) {
+		return ""
+	}
+	return name
+}
+
+// tagExists reports whether the repository holds the tag.
+func tagExists(root, name string) bool {
+	cmd := exec.CommandContext(context.Background(), "git", "-C", root, "rev-parse", "-q", "--verify", "refs/tags/"+name)
+	return cmd.Run() == nil
 }
 
 // apiDiff compares the exported API of a module with its previous tag.
 //
 // apidiff reads a module through the build list of the working directory, so the
-// previous tag needs a throwaway module that requires it. The flow is three
-// steps: export the old API from that module, export the new API from the module
+// previous tag needs its source on disk. The flow is three steps: export the old
+// API from the old module's own directory, export the new API from the module
 // directory, then compare the two files. A module without a previous tag has no
 // API to break, and it says so.
 func apiDiff(root string, s step) (string, error) {
@@ -283,15 +296,22 @@ func apiDiff(root string, s step) (string, error) {
 	if out, err := goCommand(tmp, "mod", "init", "apidiff"); err != nil {
 		return string(out), err
 	}
-	if out, err := goCommand(tmp, "get", s.module.Path+"@"+s.lastVersion); err != nil {
-		// A tag that the proxy does not hold stops this step, and the go
-		// command says why.
+	// The old API is exported from a worktree of the previous release. The
+	// module's directory holds its siblings there, so the relative replace
+	// directives of its go.mod resolve as they do in the repository. A
+	// throwaway module or the module cache would leave the loader without the
+	// siblings or the indirect dependencies.
+	oldTree := filepath.Join(tmp, "old")
+	if out, err := gitCommand(root, "worktree", "add", "--detach", oldTree, s.lastTag); err != nil {
 		return string(out), err
 	}
+	defer func() {
+		_, _ = gitCommand(root, "worktree", "remove", "--force", oldTree)
+	}()
 
 	oldExport := filepath.Join(tmp, "old.export")
 	newExport := filepath.Join(tmp, "new.export")
-	if out, err := goCommand(tmp, "run", apidiff+"@latest", "-m", "-w", oldExport, s.module.Path); err != nil {
+	if out, err := goCommand(filepath.Join(oldTree, s.module.Dir), "run", apidiff+"@latest", "-m", "-w", oldExport, s.module.Path); err != nil {
 		return string(out), err
 	}
 	if out, err := goCommand(filepath.Join(root, s.module.Dir), "run", apidiff+"@latest", "-m", "-w", newExport, s.module.Path); err != nil {
@@ -310,6 +330,17 @@ func goCommand(dir string, args ...string) ([]byte, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return out, fmt.Errorf("go %s: %w", strings.Join(args, " "), err)
+	}
+	return out, nil
+}
+
+// gitCommand runs one git command inside dir.
+func gitCommand(dir string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(context.Background(), "git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
 	return out, nil
 }

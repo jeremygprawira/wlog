@@ -7,6 +7,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +20,78 @@ import (
 func fixture(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", "..", "testdata", "requires"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// copyTree copies one directory into another.
+func copyTree(t *testing.T, src, dst string) {
+	t.Helper()
+	err := filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// git runs one git command inside dir and fails the test on error.
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// taggedFixture copies the fixture workspace into a temporary git repository
+// and tags every module at v0.1.0, as the previous release would have.
+func taggedFixture(t *testing.T) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "requires")
+	copyTree(t, fixture(t), root)
+	git(t, root, "init", "-q")
+	git(t, root, "add", "-A")
+	git(t, root, "-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-qm", "fixture")
+	git(t, root, "tag", "v0.1.0")
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || entry.Name() != "go.mod" {
+			return nil
+		}
+		dir, err := filepath.Rel(root, filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		if dir == "." {
+			return nil
+		}
+		name := filepath.ToSlash(dir) + "/v0.1.0"
+		cmd := exec.Command("git", "-C", root, "tag", name)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git tag %s: %w\n%s", name, err, out)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +201,7 @@ func TestRelease_ReadsTheRequiredVersion(t *testing.T) {
 // TestRelease_ReadsTheLastTagOfAModule proves that a sub-module tag puts its
 // directory in front, which is the rule that the Go module proxy follows.
 func TestRelease_ReadsTheLastTagOfAModule(t *testing.T) {
-	steps, err := plan(fixture(t), "v0.1.0", "v0.2.0")
+	steps, err := plan(taggedFixture(t), "v0.1.0", "v0.2.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +226,25 @@ func TestRelease_ReadsNoLastTagOfANewModule(t *testing.T) {
 		if s.lastTag != "" {
 			t.Errorf("last tag of %s = %q, want none", s.module.Dir, s.lastTag)
 		}
+	}
+}
+
+// TestRelease_SkipsAnUntaggedModule proves that a module the previous release
+// never shipped reports no previous tag, even when the version is not empty.
+func TestRelease_SkipsAnUntaggedModule(t *testing.T) {
+	root := taggedFixture(t)
+	git(t, root, "tag", "-d", "lib/v0.1.0")
+
+	steps, err := plan(root, "v0.1.0", "v0.2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, ok := byPath(steps, "example.com/lib")
+	if !ok {
+		t.Fatal("plan returned no lib step")
+	}
+	if lib.lastTag != "" {
+		t.Errorf("last tag of lib = %q, want none for an untagged module", lib.lastTag)
 	}
 }
 
