@@ -1,11 +1,11 @@
 module github.com/jeremygprawira/wlog/store/bun
 
-go 1.21
+go 1.24.0
 
 require (
 	github.com/jeremygprawira/wlog v0.6.0
-	github.com/uptrace/bun v1.1.17
-	github.com/uptrace/bun/dialect/sqlitedialect v1.1.17
+	github.com/uptrace/bun v1.2.18
+	github.com/uptrace/bun/dialect/sqlitedialect v1.2.18
 	modernc.org/sqlite v1.34.5
 )
 
@@ -15,11 +15,12 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	modernc.org/libc v1.55.3 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect

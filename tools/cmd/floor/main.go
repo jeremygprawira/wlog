@@ -187,6 +187,11 @@ func runFloorWithNewerLibs(dir, floor string) ([]byte, error) {
 	if text, err := runGo(dir, "", []string{"get", "-u", "./..."}); err != nil {
 		return text, err
 	}
+	// An upgraded module can need a go.sum entry that the old file does not
+	// hold, so the sums are completed before the test.
+	if text, err := runGo(dir, "", []string{"mod", "tidy"}); err != nil {
+		return text, err
+	}
 	// The upgrade moves the modules past their floor, so the newest toolchain runs
 	// this copy. A floor is the oldest Go that compiles the code as it stands, and
 	// an upgraded dependency set is the day after the release.
