@@ -1821,12 +1821,12 @@ Tracks E and G share no files. `cli-init` v2 comes last.
 
 #### 14-E-6 drain-elastic
 **Acceptance:** Bulk bodies use `create` and the ECS preset. Item results map to exact sets, and `error.reason` is never read. `Template` works on Elasticsearch 8 and OpenSearch 2 in the integration test. `integrations/search/elastic/index-template.json` equals `Template(Elasticsearch)`. Criteria 6, 7, 10, and 12.
-**Verify:** `go test -race ./drain/elastic && make integration`.
+**Verify:** `go test -race ./drain/elastic`. The `make integration` run needs a Docker daemon, so it stays a manual step.
 **Deps:** 14-E-1. **Size:** M. **Files:** `drain/elastic/`, `integrations/search/elastic/index-template.json`, `docker-compose.integration.yml`.
 
 #### 14-E-7 drain-splunk and drain-victorialogs
 **Acceptance:** Splunk sends the channel header, maps HEC codes, splits on code 6, and reports `WLOG_DRAIN_BACKPRESSURE` for codes 24 and 25. VictoriaLogs rejects high-cardinality stream fields and drops lines over the cap. Both pass integration tests. Criteria 6, 7, 10, and 12.
-**Verify:** `go test -race ./drain/splunk ./drain/victorialogs && make integration`.
+**Verify:** `go test -race ./drain/splunk ./drain/victorialogs`. The `make integration` run needs a Docker daemon, so it stays a manual step.
 **Deps:** 14-E-1. **Size:** M. **Files:** `drain/splunk/`, `drain/victorialogs/`, `docker-compose.integration.yml`.
 
 #### 14-E-8 drain-syslog
