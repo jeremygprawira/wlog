@@ -66,15 +66,12 @@ type Handle struct {
 	failures int
 }
 
-// Start opens one unit of work: it extracts the trace context from the carrier, starts the
-// event, writes the kind, the operation, and the group, and returns the handle that ends
+// Start opens one unit of work: it starts the event, reads the trace context from the
+// carrier, writes the kind, the operation, and the group, and returns the handle that ends
 // it. A nil Logger means wlog.Default.
 func Start(ctx context.Context, log *wlog.Logger, u Unit) (context.Context, *Handle) {
 	if log == nil {
 		log = wlog.Default()
-	}
-	if u.Carrier != nil {
-		ctx = propagate.Extract(ctx, u.Carrier)
 	}
 
 	operation := u.Operation
@@ -82,6 +79,11 @@ func Start(ctx context.Context, log *wlog.Logger, u Unit) (context.Context, *Han
 		operation = operationOf(u)
 	}
 	ctx, end := startEvent(ctx, log, operation)
+	// The carrier is read after the event exists, so the ids of the incoming message
+	// replace the trace ids the event started with.
+	if u.Carrier != nil {
+		ctx = propagate.Extract(ctx, u.Carrier)
+	}
 
 	h := &Handle{ctx: ctx, log: log, kind: u.Kind, group: groups[u.Kind], end: end}
 	wlog.Set(ctx, "kind", string(u.Kind))

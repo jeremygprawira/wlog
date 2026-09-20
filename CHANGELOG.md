@@ -13,6 +13,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   Pro. The audit set 50µs before the realistic benchmark existed, and no run met it
   without weakening redaction.
 
+### Fixed
+
+- `work.Start` reads the carrier after it starts the event, so a consumed message joins the
+  trace of its producer. Before, the fresh trace of the event replaced the extracted trace.
+
 ## [0.6.0] - 2026-09-19
 
 v0.6.0 lands event shape v2 and the five foundations. Every HTTP adapter and every drain

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/propagate"
 	"github.com/jeremygprawira/wlog/wlogtest"
 	"github.com/jeremygprawira/wlog/work"
 )
@@ -232,5 +233,25 @@ func TestWork_RecoverPanics(t *testing.T) {
 	}
 	if rec.Last()["level"] != "error" {
 		t.Errorf("level = %v, want error", rec.Last()["level"])
+	}
+}
+
+// TestWork_CarrierLinksTrace proves that a unit with a traceparent carrier adopts the trace
+// of the header, so a consumed message joins the trace of its producer.
+func TestWork_CarrierLinksTrace(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	carrier := propagate.NewBytesCarrier(map[string][]byte{
+		"traceparent": []byte("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),
+	})
+
+	if err := work.Run(context.Background(), log, work.Unit{Kind: work.KindMessage, Carrier: carrier}, func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	trace, _ := rec.Last()["trace"].(map[string]any)
+	if trace["trace_id"] != "4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Errorf("trace.trace_id = %v, want the trace id of the carrier", trace["trace_id"])
+	}
+	if trace["parent_span_id"] != "00f067aa0ba902b7" {
+		t.Errorf("trace.parent_span_id = %v, want the span id of the carrier", trace["parent_span_id"])
 	}
 }
