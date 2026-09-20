@@ -13,6 +13,8 @@ use ./middleware/echo5
 use (
 	./client/aws
 	./cmd/wlog
+	./errors/oops
+	./errors/validator
 	./examples
 	./examples/lambda
 	./log/hclog
