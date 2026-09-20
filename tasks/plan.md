@@ -1499,7 +1499,7 @@ golden file is written by hand from the spec.
 - `CHANGELOG.md` lists every renamed or removed API under v0.6.0 with a migration note.
 - Tests: the existing tests of each module, updated. `tools snippets` passes.
 
-**Verify:** `go work sync && for m in log/zap log/zerolog log/logrus trace/otel examples cmd/wlog; do (cd $m && go test -race ./...); done && go run ./tools/cmd/snippets`.
+**Verify:** `for m in log/zap log/zerolog log/logrus trace/otel examples cmd/wlog; do (cd $m && go test -race ./...); done && go run ./tools/cmd/snippets`.
 **Deps:** 11-SET-1. **Size:** L. **Closes:** none (keeps the build green).
 **Files:**
 
