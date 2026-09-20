@@ -173,7 +173,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 12-F-4 `wlog explain`, `rules`, `schema`, and `version`
 - [x] 12-F-5 Agent docs
 - [x] 12-F-6 Search recipes
-- [ ] 12-F-7 `wlog mcp`
+- [x] 12-F-7 `wlog mcp`
 - [ ] 12-F-8 Recipe: cli-tool
 - [ ] 12-F-9 `wlog doctor` additions
 - [ ] Review point 12, v0.7.0: human review, then ask before tagging
