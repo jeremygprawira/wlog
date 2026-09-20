@@ -138,3 +138,27 @@ func TestDoctor_PAR34_CodesJSON(t *testing.T) {
 		}
 	}
 }
+
+// TestDoctor_Tracks proves that doctor names the setup line of an installed adapter and
+// warns about a package-level log call inside a handler.
+func TestDoctor_Tracks(t *testing.T) {
+	checks := doctor.Inspect("../../testdata/doctortracks")
+
+	setupLine := false
+	globalLine := false
+	for _, check := range checks {
+		if strings.Contains(check.Message, "wloggin.Middleware") {
+			setupLine = true
+		}
+		if check.Name == "global" && check.Status == "warn" &&
+			strings.Contains(check.Message, "package-level logger") {
+			globalLine = true
+		}
+	}
+	if !setupLine {
+		t.Error("doctor named no setup line for the installed gin adapter")
+	}
+	if !globalLine {
+		t.Error("doctor did not warn about the package-level logger call")
+	}
+}

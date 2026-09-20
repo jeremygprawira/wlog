@@ -83,15 +83,17 @@ func Inspect(dir string) []Check {
 			"fix the package so it compiles, then run doctor again"))
 	}
 	loaded := loadErr == nil
-	return append(checks,
+	checks = append(checks,
 		checkModule(dir),
 		checkAdapterRequires(dir),
 		checkMiddleware(pkgs, points, loaded),
 		checkLoggerPerRequest(pkgs, points, loaded),
+		checkGlobalLogger(pkgs, points, loaded),
 		checkDrainEnv(dir),
 		checkRedactor(dir),
 		checkScore(points, pkgs, loaded),
 	)
+	return append(checks, adapterChecks(dir)...)
 }
 
 // loadPoints loads the module's entry points from dir. A load error is returned, not swallowed:
