@@ -613,7 +613,7 @@ Each drain task also moves the drain to `New`, `NewSender`, `MustNew`, and `With
 - Compose pins `clickhouse/clickhouse-server` 25.3 or newer, the OTel collector binds `0.0.0.0:4318`, and every service has a health probe.
 - Tests: `TestClickHouse_PIPE9_TimestampFormat`, `TestClickHouse_PIPE20_IdentifierRule`, `TestClickHouse_PIPE19_URLWithQuery`, plus the interim tests.
 
-**Verify:** `go test -race -run 'TestClickHouse_' ./drain/clickhouse && make integration`.
+**Verify:** `go test -race -run 'TestClickHouse_' ./drain/clickhouse`. The `make integration` run needs a Docker daemon, so it stays a manual step.
 **Deps:** 10-PIPE-7. **Size:** M. **Closes:** PIPE-9, PIPE-19 (clickhouse part), PIPE-20.
 **Files:**
 
