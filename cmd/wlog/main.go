@@ -20,6 +20,7 @@ import (
 	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
 	wlogexplain "github.com/jeremygprawira/wlog/cmd/wlog/cmd/explain"
 	wloginit "github.com/jeremygprawira/wlog/cmd/wlog/cmd/init"
+	wlogmcp "github.com/jeremygprawira/wlog/cmd/wlog/cmd/mcp"
 	wlogquery "github.com/jeremygprawira/wlog/cmd/wlog/cmd/query"
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
 	"github.com/jeremygprawira/wlog/cmd/wlog/internal/term"
@@ -49,6 +50,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "tail" {
 		return wlogquery.Run(append([]string{"--follow"}, args[1:]...), stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "mcp" {
+		return wlogmcp.Run(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && (args[0] == "explain" || args[0] == "rules" || args[0] == "schema" || args[0] == "version") {
 		return wlogexplain.Run(args[1:], stdout, stderr)
