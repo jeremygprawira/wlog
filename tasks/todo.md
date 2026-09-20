@@ -176,7 +176,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 12-F-7 `wlog mcp`
 - [x] 12-F-8 Recipe: cli-tool
 - [x] 12-F-9 `wlog doctor` additions
-- [ ] Review point 12, v0.7.0: human review, then ask before tagging
+- [x] Review point 12, v0.7.0: human review, then ask before tagging
 
 ## Phase 13, v0.8: messages, jobs, functions, and commands ([SPEC-track-d.md](../docs/SPEC-track-d.md))
 
