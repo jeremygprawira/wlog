@@ -1,0 +1,52 @@
+# wlog
+
+> wlog is a Go library for wide-event logging. Your code adds fields to one event per
+
+## Docs
+
+- [wlog](README.md): wlog is a Go library for wide-event logging. Your code adds fields to one event per
+- [Capability Map: wlog](docs/CAPABILITIES.md): Approved 2026-09-14 (rev 3: evlog parity additions: audit, plugins, stream, geo, identity headers, typed fields, `wlog map`).
+- [Spec: audit](docs/SPEC-audit.md): Tamper-evident audit logging for "who did what, to what, with what outcome". It reuses evlog's
+- [Spec: catalog](docs/SPEC-catalog.md): One registry per domain that holds the static facts about an error code: its status, its
+- [Spec: cli-map](docs/SPEC-cli-map.md): Give a team one command that answers "is this service observable, and what must we fix
+- [Spec: cli-v1.3](docs/SPEC-cli-v1.3.md): Turn `wlog` from one command into the four a team actually runs: set it up, diagnose it,
+- [Spec: conformance](docs/SPEC-conformance.md): Make "agnostic" a test result. Every adapter of one kind runs the same scenarios and must emit the
+- [Spec: core v2](docs/SPEC-core-v2.md): Give every event one versioned shape that people, agents, and code read the same way. Let a
+- [Spec: core](docs/SPEC-core.md): Give every other module one stable surface: a `Logger`, a `context.Context` API to build one
+- [Spec: drain-memory](docs/SPEC-drain-memory.md): An in-process `wlog.Drain` that keeps recent events in a ring buffer and lets live code
+- [Spec: drains-v1.1](docs/SPEC-drains-v1.1.md): Ship the three v1.1 drains. Each one turns a batch of already-redacted wide events into
+- [Spec: drains-v1.4](docs/SPEC-drains-v1.4.md): Three more backends, reached the same way the six v1 drains already are. Each one wraps
+- [Spec: drains-v1](docs/SPEC-drains-v1.md): Ship the five v1 backend drains, so a team turns one on with env vars and nothing else.
+- [Spec: enrich](docs/SPEC-enrich.md): Built-in `wlog.Enricher`s for context every event benefits from: host/deployment metadata, a
+- [Spec: errors-herr](docs/SPEC-errors-herr.md): A `wlog.ErrorExtractor` for [herr](https://github.com/jeremygprawira/herr), so `wlog.Error(ctx,
+- [Spec: phase 10 hardening](docs/SPEC-hardening.md): Fix the audit findings that the phase 11 rewrites do not replace, so v0.5 is safe to run. Each
+- [Spec: http-adapters](docs/SPEC-http-adapters.md): Three thin middlewares so an Echo v4, Echo v5, or Gin app gets the same wide event as a plain
+- [Spec: http-core](docs/SPEC-http-core.md): Every HTTP stack emits the same request event: net/http, Echo, Gin, and every router in track A.
+- [Spec: http-std](docs/SPEC-http-std.md): One `net/http` middleware that wraps a request in a `wlog.Start`/`end`. It also covers
+- [Spec: llm](docs/SPEC-llm.md): One typed record for an LLM call, written onto the wide event under `llm`. It holds the
+- [Spec: log-adapters](docs/SPEC-log-adapters.md): Let a wlog event reach a team's existing logger. Let an existing logger's calls join a wlog
+- [Spec: pipeline](docs/SPEC-pipeline.md): Wrap a batch-sending backend with batching, retry, and a bounded buffer. A real drain
+- [Spec: redact](docs/SPEC-redact.md): Scrub sensitive data from a wide event before any sink sees it. The **denylist is a set the
+- [Spec: repo-ci](docs/SPEC-repo-ci.md): Make the build tell the truth before any other phase 10 work starts. Today CI fails on every
+- [Spec: sample](docs/SPEC-sample.md): A `wlog.HeadSampler` for head sampling (drop by random rate per level) and a `wlog.Keeper`
+- [Spec: setup](docs/SPEC-setup.md): Let a deploy pick its backends and service identity through env vars, with no code change. A team
+- [Spec: trace-otel](docs/SPEC-trace-otel.md): Fill `trace.trace_id` and `trace.span_id` from an active OpenTelemetry span. This serves a team
+- [Spec: HTTP routers and RPC (track A)](docs/SPEC-track-a.md): Every popular Go router and RPC layer emits the same event as net/http. Route, status, level,
+- [Spec: outbound calls and data stores (track B)](docs/SPEC-track-b.md): One event shows where a unit of work spent its time and what failed: each HTTP call, query,
+- [Spec: logger bridges, error libraries, and flags (track C)](docs/SPEC-track-c.md): An app keeps its logger and its error library. Log lines written inside a unit of work fold
+- [Spec: messages, jobs, functions, and commands (track D)](docs/SPEC-track-d.md): A consumer, a job worker, a function, and a command each emit one event per unit of work. The
+- [Spec: destinations and OpenTelemetry (track E)](docs/SPEC-track-e.md): Send the same wide event to the tools a team already runs. An OTel user gets span attributes, span
+- [Spec: search and agents (track F)](docs/SPEC-track-f.md): Make the events easy to search in three places: a terminal, an agent's shell or MCP client, and
+- [Spec: AI and agents (track G)](docs/SPEC-track-g.md): A model call or an MCP tool call records itself on the current event with no hand-copied token
+- [Spec: v1.2 additions to existing modules](docs/SPEC-v1.2-additions.md): New modules in this phase have their own files: [catalog](SPEC-catalog.md) and
+- [Spec: wlogtest](docs/SPEC-wlogtest.md): Let a user assert on what their own code logged, in their own tests, without parsing JSON off
+- [Spec: propagate and work](docs/SPEC-work.md): Give every non-HTTP adapter the same two tools. `propagate` carries trace context across process
+- [Spec: wlog (project-wide, v4)](docs/SPEC.md): **wlog** ("wide log") is a Go library for wide-event logging. Each unit of work produces one
+- [Best practices](docs/best-practices.md): Five rules for a wide event that earns its keep. Each rule points at the test that
+- [Cost](docs/cost.md): The `llm` package records what a model call cost on the same wide event as the request.
+- [Customization](docs/customization.md): Every default can change through an option. An option always wins over an environment
+- [Event shape](docs/event-shape.md): One unit of work produces one event. The event is a JSON object with a fixed core and
+- [evlog parity](docs/evlog-parity.md): evlog is the TypeScript logger wlog follows: one wide event per unit of work, enriched as
+- [Problem codes](docs/problems.md): wlog reports its own failures as a `wlog.Problem`. A problem carries a stable code, the
+- [Recipe: gRPC service](docs/recipes/grpc-service.md): A gRPC server where every call is one wide event. The runnable example lives in
+- [Recipe: REST API](docs/recipes/rest-api.md): A small chi API where every request is one wide event. The runnable example lives in

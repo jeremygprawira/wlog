@@ -48,6 +48,10 @@ tidy-check:
 ste:
 	go run ./tools/cmd/ste
 
+# docs builds the two language-model documents from the repository pages.
+docs:
+	go run ./tools/cmd/docs
+
 # snippets compiles every fenced Go block in the documentation, and runs the
 # blocks that ask to run.
 snippets:
