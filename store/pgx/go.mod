@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/jackc/pgx/v5 v5.6.0
-	github.com/jeremygprawira/wlog v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
 )
 
 require (

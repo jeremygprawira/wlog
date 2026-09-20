@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/middleware/fasthttp
 go 1.23.0
 
 require (
-	github.com/jeremygprawira/wlog v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
 	github.com/valyala/fasthttp v1.63.0
 )
 

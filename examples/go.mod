@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/jeremygprawira/wlog/middleware/chi v0.6.0
+	github.com/jeremygprawira/wlog/middleware/chi v0.7.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/labstack/echo/v5 v5.3.1
 	go.uber.org/zap v1.28.0
@@ -29,12 +29,12 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/jeremygprawira/wlog v0.6.0
-	github.com/jeremygprawira/wlog/log/zap v0.6.0
-	github.com/jeremygprawira/wlog/middleware/echo v0.6.0
-	github.com/jeremygprawira/wlog/middleware/echo5 v0.6.0
-	github.com/jeremygprawira/wlog/middleware/gin v0.6.0
-	github.com/jeremygprawira/wlog/rpc/grpc v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog/log/zap v0.7.0
+	github.com/jeremygprawira/wlog/middleware/echo v0.7.0
+	github.com/jeremygprawira/wlog/middleware/echo5 v0.7.0
+	github.com/jeremygprawira/wlog/middleware/gin v0.7.0
+	github.com/jeremygprawira/wlog/rpc/grpc v0.7.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect

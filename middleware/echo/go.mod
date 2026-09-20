@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/middleware/echo
 go 1.26.0
 
 require (
-	github.com/jeremygprawira/wlog v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
 	github.com/labstack/echo/v4 v4.15.4
 )
 

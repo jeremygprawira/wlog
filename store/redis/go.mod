@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/store/redis
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
 	github.com/redis/go-redis/v9 v9.7.3
 )
 

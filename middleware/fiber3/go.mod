@@ -4,8 +4,8 @@ go 1.25.0
 
 require (
 	github.com/gofiber/fiber/v3 v3.5.0
-	github.com/jeremygprawira/wlog v0.6.0
-	github.com/jeremygprawira/wlog/middleware/fasthttp v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog/middleware/fasthttp v0.7.0
 	github.com/valyala/fasthttp v1.73.0
 )
 

@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/aws/aws-sdk-go-v2 v1.17.0
 	github.com/aws/smithy-go v1.13.3
-	github.com/jeremygprawira/wlog v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
 )
 
 require (

@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/store/mongo
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.6.0
+	github.com/jeremygprawira/wlog v0.7.0
 	go.mongodb.org/mongo-driver/v2 v2.0.0
 )
 
