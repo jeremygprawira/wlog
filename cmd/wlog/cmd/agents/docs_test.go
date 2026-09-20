@@ -9,8 +9,9 @@ import (
 	"testing"
 )
 
-// root is the workspace root, from the test's working directory.
-func root() string { return filepath.Join("..", "..", "..") }
+// root is the workspace root, from the test's working directory, which sits under the
+// cmd/wlog module.
+func root() string { return filepath.Join("..", "..", "..", "..") }
 
 // TestAgentDocs_Files proves that make docs left both documents in place, with the index
 // naming the pages and the full text holding them.
