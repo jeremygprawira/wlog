@@ -5,4 +5,3 @@
 # dependency and needs a version decision rather than a code fix.
 #
 ./rpc/gqlgen # the upgraded gqlgen adds a context to ExecutableSchema.Complexity; the fake schema follows at the next bump
-./client/aws # the upgraded SDK set loses the ComputePayloadHash stack feature; needs a matching aws-sdk-go-v2 set
