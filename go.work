@@ -34,6 +34,7 @@ use (
 	./middleware/httprouter
 	./middleware/huma
 	./middleware/kratos
+	./queue/confluent
 	./queue/franz
 	./queue/kafkago
 	./queue/sarama

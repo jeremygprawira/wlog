@@ -25,3 +25,8 @@ require (
 )
 
 replace github.com/jeremygprawira/wlog => ../..
+
+// This adapter is written for SDK v1.17.0. The replace holds that version in the workspace,
+// because a sibling module raises the SDK through its own requirements. Remove it when the
+// adapter moves to a matching modern SDK set.
+replace github.com/aws/aws-sdk-go-v2 => github.com/aws/aws-sdk-go-v2 v1.17.0

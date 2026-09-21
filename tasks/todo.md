@@ -182,7 +182,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 
 - [x] 13-D-1 queue-kafkago
 - [x] 13-D-2 queue-sarama and queue-franz
-- [ ] 13-D-3 queue-confluent
+- [x] 13-D-3 queue-confluent
 - [ ] 13-D-4 queue-watermill
 - [ ] 13-D-5 queue-sqs
 - [ ] 13-D-6 queue-nats and queue-amqp
