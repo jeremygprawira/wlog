@@ -34,6 +34,21 @@ func TestCore_SetLevel_OverridesDefault(t *testing.T) {
 	}
 }
 
+// TestCore_CurrentLevel_ReportsExplicitSet proves that CurrentLevel reports the level of the
+// event and whether SetLevel named it, so a finisher keeps a level the handler chose.
+func TestCore_CurrentLevel_ReportsExplicitSet(t *testing.T) {
+	ctx, finish := startEvent(t)
+
+	if level, set := wlog.CurrentLevel(ctx); set || level != wlog.LevelInfo {
+		t.Errorf("CurrentLevel = %v/%v, want info with no explicit level", level, set)
+	}
+	wlog.SetLevel(ctx, wlog.LevelWarn)
+	if level, set := wlog.CurrentLevel(ctx); !set || level != wlog.LevelWarn {
+		t.Errorf("CurrentLevel = %v/%v, want warn with an explicit level", level, set)
+	}
+	_ = finish()
+}
+
 func TestCore_WithLevel_FiltersBelowMinimum(t *testing.T) {
 	log := wlog.New(wlog.WithLevel(wlog.LevelWarn))
 	out := captureStdout(t, func() {

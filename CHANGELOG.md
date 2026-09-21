@@ -7,6 +7,11 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+### Added
+
+- `wlog.CurrentLevel` returns the level of the current event and reports whether `SetLevel`
+  named it, so a finisher keeps a level an earlier stage chose.
+
 ### Changed
 
 - The middleware budget is 55µs p50, and the measured p50 is about 52µs on an Apple M4
@@ -15,6 +20,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ### Fixed
 
+- `work.Handle.End` keeps a level the handler named. Before, the level of the error
+  replaced it, so a job that cancels or snoozes records the wrong level.
 - `work.Start` reads the carrier after it starts the event, so a consumed message joins the
   trace of its producer. Before, the fresh trace of the event replaced the extracted trace.
 

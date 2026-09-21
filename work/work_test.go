@@ -236,6 +236,22 @@ func TestWork_RecoverPanics(t *testing.T) {
 	}
 }
 
+// TestWork_ExplicitLevelWins proves that a level the handler names wins over the level the
+// error asks for, so an adapter that cancels or snoozes a job keeps its own level.
+func TestWork_ExplicitLevelWins(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	unit := work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex"}}
+
+	_ = work.Run(context.Background(), log, unit, func(ctx context.Context) error {
+		wlog.SetLevel(ctx, wlog.LevelWarn)
+		return errors.New("job cancelled")
+	})
+
+	if level := rec.Last()["level"]; level != "warn" {
+		t.Errorf("level = %v, want the level the handler named", level)
+	}
+}
+
 // TestWork_CarrierLinksTrace proves that a unit with a traceparent carrier adopts the trace
 // of the header, so a consumed message joins the trace of its producer.
 func TestWork_CarrierLinksTrace(t *testing.T) {

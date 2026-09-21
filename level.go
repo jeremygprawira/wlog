@@ -24,6 +24,19 @@ var levelRank = map[Level]int{
 	LevelError: 3,
 }
 
+// CurrentLevel returns the level of the current event, and reports whether SetLevel named
+// it. A finisher reads the report, so a level an earlier stage chose wins over the level the
+// finisher would set. A context with no event reports no level.
+func CurrentLevel(ctx context.Context) (Level, bool) {
+	e := eventFrom(ctx)
+	if e == nil {
+		return "", false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.level, e.levelSet
+}
+
 // WithLevel sets the minimum level a Logger writes. An event below it is dropped, and
 // debug mode names the reason. Default LevelDebug (nothing filtered).
 func WithLevel(min Level) Option {

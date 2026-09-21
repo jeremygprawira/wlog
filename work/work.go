@@ -143,8 +143,12 @@ func (h *Handle) End(err error) {
 	if err != nil {
 		wlog.Error(h.ctx, err)
 	}
-	if level := h.level(err); level != "" {
-		wlog.SetLevel(h.ctx, level)
+	// A level the handler named wins over the level of the error, which is what a job that
+	// cancels or snoozes needs.
+	if _, set := wlog.CurrentLevel(h.ctx); !set {
+		if level := h.level(err); level != "" {
+			wlog.SetLevel(h.ctx, level)
+		}
 	}
 	h.end()
 }

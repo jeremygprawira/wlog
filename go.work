@@ -12,8 +12,6 @@ use ./middleware/echo5
 
 use (
 	./client/aws
-	./queue/amqp
-	./queue/cloudevents
 	./cmd/wlog
 	./errors/cockroach
 	./errors/oops
@@ -21,6 +19,8 @@ use (
 	./examples
 	./examples/lambda
 	./flag/openfeature
+	./job/asynq
+	./job/river
 	./log/hclog
 	./log/logr
 	./log/logrus
@@ -36,6 +36,8 @@ use (
 	./middleware/httprouter
 	./middleware/huma
 	./middleware/kratos
+	./queue/amqp
+	./queue/cloudevents
 	./queue/confluent
 	./queue/franz
 	./queue/kafkago
