@@ -17,6 +17,7 @@ use (
 	./errors/oops
 	./errors/validator
 	./examples
+	./faas/gcf
 	./faas/lambda
 	./flag/openfeature
 	./job/asynq

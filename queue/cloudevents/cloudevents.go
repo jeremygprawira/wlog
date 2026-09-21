@@ -99,6 +99,11 @@ func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(co
 	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
+// Unit maps one CloudEvent onto a unit of work, with the field set of this module. A receiver
+// that does not drive the CloudEvents client, such as the GCF adapter, calls Unit so its events
+// carry the same fields.
+func Unit(event cloudevents.Event) work.Unit { return unitOf(event) }
+
 // unitOf maps one received event onto a unit of work. The event time becomes the start time, so
 // the event carries the time the message waited as lag_ms. The CloudEvents ids go under
 // messaging.cloudevents, and the subject is the destination of the operation.

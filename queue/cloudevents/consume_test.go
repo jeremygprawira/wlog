@@ -33,6 +33,23 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 	return process(context.Background(), log, unit, handler)
 }
 
+// TestCloudEvents_C1_UnitNamesTheEvent proves that Unit maps one CloudEvent onto the fields of
+// this module, so a receiver outside this module emits the same event.
+func TestCloudEvents_C1_UnitNamesTheEvent(t *testing.T) {
+	unit := Unit(newEvent())
+
+	if unit.Kind != work.KindMessage {
+		t.Errorf("kind = %v, want message", unit.Kind)
+	}
+	if unit.Fields["system"] != "cloudevents" || unit.Fields["operation"] != "process" {
+		t.Errorf("fields = %v, want system cloudevents and operation process", unit.Fields)
+	}
+	ce, _ := unit.Fields["cloudevents"].(map[string]any)
+	if ce["event_id"] != "evt-1" || ce["event_type"] != "orders.created" {
+		t.Errorf("cloudevents = %v, want the ids of the event", unit.Fields["cloudevents"])
+	}
+}
+
 // TestCloudEvents_C1_ReceiveFields proves that the observability service fills the messaging
 // group and the cloudevents group from one received event.
 func TestCloudEvents_C1_ReceiveFields(t *testing.T) {
