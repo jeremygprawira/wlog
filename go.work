@@ -20,7 +20,9 @@ use (
 	./examples/lambda
 	./flag/openfeature
 	./job/asynq
+	./job/cron
 	./job/river
+	./job/temporal
 	./log/hclog
 	./log/logr
 	./log/logrus
