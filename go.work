@@ -12,6 +12,7 @@ use ./middleware/echo5
 
 use (
 	./client/aws
+	./queue/amqp
 	./cmd/wlog
 	./errors/cockroach
 	./errors/oops
@@ -37,6 +38,7 @@ use (
 	./queue/confluent
 	./queue/franz
 	./queue/kafkago
+	./queue/nats
 	./queue/sarama
 	./queue/sqs
 	./queue/watermill
