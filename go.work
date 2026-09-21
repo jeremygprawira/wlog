@@ -38,6 +38,7 @@ use (
 	./queue/franz
 	./queue/kafkago
 	./queue/sarama
+	./queue/watermill
 	./rpc/connect
 	./rpc/gqlgen
 	./rpc/grpc
