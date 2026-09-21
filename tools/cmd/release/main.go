@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
@@ -470,17 +469,19 @@ func readLines(in io.Reader, count int) ([]string, error) {
 	return lines, nil
 }
 
-// oneLine returns the first interesting line of an apidiff report.
+// oneLine returns the interesting lines of an apidiff report as one line, so the dry run
+// shows every change. A line that names an ignored internal package carries no change.
 func oneLine(report string) string {
 	lines := []string{}
 	for _, line := range strings.Split(strings.TrimSpace(report), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			lines = append(lines, line)
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Ignoring ") {
+			continue
 		}
+		lines = append(lines, line)
 	}
 	if len(lines) == 0 {
 		return "no change"
 	}
-	sort.SliceStable(lines, func(i, j int) bool { return false })
-	return lines[0]
+	return strings.Join(lines, "; ")
 }

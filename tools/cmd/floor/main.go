@@ -184,7 +184,7 @@ func runFloorWithNewerLibs(dir, floor string) ([]byte, error) {
 
 	// The upgrade itself runs on the newest toolchain: it asks for the newest
 	// libraries, and one of them may require a newer Go than the floor.
-	if text, err := runGo(dir, "", []string{"get", "-u", "./..."}); err != nil {
+	if text, err := runGo(dir, "", []string{"get", "-u", "-t", "./..."}); err != nil {
 		return text, err
 	}
 	// An upgraded module can need a go.sum entry that the old file does not

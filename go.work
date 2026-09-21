@@ -10,6 +10,14 @@ use ./middleware/echo
 
 use ./middleware/echo5
 
+// The workspace lifts aws-sdk-go-v2 through queue/sqs, and the old s3 and credentials
+// versions of client/aws cannot build against the lifted core. Pin them forward in the
+// workspace, so client/aws keeps its v0.7.0 floor in its own go.mod.
+replace (
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.0 => github.com/aws/aws-sdk-go-v2/credentials v1.17.10
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.29.0 => github.com/aws/aws-sdk-go-v2/service/s3 v1.75.0
+)
+
 use (
 	./client/aws
 	./cmd/wlog

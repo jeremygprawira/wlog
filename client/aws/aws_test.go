@@ -177,7 +177,9 @@ func newClient(t *testing.T, url string, maxAttempts int) *s3.Client {
 func withEndpoint(url string) func(*s3.Options) {
 	return func(o *s3.Options) {
 		o.UsePathStyle = true
-		o.BaseEndpoint = aws.String(url)
+		o.EndpointResolver = s3.EndpointResolverFunc(func(region string, _ s3.EndpointResolverOptions) (aws.Endpoint, error) {
+			return aws.Endpoint{URL: url, HostnameImmutable: true, SigningRegion: region}, nil
+		})
 	}
 }
 

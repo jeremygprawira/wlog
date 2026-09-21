@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/propagate"
 	"github.com/jeremygprawira/wlog/wlogtest"
 	"github.com/jeremygprawira/wlog/work"
 )
@@ -188,4 +189,87 @@ func numberOf(value any) float64 {
 		return float64(number)
 	}
 	return 0
+}
+
+// TestWork_BatchChildKeepsTheBatchTrace proves that a message with an empty carrier keeps
+// the trace of its batch, so its parent span stays in the same trace.
+func TestWork_BatchChildKeepsTheBatchTrace(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	fields := map[string]any{"system": "kafka", "operation": "process", "destination": "orders"}
+	parentCtx, parent := work.BatchEvent(context.Background(), log, work.Unit{Kind: work.KindMessage, Fields: fields}, 1)
+
+	_, child := work.Start(parentCtx, log, work.Unit{
+		Kind: work.KindMessage, Fields: fields, Carrier: propagate.MapCarrier{},
+	})
+	child.End(nil)
+	parent.End(nil)
+
+	events := rec.Events()
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want the batch and its message", len(events))
+	}
+	// The child ends first, so it lands first.
+	childTrace, _ := events[0]["trace"].(map[string]any)
+	batchTrace, _ := events[1]["trace"].(map[string]any)
+	if childTrace["trace_id"] != batchTrace["trace_id"] {
+		t.Errorf("child trace_id = %v, want the batch trace id %v", childTrace["trace_id"], batchTrace["trace_id"])
+	}
+	if childTrace["parent_span_id"] != batchTrace["span_id"] {
+		t.Errorf("child parent_span_id = %v, want the batch span id %v", childTrace["parent_span_id"], batchTrace["span_id"])
+	}
+}
+
+// TestWork_BatchChildJoinsTheProducerTrace proves that a message whose carrier holds a
+// traceparent joins the producer trace.
+func TestWork_BatchChildJoinsTheProducerTrace(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	fields := map[string]any{"system": "kafka", "operation": "process", "destination": "orders"}
+	parentCtx, parent := work.BatchEvent(context.Background(), log, work.Unit{Kind: work.KindMessage, Fields: fields}, 1)
+
+	_, child := work.Start(parentCtx, log, work.Unit{
+		Kind: work.KindMessage, Fields: fields,
+		Carrier: propagate.MapCarrier{"traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+	})
+	child.End(nil)
+	parent.End(nil)
+
+	childTrace, _ := rec.Events()[0]["trace"].(map[string]any)
+	if childTrace["trace_id"] != "4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Errorf("child trace_id = %v, want the producer trace id", childTrace["trace_id"])
+	}
+	if childTrace["parent_span_id"] != "00f067aa0ba902b7" {
+		t.Errorf("child parent_span_id = %v, want the producer span id", childTrace["parent_span_id"])
+	}
+}
+
+// TestWork_TickerEventContext proves that fn gets the context of its tick event, so a field
+// it sets lands on the event.
+func TestWork_TickerEventContext(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		work.Ticker(ctx, log, "reaper", time.Millisecond, func(tickCtx context.Context) error {
+			wlog.Set(tickCtx, "tick_field", "yes")
+			return nil
+		})
+	}()
+
+	deadline := time.After(3 * time.Second)
+	for len(rec.Events()) == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("the ticker never ran")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	cancel()
+	<-done
+
+	if got := rec.Events()[0]["tick_field"]; got != "yes" {
+		t.Errorf("tick_field = %v, want the field fn set", got)
+	}
 }

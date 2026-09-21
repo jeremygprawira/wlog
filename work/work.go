@@ -78,10 +78,13 @@ func Start(ctx context.Context, log *wlog.Logger, u Unit) (context.Context, *Han
 	if operation == "" {
 		operation = operationOf(u)
 	}
+	// A message of a batch is a child of the batch event, and it keeps the batch trace
+	// until its own carrier names a producer trace. Extract always writes a trace, so an
+	// empty carrier would move the child to a random trace and leave its parent span in
+	// the batch trace.
+	parent := wlog.HasEvent(ctx)
 	ctx, end := startEvent(ctx, log, operation)
-	// The carrier is read after the event exists, so the ids of the incoming message
-	// replace the trace ids the event started with.
-	if u.Carrier != nil {
+	if u.Carrier != nil && (!parent || u.Carrier.Get("traceparent") != "") {
 		ctx = propagate.Extract(ctx, u.Carrier)
 	}
 

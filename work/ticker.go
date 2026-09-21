@@ -38,12 +38,13 @@ func Ticker(ctx context.Context, log *wlog.Logger, name string, d time.Duration,
 // re-raises a panic once the event is out.
 func runTick(ctx context.Context, log *wlog.Logger, name string, skipped int, fn func(context.Context) error) {
 	unit := Unit{Kind: KindJob, Fields: map[string]any{"system": "ticker", "name": name}}
-	_, h := Start(ctx, log, unit)
+	tickCtx, h := Start(ctx, log, unit)
 	if skipped > 0 {
 		h.Set("ticker", map[string]any{"skipped": skipped})
 	}
 
-	recovered, err := callSafe(ctx, fn)
+	// fn gets the context of the tick event, so a field it sets lands on the event.
+	recovered, err := callSafe(tickCtx, fn)
 	h.End(err)
 	if recovered != nil {
 		panic(recovered)

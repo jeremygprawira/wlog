@@ -1,6 +1,6 @@
 module github.com/jeremygprawira/wlog/job/asynq
 
-go 1.26.0
+go 1.24.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.39.0
@@ -14,11 +14,10 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/redis/go-redis/v9 v9.14.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
