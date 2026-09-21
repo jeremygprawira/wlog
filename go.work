@@ -34,7 +34,9 @@ use (
 	./middleware/httprouter
 	./middleware/huma
 	./middleware/kratos
+	./queue/franz
 	./queue/kafkago
+	./queue/sarama
 	./rpc/connect
 	./rpc/gqlgen
 	./rpc/grpc

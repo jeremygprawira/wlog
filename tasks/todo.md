@@ -181,7 +181,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 ## Phase 13, v0.8: messages, jobs, functions, and commands ([SPEC-track-d.md](../docs/SPEC-track-d.md))
 
 - [x] 13-D-1 queue-kafkago
-- [ ] 13-D-2 queue-sarama and queue-franz
+- [x] 13-D-2 queue-sarama and queue-franz
 - [ ] 13-D-3 queue-confluent
 - [ ] 13-D-4 queue-watermill
 - [ ] 13-D-5 queue-sqs
