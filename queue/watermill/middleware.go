@@ -25,29 +25,28 @@ const resultDeadLetter = "dead_letter"
 func Middleware(log *wlog.Logger) message.HandlerMiddleware {
 	return func(h message.HandlerFunc) message.HandlerFunc {
 		return func(msg *message.Message) ([]*message.Message, error) {
+			// The reason is read before the handler. A requeued message keeps the metadata
+			// of its first delivery, so a later success would look poisoned.
+			before := msg.Metadata.Get(watermillmiddleware.ReasonForPoisonedKey)
 			var produced []*message.Message
 			err := work.Run(msg.Context(), log, unitOf(msg), func(ctx context.Context) error {
 				// The handler reads the context of the message, so it carries the event.
 				msg.SetContext(ctx)
 				var handlerErr error
 				produced, handlerErr = h(msg)
-				if msg.Metadata.Get(watermillmiddleware.ReasonForPoisonedKey) != "" {
-					// The PoisonQueue middleware published the message and returned nil, so
-					// the record names the state the library chose.
-					wlog.SetGroup(ctx, "messaging", "result", resultDeadLetter)
-					wlog.SetLevel(ctx, wlog.LevelError)
+				if handlerErr == nil && before == "" {
+					if reason := msg.Metadata.Get(watermillmiddleware.ReasonForPoisonedKey); reason != "" {
+						// The PoisonQueue middleware published the message and returned nil,
+						// so the record names the state the library chose.
+						wlog.SetGroup(ctx, "messaging", "result", resultDeadLetter)
+						wlog.SetLevel(ctx, wlog.LevelError)
+					}
 				}
 				return handlerErr
 			})
 			return produced, err
 		}
 	}
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the group
-// of the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // unitOf maps one handled message onto a unit of work. The router puts the handler name, the

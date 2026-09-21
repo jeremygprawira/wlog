@@ -27,7 +27,7 @@ type Handler func(ctx context.Context, msg *pubsub.Message) error
 // Logger means wlog.Default.
 func Receive(ctx context.Context, log *wlog.Logger, sub Receiver, fn Handler) error {
 	return sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-		err := process(ctx, log, unitOf(msg, sub.ID()), func(ctx context.Context) error {
+		err := work.Run(ctx, log, unitOf(msg, sub.ID()), func(ctx context.Context) error {
 			return fn(ctx, msg)
 		})
 		if err != nil {
@@ -36,12 +36,6 @@ func Receive(ctx context.Context, log *wlog.Logger, sub Receiver, fn Handler) er
 		}
 		msg.Ack()
 	})
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the group of
-// the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // unitOf maps one message onto a unit of work. The publish time becomes the start time, so the

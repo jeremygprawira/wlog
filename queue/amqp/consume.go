@@ -46,7 +46,7 @@ func Consume(ctx context.Context, log *wlog.Logger, deliveries <-chan amqp.Deliv
 			if !ok {
 				return nil
 			}
-			err := process(ctx, log, unitOf(delivery, queue), func(ctx context.Context) error {
+			err := work.Run(ctx, log, unitOf(delivery, queue), func(ctx context.Context) error {
 				return fn(ctx, delivery)
 			})
 			settle(delivery, err, cfg)
@@ -77,12 +77,6 @@ func requeue(err error, cfg config) bool {
 		}
 	}
 	return false
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the group of
-// the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // unitOf maps one delivery onto a unit of work. The timestamp becomes the start time, so the

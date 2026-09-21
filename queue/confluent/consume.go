@@ -36,11 +36,12 @@ var _ Consumer = (*kafka.Consumer)(nil)
 // Handler handles one message inside its event.
 type Handler func(ctx context.Context, msg *kafka.Message) error
 
-// Consume reads messages until the context ends or a read fails for a reason other than a
-// timeout. Each message gets one event, and Consume commits the message after the handler
-// returns nil. A failed handler is not committed, and the loop continues, so the group
-// delivers the message again after a restart or a rebalance. A nil Logger means
-// wlog.Default.
+// Consume reads messages until the context ends, a read fails for a reason other than a
+// timeout, or a handler fails. Each message gets one event, and Consume commits the message
+// after the handler returns nil. A failed handler is not committed, and the loop stops,
+// because a commit of a later offset covers the failed message. Start a new consumer, or seek
+// back, to retry it. Set enable.auto.commit=false, because librdkafka commits on its own by
+// default and would cover the failed message too. A nil Logger means wlog.Default.
 func Consume(ctx context.Context, log *wlog.Logger, c Consumer, fn Handler) error {
 	for {
 		if err := ctx.Err(); err != nil {
@@ -53,11 +54,11 @@ func Consume(ctx context.Context, log *wlog.Logger, c Consumer, fn Handler) erro
 			}
 			return err
 		}
-		err = process(ctx, log, unitOf(msg), func(ctx context.Context) error {
+		err = work.Run(ctx, log, unitOf(msg), func(ctx context.Context) error {
 			return fn(ctx, msg)
 		})
 		if err != nil {
-			continue
+			return err
 		}
 		if _, err := c.CommitMessage(msg); err != nil {
 			return err
@@ -69,12 +70,6 @@ func Consume(ctx context.Context, log *wlog.Logger, c Consumer, fn Handler) erro
 func isTimeout(err error) bool {
 	var kafkaErr kafka.Error
 	return errors.As(err, &kafkaErr) && kafkaErr.IsTimeout()
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the group
-// of the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // unitOf maps one message onto a unit of work. The message time becomes the start time, so

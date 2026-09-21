@@ -95,10 +95,13 @@ func TestKafka_C2_CommitAfterSuccess(t *testing.T) {
 }
 
 // TestKafka_C2_FailedHandlerDoesNotCommit proves that a failed handler leaves the message
-// uncommitted, so the next fetch of the partition sees the same offset.
+// uncommitted, and that a reader which keeps fetching moves to the next offset. A caller
+// that wants the failed message again opens a new reader or seeks back.
 func TestKafka_C2_FailedHandlerDoesNotCommit(t *testing.T) {
-	msg := kafka.Message{Topic: "orders", Partition: 1, Offset: 7, HighWaterMark: 9}
-	r := &fakeReader{group: "workers", messages: []kafka.Message{msg, msg}}
+	r := &fakeReader{group: "workers", messages: []kafka.Message{
+		{Topic: "orders", Partition: 1, Offset: 7, HighWaterMark: 9},
+		{Topic: "orders", Partition: 1, Offset: 8, HighWaterMark: 9},
+	}}
 	failure := errString("handler failed")
 	handler := func(context.Context, kafka.Message) error { return failure }
 	log, _ := wlogtest.New(t)
@@ -110,12 +113,35 @@ func TestKafka_C2_FailedHandlerDoesNotCommit(t *testing.T) {
 		t.Fatalf("commits = %d, want none after a failed handler", got)
 	}
 
-	// The caller fetches again, and the same offset comes back.
 	if err := Consume(context.Background(), log, r, handler); err == nil {
 		t.Fatal("Consume returned nil on the second fetch")
 	}
-	if got := r.lastOffset(); got != 7 {
-		t.Errorf("second fetch offset = %d, want the uncommitted 7", got)
+	if got := r.lastOffset(); got != 8 {
+		t.Errorf("second fetch offset = %d, want the next offset 8", got)
+	}
+}
+
+// TestKafka_C1_PanicReachesCaller proves that a panicking handler records the panic with a
+// stack, and the panic continues, so the caller decides the retry.
+func TestKafka_C1_PanicReachesCaller(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	r := &fakeReader{group: "workers", messages: []kafka.Message{{Topic: "orders", Offset: 7}}}
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("Consume did not panic again")
+			}
+		}()
+		_ = Consume(context.Background(), log, r, func(context.Context, kafka.Message) error { panic("boom") })
+	}()
+
+	info, _ := rec.Last()["error"].(map[string]any)
+	if info == nil || info["stack"] == nil {
+		t.Errorf("error = %v, want the recovered stack", info)
+	}
+	if got := r.committed(); got != 0 {
+		t.Errorf("commits = %d, want none after a panic", got)
 	}
 }
 
@@ -176,4 +202,11 @@ func (r *fakeReader) lastOffset() int64 {
 		return -1
 	}
 	return r.messages[r.fetched-1].Offset
+}
+
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again, which is the rule of the track spec.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }

@@ -98,6 +98,18 @@ func TestSqs_C1_ReceiveAsksForAttributes(t *testing.T) {
 			t.Errorf("the receive does not ask for %s", name)
 		}
 	}
+
+	// SQS returns only the message attributes a receive names, so the trace attributes
+	// must be asked for too.
+	attributes := map[string]bool{}
+	for _, name := range client.lastReceive().MessageAttributeNames {
+		attributes[name] = true
+	}
+	for _, name := range []string{"traceparent", "tracestate", "X-Request-ID"} {
+		if !attributes[name] {
+			t.Errorf("the receive does not ask for the %s message attribute", name)
+		}
+	}
 }
 
 // TestSqs_C1_FailedMessageIsNotDeleted proves that a failed handler leaves the message for its
@@ -154,3 +166,10 @@ type errString string
 
 // Error returns the text of the error.
 func (e errString) Error() string { return string(e) }
+
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again, which is the rule of the track spec.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
+}

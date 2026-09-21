@@ -43,26 +43,40 @@ func (observability) InboundContextDecorators() []func(context.Context, binding.
 func (observability) RecordReceivedMalformedEvent(context.Context, error) {}
 
 // RecordCallingInvoker starts one event for one received event, and returns the end func that
-// the SDK calls with the result of the function.
+// the SDK calls with the result of the function. An acknowledgement is a non-nil result, so
+// the end func maps it to no error.
 func (o observability) RecordCallingInvoker(ctx context.Context, event *cloudevents.Event) (context.Context, func(error)) {
 	if event == nil {
 		return ctx, func(error) {}
 	}
 	ctx, handle := work.Start(ctx, o.log, unitOf(*event))
-	return ctx, handle.End
+	return ctx, func(result error) { handle.End(ackError(result)) }
+}
+
+// ackError returns the error the event records for one receive result. An acknowledgement,
+// and a nil result, record no error.
+func ackError(result error) error {
+	if protocol.IsACK(result) {
+		return nil
+	}
+	return result
 }
 
 // RecordSendingEvent starts one call for one sent event, and returns the end func that the SDK
-// calls with the result.
+// calls with the result. The trace headers are written here, because the SDK runs the
+// defaulters before this hook and the span id must be the span id of the call.
 func (observability) RecordSendingEvent(ctx context.Context, event cloudevents.Event) (context.Context, func(error)) {
 	ctx, end := wlog.StartCall(ctx, callOf(event))
+	injectTrace(ctx, event)
 	return ctx, func(result error) { end(resultOf(result)) }
 }
 
 // RecordRequestEvent starts one call for one requested event, and returns the end func that the
-// SDK calls with the result.
+// SDK calls with the result. The trace headers are written here, for the same reason as the
+// send side.
 func (observability) RecordRequestEvent(ctx context.Context, event cloudevents.Event) (context.Context, func(error, *cloudevents.Event)) {
 	ctx, end := wlog.StartCall(ctx, callOf(event))
+	injectTrace(ctx, event)
 	return ctx, func(result error, _ *cloudevents.Event) { end(resultOf(result)) }
 }
 
@@ -92,12 +106,6 @@ func (e *panicError) Error() string { return fmt.Sprintf("panic: %v", e.value) }
 
 // Stack returns the stack of the panic.
 func (e *panicError) Stack() string { return e.stack }
-
-// process runs one unit of work through the event path of this adapter: one event, the group of
-// the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
 
 // Unit maps one CloudEvent onto a unit of work, with the field set of this module. A receiver
 // that does not drive the CloudEvents client, such as the GCF adapter, calls Unit so its events
@@ -179,14 +187,21 @@ func resultOf(result error) wlog.CallResult {
 	return wlog.CallResult{Err: result}
 }
 
+// injectTrace writes the trace headers of ctx as extensions of one event, when ctx carries a
+// trace.
+func injectTrace(ctx context.Context, event cloudevents.Event) {
+	if _, ok := propagate.FromContext(ctx); !ok {
+		return
+	}
+	propagate.Inject(ctx, extensionCarrier{event: event})
+}
+
 // EventDefaulter returns the defaulter that writes the trace headers of the context as
-// extensions, so the next service joins the same trace. Install it with client.WithEventDefaulter.
+// extensions, so a caller that sends an event outside the observability service joins the
+// same trace. Install it with client.WithEventDefaulter.
 func EventDefaulter() client.EventDefaulter {
 	return func(ctx context.Context, event cloudevents.Event) cloudevents.Event {
-		if _, ok := propagate.FromContext(ctx); !ok {
-			return event
-		}
-		propagate.Inject(ctx, extensionCarrier{event: event})
+		injectTrace(ctx, event)
 		return event
 	}
 }

@@ -35,13 +35,17 @@ type Handler func(ctx context.Context, msg kafka.Message) error
 // the caller decides to retry or to skip. Call Consume in a loop. A nil Logger means
 // wlog.Default.
 //
+// A kafka.Reader moves its read position on every fetch, commit or not. A caller that keeps
+// the same reader after an error commits past the failed message. To retry it, stop the loop
+// and open a new reader, or seek the reader back to the failed offset.
+//
 // Consume never uses ReadMessage, because ReadMessage commits before the handler runs.
 func Consume(ctx context.Context, log *wlog.Logger, r Fetcher, fn Handler) error {
 	msg, err := r.FetchMessage(ctx)
 	if err != nil {
 		return err
 	}
-	err = process(ctx, log, unitOf(msg, r.Config().GroupID), func(ctx context.Context) error {
+	err = work.Run(ctx, log, unitOf(msg, r.Config().GroupID), func(ctx context.Context) error {
 		return fn(ctx, msg)
 	})
 	if err != nil {
@@ -75,14 +79,6 @@ func unitOf(msg kafka.Message, group string) work.Unit {
 		Carrier:   carrierOf(msg.Headers),
 		StartedAt: msg.Time,
 	}
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the
-// group of the kind, and a recovered panic as an error. Consume builds the unit from the
-// message and calls process. A test passes a unit of another kind, because a Kafka message
-// cannot carry the fields of a job, an rpc, a command, or a function.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // carrierOf wraps the headers of one message as a propagate carrier, so a traceparent

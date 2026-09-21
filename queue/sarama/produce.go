@@ -5,6 +5,7 @@ package wlogsarama
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/IBM/sarama"
@@ -89,8 +90,13 @@ type Async struct {
 }
 
 // AsyncProducer returns the wrapper around p and starts the goroutine that ends the calls of
-// produced messages.
-func AsyncProducer(p AsyncSender) *Async {
+// produced messages. The config must turn on Producer.Return.Successes, because a call ends
+// when the broker reports the message, and a producer that reports nothing leaves every call
+// open. sarama already requires Producer.Return.Errors.
+func AsyncProducer(p AsyncSender, cfg *sarama.Config) (*Async, error) {
+	if cfg == nil || !cfg.Producer.Return.Successes {
+		return nil, errors.New("wlogsarama: set Config.Producer.Return.Successes, or a produced call never ends")
+	}
 	a := &Async{
 		p:       p,
 		pending: map[*sarama.ProducerMessage]func(wlog.CallResult){},
@@ -98,7 +104,7 @@ func AsyncProducer(p AsyncSender) *Async {
 		fail:    make(chan *sarama.ProducerError),
 	}
 	go a.watch()
-	return a
+	return a, nil
 }
 
 // Send queues msg for the wrapped producer, adds the trace headers of ctx to msg, and

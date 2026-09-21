@@ -4,6 +4,7 @@ package wlogcloudevents
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -55,18 +56,19 @@ func TestCloudEvents_C1_SendCallRecord(t *testing.T) {
 	}
 }
 
-// TestCloudEvents_C1_EventDefaulterTrace proves that the defaulter writes a traceparent whose
-// span id is the span id of the open call.
-func TestCloudEvents_C1_EventDefaulterTrace(t *testing.T) {
+// TestCloudEvents_C1_SendTraceNamesTheCall proves that the send hook writes a traceparent
+// whose span id is the span id of the open call. The hook writes it, because the SDK runs the
+// defaulters before the hook.
+func TestCloudEvents_C1_SendTraceNamesTheCall(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
+	event := newEvent()
 
-	ctx, finish := wlog.StartCall(ctx, wlog.Call{Kind: "queue", System: "cloudevents", Operation: "publish"})
-	event := EventDefaulter()(ctx, newEvent())
-	finish(wlog.CallResult{Status: "ack"})
+	_, sent := Observability(log).RecordSendingEvent(ctx, event)
+	sent(nil)
 	end()
 
-	parts := strings.Split(event.Extensions()["traceparent"].(string), "-")
+	parts := strings.Split(fmt.Sprint(event.Extensions()["traceparent"]), "-")
 	if len(parts) != 4 || parts[1] != "4bf92f3577b34da6a3ce929d0e0e4736" {
 		t.Fatalf("traceparent = %v, want the trace id of the unit", event.Extensions()["traceparent"])
 	}

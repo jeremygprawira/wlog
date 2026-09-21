@@ -4,6 +4,7 @@ package wlogsqs
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func Receive(ctx context.Context, log *wlog.Logger, client SQSClient, input *sqs
 			return err
 		}
 		for _, msg := range out.Messages {
-			err := process(ctx, log, unitOf(msg, input.QueueUrl), func(ctx context.Context) error {
+			err := work.Run(ctx, log, unitOf(msg, input.QueueUrl), func(ctx context.Context) error {
 				return fn(ctx, msg)
 			})
 			if err != nil {
@@ -58,8 +59,10 @@ func Receive(ctx context.Context, log *wlog.Logger, client SQSClient, input *sqs
 	}
 }
 
-// withAttributes returns a copy of input that asks for the two system attributes the event
-// needs, next to the names the caller asked for.
+// withAttributes returns a copy of input that asks for the system attributes the event needs
+// and the trace attributes of the producer, next to the names the caller asked for. SQS
+// returns only the message attributes a receive names, so a consumer that does not ask for
+// traceparent never joins the producer trace.
 func withAttributes(input *sqs.ReceiveMessageInput) *sqs.ReceiveMessageInput {
 	out := *input
 	names := []sqstypes.MessageSystemAttributeName{
@@ -72,13 +75,15 @@ func withAttributes(input *sqs.ReceiveMessageInput) *sqs.ReceiveMessageInput {
 		}
 	}
 	out.MessageSystemAttributeNames = names
-	return &out
-}
 
-// process runs one unit of work through the event path of this adapter: one event, the group
-// of the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
+	attributes := []string{"traceparent", "tracestate", "X-Request-ID"}
+	for _, name := range input.MessageAttributeNames {
+		if !slices.Contains(attributes, name) {
+			attributes = append(attributes, name)
+		}
+	}
+	out.MessageAttributeNames = attributes
+	return &out
 }
 
 // unitOf maps one received message onto a unit of work. The send time becomes the start time,

@@ -37,7 +37,10 @@ func (groupHandler) Setup(sarama.ConsumerGroupSession) error { return nil }
 // Cleanup runs after the claims of one generation, and records nothing.
 func (groupHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
-// ConsumeClaim reads the messages of one claim until the session ends or the claim closes.
+// ConsumeClaim reads the messages of one claim until the session ends, the claim closes, or a
+// handler fails. Kafka keeps one offset per partition, so a mark of a later message covers the
+// failed one. The claim stops on a failure, and the group delivers the failed message again
+// after a rebalance.
 func (h groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for {
 		select {
@@ -47,11 +50,11 @@ func (h groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
 			if !ok {
 				return nil
 			}
-			err := process(session.Context(), h.log, unitOf(session, claim, msg), func(ctx context.Context) error {
+			err := work.Run(session.Context(), h.log, unitOf(session, claim, msg), func(ctx context.Context) error {
 				return h.fn(ctx, msg)
 			})
 			if err != nil {
-				continue
+				return err
 			}
 			session.MarkMessage(msg, "")
 		}
@@ -64,12 +67,6 @@ func (h groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
 func Message(log *wlog.Logger, session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim, msg *sarama.ConsumerMessage) (context.Context, func(error)) {
 	ctx, h := work.Start(session.Context(), log, unitOf(session, claim, msg))
 	return ctx, h.End
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the group
-// of the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // unitOf maps one sarama message onto a unit of work. The message timestamp becomes the

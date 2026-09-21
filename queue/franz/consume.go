@@ -22,12 +22,6 @@ func Record(log *wlog.Logger, cl *kgo.Client, r *kgo.Record) (context.Context, f
 	return ctx, h.End
 }
 
-// process runs one unit of work through the event path of this adapter: one event, the group
-// of the kind, and a recovered panic as an error.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // unitOf maps one fetched record onto a unit of work. The record time becomes the start
 // time, so the event carries the time the record waited as lag_ms.
 func unitOf(r *kgo.Record, group string) work.Unit {

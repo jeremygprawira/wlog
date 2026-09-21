@@ -35,9 +35,9 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 	return process(context.Background(), log, unit, handler)
 }
 
-// TestConfluent_C1_ConsumeCommitsAfterSuccess proves that the loop commits a message after the
-// handler returns nil, and leaves a failed message uncommitted.
-func TestConfluent_C1_ConsumeCommitsAfterSuccess(t *testing.T) {
+// TestConfluent_C1_HandlerErrorStopsTheLoop proves that the loop commits a message after the
+// handler returns nil, and stops on a handler error before the next message is committed.
+func TestConfluent_C1_HandlerErrorStopsTheLoop(t *testing.T) {
 	good := message("orders", 1, 7)
 	bad := message("orders", 1, 8)
 	c := &fakeConsumer{messages: []*kafka.Message{good, bad}, readErr: io.EOF}
@@ -49,8 +49,8 @@ func TestConfluent_C1_ConsumeCommitsAfterSuccess(t *testing.T) {
 		}
 		return nil
 	})
-	if !errors.Is(err, io.EOF) {
-		t.Fatalf("Consume returned %v, want the read error that ended the loop", err)
+	if err == nil || err.Error() != "handler failed" {
+		t.Fatalf("Consume returned %v, want the handler error", err)
 	}
 	committed := c.committed()
 	if len(committed) != 1 || committed[0] != good {
@@ -137,4 +137,11 @@ func TestConfluent_C1_ConsumeReadEdges(t *testing.T) {
 			t.Errorf("messaging.destination = %v, want no destination for a message with no topic", messaging["destination"])
 		}
 	})
+}
+
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again, which is the rule of the track spec.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }

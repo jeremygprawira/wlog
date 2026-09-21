@@ -26,8 +26,9 @@ type sender struct {
 	subject string
 }
 
-// SendBatch publishes one message per event.
-func (s sender) SendBatch(_ context.Context, events []map[string]any) error {
+// SendBatch publishes one message per event, and flushes the client buffer, so the batch is
+// on the wire before the call returns. A publisher without a flush needs none.
+func (s sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	for _, event := range events {
 		body, err := json.Marshal(event)
 		if err != nil {
@@ -37,6 +38,30 @@ func (s sender) SendBatch(_ context.Context, events []map[string]any) error {
 			return err
 		}
 	}
+	if flusher, ok := s.p.(interface {
+		FlushWithContext(context.Context) error
+	}); ok {
+		return flusher.FlushWithContext(ctx)
+	}
+	return nil
+}
+
+// connDrain closes one connection when the Logger closes the drain, so a process that ends
+// does not leave the connection open.
+type connDrain struct {
+	drain wlog.Drain
+	conn  *nats.Conn
+}
+
+// Send passes one event to the wrapped drain.
+func (d connDrain) Send(ctx context.Context, event map[string]any) { d.drain.Send(ctx, event) }
+
+// Close stops the wrapped drain and closes the connection.
+func (d connDrain) Close(ctx context.Context) error {
+	if closer, ok := d.drain.(interface{ Close(context.Context) error }); ok {
+		_ = closer.Close(ctx)
+	}
+	d.conn.Close()
 	return nil
 }
 
@@ -60,7 +85,7 @@ func Factory() setup.Factory {
 			if err != nil {
 				return nil, err
 			}
-			return Drain(conn, subject), nil
+			return connDrain{drain: Drain(conn, subject), conn: conn}, nil
 		},
 	}
 }

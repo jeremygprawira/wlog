@@ -20,7 +20,7 @@ type MessageHandler func(ctx context.Context, msg *nats.Msg) error
 // has no acknowledgement, so a failed handler records the error and returns.
 func Handler(log *wlog.Logger, fn MessageHandler) nats.MsgHandler {
 	return func(msg *nats.Msg) {
-		_ = process(context.Background(), log, unitOf(msg), func(ctx context.Context) error {
+		_ = work.Run(context.Background(), log, unitOf(msg), func(ctx context.Context) error {
 			return fn(ctx, msg)
 		})
 	}
@@ -53,7 +53,7 @@ func JetStreamHandler(log *wlog.Logger, fn JetStreamHandlerFunc, opts ...Option)
 		opt(&cfg)
 	}
 	return func(msg jetstream.Msg) {
-		err := process(context.Background(), log, jetStreamUnit(msg), func(ctx context.Context) error {
+		err := work.Run(context.Background(), log, jetStreamUnit(msg), func(ctx context.Context) error {
 			return fn(ctx, msg)
 		})
 		switch {
@@ -75,13 +75,6 @@ func matches(err error, errs []error) bool {
 		}
 	}
 	return false
-}
-
-// process runs one unit of work through the event path of this adapter: one event, the group of
-// the kind, and a recovered panic as an error. A panicking handler nacks its message instead of
-// taking the process with it.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
 
 // unitOf maps one core NATS message onto a unit of work. The subscription names the queue group

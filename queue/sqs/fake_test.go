@@ -24,7 +24,8 @@ type fakeSQSClient struct {
 	sends    []*sqs.SendMessageInput
 }
 
-// ReceiveMessage returns the messages of the slice, and readErr when the slice is empty.
+// ReceiveMessage returns the messages of the slice, and readErr when the slice is empty. It
+// keeps only the message attributes that the receive names, which is what SQS does.
 func (c *fakeSQSClient) ReceiveMessage(_ context.Context, params *sqs.ReceiveMessageInput, _ ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -32,7 +33,21 @@ func (c *fakeSQSClient) ReceiveMessage(_ context.Context, params *sqs.ReceiveMes
 	if len(c.messages) == 0 {
 		return nil, c.readErr
 	}
-	messages := c.messages
+	asked := map[string]bool{}
+	for _, name := range params.MessageAttributeNames {
+		asked[name] = true
+	}
+	messages := make([]sqstypes.Message, 0, len(c.messages))
+	for _, msg := range c.messages {
+		kept := map[string]sqstypes.MessageAttributeValue{}
+		for name, value := range msg.MessageAttributes {
+			if asked[name] {
+				kept[name] = value
+			}
+		}
+		msg.MessageAttributes = kept
+		messages = append(messages, msg)
+	}
 	c.messages = nil
 	return &sqs.ReceiveMessageOutput{Messages: messages}, nil
 }

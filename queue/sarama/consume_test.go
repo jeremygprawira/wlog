@@ -31,9 +31,10 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 	return process(context.Background(), log, unit, handler)
 }
 
-// TestSarama_C1_HandlerMarksAfterSuccess proves that the claim loop marks a message after
-// the handler returns nil, and leaves a failed message unmarked.
-func TestSarama_C1_HandlerMarksAfterSuccess(t *testing.T) {
+// TestSarama_C1_HandlerErrorStopsTheClaim proves that the claim marks a message after the
+// handler returns nil, and that a handler error stops the claim before the next message is
+// marked. The group delivers the failed message again after a rebalance.
+func TestSarama_C1_HandlerErrorStopsTheClaim(t *testing.T) {
 	claim := &fakeClaim{
 		topic: "orders", partition: 1, highWaterMark: 10,
 		messages: []*sarama.ConsumerMessage{
@@ -50,8 +51,8 @@ func TestSarama_C1_HandlerMarksAfterSuccess(t *testing.T) {
 		}
 		return nil
 	})
-	if err := handler.ConsumeClaim(session, claim); err != nil {
-		t.Fatalf("ConsumeClaim: %v", err)
+	if err := handler.ConsumeClaim(session, claim); err == nil || err.Error() != "handler failed" {
+		t.Fatalf("ConsumeClaim returned %v, want the handler error", err)
 	}
 
 	marked := session.markedOffsets()
@@ -119,3 +120,10 @@ type errString string
 
 // Error returns the text of the error.
 func (e errString) Error() string { return string(e) }
+
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again, which is the rule of the track spec.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
+}

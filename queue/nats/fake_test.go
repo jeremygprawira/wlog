@@ -16,6 +16,22 @@ type fakePublisher struct {
 	mu       sync.Mutex
 	messages []*nats.Msg
 	err      error
+	flushes  int
+}
+
+// FlushWithContext records one flush.
+func (p *fakePublisher) FlushWithContext(context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.flushes++
+	return nil
+}
+
+// flushed returns how many flushes the drain asked for.
+func (p *fakePublisher) flushed() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.flushes
 }
 
 // PublishMsg records one message.

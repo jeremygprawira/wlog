@@ -36,17 +36,36 @@ func Produce(ctx context.Context, p Sender, msg *kafka.Message, deliveryChan cha
 	ctx, end := wlog.StartCall(ctx, callOf(msg))
 	msg.Headers = withTraceHeaders(ctx, msg.Headers)
 
-	if err := p.Produce(msg, deliveryChan); err != nil {
+	// The report arrives on a private channel, so a nil caller channel and a shared channel
+	// both work, and two calls never read each other's report.
+	report := make(chan kafka.Event, 1)
+	if err := p.Produce(msg, report); err != nil {
 		end(wlog.CallResult{Err: err})
 		return err
 	}
-	event, ok := <-deliveryChan
-	if !ok {
-		end(wlog.CallResult{Err: errNoReport})
-		return errNoReport
+
+	var event kafka.Event
+	select {
+	case received, ok := <-report:
+		if !ok {
+			end(wlog.CallResult{Err: errNoReport})
+			return errNoReport
+		}
+		event = received
+	case <-ctx.Done():
+		end(wlog.CallResult{Err: ctx.Err()})
+		return ctx.Err()
 	}
 	err := deliveryError(event)
 	end(resultOf(err))
+
+	// A caller that passed a channel still gets the report.
+	if deliveryChan != nil {
+		select {
+		case deliveryChan <- event:
+		case <-ctx.Done():
+		}
+	}
 	return err
 }
 

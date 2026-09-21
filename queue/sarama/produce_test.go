@@ -92,7 +92,12 @@ func TestSarama_C1_SyncProducerCallRecord(t *testing.T) {
 // when the producer reports the message on Successes.
 func TestSarama_C1_AsyncProducerCallRecord(t *testing.T) {
 	fake := newFakeAsyncProducer()
-	p := AsyncProducer(fake)
+	cfg := sarama.NewConfig()
+	cfg.Producer.Return.Successes = true
+	p, err := AsyncProducer(fake, cfg)
+	if err != nil {
+		t.Fatalf("AsyncProducer: %v", err)
+	}
 	log, rec := wlogtest.New(t)
 
 	ctx := log.WithContext(context.Background())

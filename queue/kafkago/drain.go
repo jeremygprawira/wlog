@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 
@@ -39,6 +40,24 @@ func (s sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	return s.w.WriteMessages(ctx, msgs...)
 }
 
+// writerDrain closes one writer when the Logger closes the drain, so its goroutines do not
+// outlive the process.
+type writerDrain struct {
+	drain  wlog.Drain
+	writer *kafka.Writer
+}
+
+// Send passes one event to the wrapped drain.
+func (d writerDrain) Send(ctx context.Context, event map[string]any) { d.drain.Send(ctx, event) }
+
+// Close stops the wrapped drain and closes the writer.
+func (d writerDrain) Close(ctx context.Context) error {
+	if closer, ok := d.drain.(interface{ Close(context.Context) error }); ok {
+		_ = closer.Close(ctx)
+	}
+	return d.writer.Close()
+}
+
 // Factory returns the setup factory of the Kafka drain, so a deployment picks it with
 // WLOG_DRAINS=kafka. It reads WLOG_KAFKA_BROKERS, a comma separated list of addresses, and
 // WLOG_KAFKA_TOPIC. SASL, TLS, and credentials need code.
@@ -56,8 +75,15 @@ func Factory() setup.Factory {
 			if len(addrs) == 0 || topic == "" {
 				return nil, errors.New("wlogkafka: WLOG_KAFKA_BROKERS and WLOG_KAFKA_TOPIC are both required")
 			}
-			w := &kafka.Writer{Addr: kafka.TCP(addrs...), Topic: topic}
-			return Drain(w), nil
+			w := &kafka.Writer{
+				Addr:  kafka.TCP(addrs...),
+				Topic: topic,
+				// The pipeline batches, so the writer waits only briefly for a full batch,
+				// and it waits for the acks, so a broker refusal reaches the retry.
+				RequiredAcks: kafka.RequireAll,
+				BatchTimeout: 10 * time.Millisecond,
+			}
+			return writerDrain{drain: Drain(w), writer: w}, nil
 		},
 	}
 }

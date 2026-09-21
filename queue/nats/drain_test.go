@@ -25,6 +25,21 @@ func TestNats_C1_DrainShipsEvents(t *testing.T) {
 	}})
 }
 
+// TestNats_C1_DrainFlushes proves that one batch flushes the client buffer before the call
+// returns, so a process that ends does not lose the events.
+func TestNats_C1_DrainFlushes(t *testing.T) {
+	pub := &fakePublisher{}
+	drain := Drain(pub, "events")
+	drain.Send(context.Background(), map[string]any{"event_id": "e1"})
+	if closer, ok := drain.(interface{ Close(context.Context) error }); ok {
+		_ = closer.Close(context.Background())
+	}
+
+	if pub.flushed() == 0 {
+		t.Error("the drain sent no flush")
+	}
+}
+
 // TestNats_C1_DrainBatch proves that a batch of three events becomes three messages, each one
 // the canonical event JSON of its own event.
 func TestNats_C1_DrainBatch(t *testing.T) {

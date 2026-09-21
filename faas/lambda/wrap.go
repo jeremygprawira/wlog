@@ -77,12 +77,6 @@ func flush(log *wlog.Logger, timeout time.Duration) {
 	_ = log.Flush(ctx)
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered
-// panic as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // unitOf maps one invocation onto a unit of work. The remaining time comes from the
 // invocation deadline, and the cold start flag from the first call in this process.
 func unitOf(ctx context.Context, in any, coldStart bool) work.Unit {

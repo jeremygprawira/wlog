@@ -205,3 +205,10 @@ func lastEvent(t *testing.T, rec *wlogtest.Recorder) map[string]any {
 	}
 	return got
 }
+
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again, which is the rule of the track spec.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
+}

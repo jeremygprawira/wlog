@@ -10,6 +10,7 @@ import (
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/cloudevents/sdk-go/v2/protocol"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/internal/conformance"
@@ -47,6 +48,27 @@ func TestCloudEvents_C1_UnitNamesTheEvent(t *testing.T) {
 	ce, _ := unit.Fields["cloudevents"].(map[string]any)
 	if ce["event_id"] != "evt-1" || ce["event_type"] != "orders.created" {
 		t.Errorf("cloudevents = %v, want the ids of the event", unit.Fields["cloudevents"])
+	}
+}
+
+// TestCloudEvents_C1_AckIsNotAFailure proves that an acknowledgement result records level
+// info and no error, because the SDK reports an acknowledgement as a non-nil result.
+func TestCloudEvents_C1_AckIsNotAFailure(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	event := newEvent()
+
+	_, end := Observability(log).RecordCallingInvoker(context.Background(), &event)
+	end(protocol.ResultACK)
+
+	got := rec.Last()
+	if got == nil {
+		t.Fatal("no event recorded")
+	}
+	if got["level"] != "info" || got["outcome"] != "success" {
+		t.Errorf("level/outcome = %v/%v, want info/success", got["level"], got["outcome"])
+	}
+	if _, present := got["error"]; present {
+		t.Errorf("error = %v, want none for an acknowledgement", got["error"])
 	}
 }
 
@@ -119,4 +141,11 @@ func newEvent() cloudevents.Event {
 	event.SetSubject("orders.created")
 	event.SetTime(time.Now().Add(-2 * time.Second))
 	return event
+}
+
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again, which is the rule of the track spec.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
