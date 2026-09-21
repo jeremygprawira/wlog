@@ -81,7 +81,7 @@ A test proves every row that says built. A row that says partial names what is m
 | overview | built | `middleware/nethttp`, `middleware/echo`, `middleware/echo5`, `middleware/gin` |
 | Nuxt, Next.js, SvelteKit, Nitro, TanStack Start, NestJS, Express, Hono, Fastify, Elysia, React Router, Cloudflare Workers, Astro, oRPC | not adopted | TypeScript frameworks |
 | Standalone TypeScript | built | `wlog.Start` works in any Go program, job, or worker |
-| AWS Lambda | built | `examples/lambda` with a handler wrapper and a flush before return |
+| AWS Lambda | built | `faas/lambda` with a handler wrapper and a flush before return |
 
 ## extend
 
