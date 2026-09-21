@@ -1,0 +1,137 @@
+// This file runs the work conformance suite against the command path, and checks the exit
+// code, the path, the flags, and the flush of one run.
+package wlogkong
+
+import (
+	"context"
+	"testing"
+
+	"github.com/alecthomas/kong"
+
+	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/conformance"
+	workconformance "github.com/jeremygprawira/wlog/internal/conformance/work"
+	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/wlogtest"
+	"github.com/jeremygprawira/wlog/work"
+)
+
+// TestKong_C1_WorkConformance proves that the command path passes every scenario of the work
+// suite.
+func TestKong_C1_WorkConformance(t *testing.T) {
+	workconformance.Run(conformance.Tester{T: t}, workFactory{})
+}
+
+// workFactory runs one unit through the event path of this adapter. The suite supplies the
+// unit, because one command run carries no rpc, message, function, or job field.
+type workFactory struct{}
+
+// Process runs one unit of work and returns what the handler returned.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
+	return process(context.Background(), log, unit, handler)
+}
+
+// TestKong_C9_ParseErrorRecordsEighty proves that a fault in the command line records exit code
+// 80 and level warn, and the path of the command it reached.
+func TestKong_C9_ParseErrorRecordsEighty(t *testing.T) {
+	log, rec := wlogtest.New(t)
+
+	if code := Run(context.Background(), log, &testCLI{}, []string{"--nope"}, kong.Name("app")); code != 80 {
+		t.Errorf("code = %d, want 80 for a fault in the command line", code)
+	}
+	got := lastEvent(t, rec)
+	if got["level"] != "warn" {
+		t.Errorf("level = %v, want warn", got["level"])
+	}
+	if code := cliField(t, got, "exit_code"); !conformance.Equal(code, 80) {
+		t.Errorf("cli.exit_code = %v, want 80", code)
+	}
+}
+
+// TestKong_C1_SubcommandRecordsPathAndFlags proves that a subcommand records its full path, the
+// names of the flags that were set, and the event context that BindTo gives the command.
+func TestKong_C1_SubcommandRecordsPathAndFlags(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	cli := &testCLI{}
+
+	if code := Run(context.Background(), log, cli, []string{"sync", "--verbose", "--token", "hunter2"}, kong.Name("app")); code != 0 {
+		t.Errorf("code = %d, want 0", code)
+	}
+	got := lastEvent(t, rec)
+	if got["operation"] != "app sync" {
+		t.Errorf("operation = %v, want app sync", got["operation"])
+	}
+	flags, _ := cliField(t, got, "flags").([]any)
+	if len(flags) != 2 || flags[0] != "token" || flags[1] != "verbose" {
+		t.Errorf("cli.flags = %v, want token and verbose", flags)
+	}
+	if got["inside"] != true {
+		t.Errorf("inside = %v, want the command to see the event context", got["inside"])
+	}
+}
+
+// TestKong_C1_FlushesBeforeReturn proves that the event reaches a pipeline before Run returns.
+func TestKong_C1_FlushesBeforeReturn(t *testing.T) {
+	sender := &fakeSender{}
+	log := wlog.New(
+		wlog.WithSilent(),
+		wlog.WithService("kong-test", "0.0.1", "prod"),
+		wlog.WithDrains(pipeline.Wrap(sender)),
+	)
+
+	Run(context.Background(), log, &testCLI{}, []string{"sync"}, kong.Name("app"))
+
+	if count := sender.count(); count != 1 {
+		t.Errorf("delivered %d events, want 1", count)
+	}
+}
+
+// testCLI is the grammar of the tests.
+type testCLI struct {
+	Verbose bool     `help:"noisy"`
+	Sync    syncCmd  `cmd:"" help:"sync the orders"`
+	Check   checkCmd `cmd:"" help:"check the orders"`
+}
+
+// syncCmd runs the sync command.
+type syncCmd struct {
+	Token string `help:"a secret"`
+}
+
+// Run records that the command saw the event context.
+func (c *syncCmd) Run(ctx context.Context) error {
+	wlog.Set(ctx, "inside", true)
+	return nil
+}
+
+// checkCmd runs the check command and fails.
+type checkCmd struct{}
+
+// Run returns an error.
+func (c *checkCmd) Run(context.Context) error { return errString("boom") }
+
+// cliField returns one field of the cli group of an event.
+func cliField(t *testing.T, got map[string]any, key string) any {
+	t.Helper()
+	cli, _ := got["cli"].(map[string]any)
+	if cli == nil {
+		t.Fatalf("the cli group is missing from %v", got)
+	}
+	return cli[key]
+}
+
+// lastEvent returns the only recorded event, and stops the test when the run recorded none.
+func lastEvent(t *testing.T, rec *wlogtest.Recorder) map[string]any {
+	t.Helper()
+	got := rec.Last()
+	if got == nil {
+		t.Fatal("no event recorded")
+	}
+	return got
+}
+
+// errString is the plain error a test returns, so the test names no error library.
+type errString string
+
+// Error returns the text of the error.
+func (e errString) Error() string { return string(e) }

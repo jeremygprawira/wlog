@@ -12,10 +12,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/tools/go/packages"
 
+	"github.com/jeremygprawira/wlog"
 	wlogagents "github.com/jeremygprawira/wlog/cmd/wlog/cmd/agents"
 	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
 	wlogexplain "github.com/jeremygprawira/wlog/cmd/wlog/cmd/explain"
@@ -27,10 +30,46 @@ import (
 	"github.com/jeremygprawira/wlog/cmd/wlog/report"
 	"github.com/jeremygprawira/wlog/cmd/wlog/rules"
 	"github.com/jeremygprawira/wlog/cmd/wlog/score"
+	"github.com/jeremygprawira/wlog/setup"
+	"github.com/jeremygprawira/wlog/work"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(runCommand(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// runCommand runs the tool, and records the run through work when WLOG_DRAINS is set. The
+// logger writes no line of its own, so the output of the tool stays the same. A run without
+// WLOG_DRAINS builds no logger.
+func runCommand(args []string, stdout, stderr io.Writer) int {
+	if os.Getenv("WLOG_DRAINS") == "" {
+		return run(args, stdout, stderr)
+	}
+	log := wlog.New(setup.FromEnv(), wlog.WithSilent(), wlog.OnProblem(func(wlog.Problem) {}))
+	code := 0
+	_ = work.Run(context.Background(), log, work.Unit{
+		Kind:   work.KindCommand,
+		Fields: map[string]any{"path": selfPath(args)},
+	}, func(ctx context.Context) error {
+		code = run(args, stdout, stderr)
+		wlog.SetGroup(ctx, "cli", "exit_code", code)
+		if work.ClassOf(work.KindCommand, strconv.Itoa(code)) == work.StatusClientError {
+			wlog.SetLevel(ctx, wlog.LevelWarn)
+		}
+		return nil
+	})
+	flush, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = log.Flush(flush)
+	return code
+}
+
+// selfPath returns the subcommand path of one run, such as wlog map.
+func selfPath(args []string) string {
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		return "wlog " + args[0]
+	}
+	return "wlog"
 }
 
 // run is main without the process exit, so a test can call it. It returns the exit
@@ -54,8 +93,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "mcp" {
 		return wlogmcp.Run(args[1:], stdout, stderr)
 	}
-	if len(args) > 0 && (args[0] == "explain" || args[0] == "rules" || args[0] == "schema" || args[0] == "version") {
+	if len(args) > 0 && args[0] == "explain" {
 		return wlogexplain.Run(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && (args[0] == "rules" || args[0] == "schema" || args[0] == "version" || args[0] == "env") {
+		return wlogexplain.Run(args, stdout, stderr)
 	}
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		_, _ = fmt.Fprint(stdout, usage())

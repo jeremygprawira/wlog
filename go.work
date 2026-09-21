@@ -13,6 +13,9 @@ use ./middleware/echo5
 use (
 	./client/aws
 	./cmd/wlog
+	./command/cobra
+	./command/kong
+	./command/urfave
 	./errors/cockroach
 	./errors/oops
 	./errors/validator
