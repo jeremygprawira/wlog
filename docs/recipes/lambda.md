@@ -1,8 +1,8 @@
 # Recipe: Lambda function
 
-A Lambda function where every invocation is one wide event. The adapter lives in
-[faas/lambda](../../faas/lambda). Its tests drive an API Gateway event, an SQS batch, and
-three warm invocations.
+A Lambda function where every invocation is one wide event. The runnable example lives in
+[examples/lambda](../../examples/lambda), and its test invokes one API Gateway request and
+compares the event with the golden in `testdata/event.json`.
 
 ## 1. Setup
 
@@ -38,7 +38,7 @@ One `GET /orders/42` through API Gateway gives this event. The duration, the eve
 the trace ids change between runs, so the example test normalizes them.
 
 ```json
-{"timestamp":"2026-01-01T00:00:00Z","level":"info","summary":"function lambda-orders http success in {d} cold start","operation":"function lambda-orders","kind":"function","outcome":"success","duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","service":{"name":"lambda-orders","version":"0.0.1","env":"prod"},"trace":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7"},"http":{"method":"GET","route":"/orders/{id}","path":"/orders/42","status":200,"protocol":"HTTP/1.1"},"faas":{"system":"aws_lambda","name":"lambda-orders","trigger":"http","invocation_id":"recipe-1","cold_start":true,"remaining_ms":4999},"wlog":{"schema_version":2}}
+{"timestamp":"2026-01-01T00:00:00Z","level":"info","summary":"function lambda-orders http success in {d} cold start (order_id=42)","operation":"function lambda-orders","kind":"function","outcome":"success","duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","trace":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7"},"http":{"method":"GET","route":"/orders/{id}","path":"/orders/42","status":200,"protocol":"HTTP/1.1"},"faas":{"system":"aws_lambda","name":"lambda-orders","trigger":"http","invocation_id":"recipe-1","cold_start":true,"remaining_ms":4999},"order_id":"42","wlog":{"schema_version":2}}
 ```
 
 ## 3. Five questions

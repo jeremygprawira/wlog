@@ -192,7 +192,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 13-D-10 faas-lambda
 - [x] 13-D-11 faas-gcf
 - [x] 13-D-12 command-cobra, command-urfave, and command-kong
-- [ ] 13-D-13 Recipes: kafka-consumer, cron-job, and lambda
+- [x] 13-D-13 Recipes: kafka-consumer, cron-job, and lambda
 - [ ] Review point 13, v0.8.0: human review, then ask before tagging
 
 ## Phase 14, v0.9: destinations, OpenTelemetry, and AI

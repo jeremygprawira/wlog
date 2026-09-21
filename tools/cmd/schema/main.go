@@ -36,6 +36,9 @@ var recipeGoldens = []string{
 	"examples/rest-api/testdata/event.json",
 	"examples/grpc-service/testdata/event.json",
 	"examples/cli-tool/testdata/event.json",
+	"examples/kafka-consumer/testdata/event.json",
+	"examples/cron-job/testdata/event.json",
+	"examples/lambda/testdata/event.json",
 }
 
 // mapGoldens lists the documents that follow the map report shape.

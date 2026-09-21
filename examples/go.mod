@@ -3,16 +3,24 @@ module github.com/jeremygprawira/wlog/examples
 go 1.26.0
 
 require (
+	github.com/aws/aws-lambda-go v1.54.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-chi/chi/v5 v5.3.2
+	github.com/jeremygprawira/wlog/faas/lambda v0.7.0
+	github.com/jeremygprawira/wlog/job/cron v0.7.0
 	github.com/jeremygprawira/wlog/middleware/chi v0.7.0
+	github.com/jeremygprawira/wlog/queue/kafkago v0.7.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/labstack/echo/v5 v5.3.1
+	github.com/robfig/cron/v3 v3.0.1
+	github.com/segmentio/kafka-go v0.4.48
 	go.uber.org/zap v1.28.0
 	google.golang.org/grpc v1.67.3
 )
 
 require (
+	github.com/klauspost/compress v1.17.6 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 )
@@ -60,6 +68,12 @@ require (
 )
 
 replace github.com/jeremygprawira/wlog => ..
+
+replace github.com/jeremygprawira/wlog/faas/lambda => ../faas/lambda
+
+replace github.com/jeremygprawira/wlog/job/cron => ../job/cron
+
+replace github.com/jeremygprawira/wlog/queue/kafkago => ../queue/kafkago
 
 replace github.com/jeremygprawira/wlog/log/zap => ../log/zap
 
