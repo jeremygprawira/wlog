@@ -186,7 +186,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 13-D-4 queue-watermill
 - [x] 13-D-5 queue-sqs
 - [x] 13-D-6 queue-nats and queue-amqp
-- [ ] 13-D-7 queue-pubsub and queue-cloudevents
+- [x] 13-D-7 queue-pubsub and queue-cloudevents
 - [ ] 13-D-8 job-asynq and job-river
 - [ ] 13-D-9 job-temporal and job-cron
 - [ ] 13-D-10 faas-lambda
