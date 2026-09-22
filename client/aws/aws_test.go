@@ -177,7 +177,11 @@ func newClient(t *testing.T, url string, maxAttempts int) *s3.Client {
 func withEndpoint(url string) func(*s3.Options) {
 	return func(o *s3.Options) {
 		o.UsePathStyle = true
+		// The module floor is s3 v1.29.0, which has no BaseEndpoint field, so the test uses
+		// the deprecated resolver until the floor moves.
+		//nolint:staticcheck // the floor predates BaseEndpoint
 		o.EndpointResolver = s3.EndpointResolverFunc(func(region string, _ s3.EndpointResolverOptions) (aws.Endpoint, error) {
+			//nolint:staticcheck // the floor predates BaseEndpoint
 			return aws.Endpoint{URL: url, HostnameImmutable: true, SigningRegion: region}, nil
 		})
 	}
