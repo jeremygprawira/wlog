@@ -6,10 +6,10 @@ require (
 	github.com/aws/aws-lambda-go v1.54.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/jeremygprawira/wlog/faas/lambda v0.7.0
-	github.com/jeremygprawira/wlog/job/cron v0.7.0
-	github.com/jeremygprawira/wlog/middleware/chi v0.7.0
-	github.com/jeremygprawira/wlog/queue/kafkago v0.7.0
+	github.com/jeremygprawira/wlog/faas/lambda v0.8.0
+	github.com/jeremygprawira/wlog/job/cron v0.8.0
+	github.com/jeremygprawira/wlog/middleware/chi v0.8.0
+	github.com/jeremygprawira/wlog/queue/kafkago v0.8.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/robfig/cron/v3 v3.0.1
@@ -19,12 +19,12 @@ require (
 )
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
-	github.com/jeremygprawira/wlog/log/zap v0.7.0
-	github.com/jeremygprawira/wlog/middleware/echo v0.7.0
-	github.com/jeremygprawira/wlog/middleware/echo5 v0.7.0
-	github.com/jeremygprawira/wlog/middleware/gin v0.7.0
-	github.com/jeremygprawira/wlog/rpc/grpc v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog/log/zap v0.8.0
+	github.com/jeremygprawira/wlog/middleware/echo v0.8.0
+	github.com/jeremygprawira/wlog/middleware/echo5 v0.8.0
+	github.com/jeremygprawira/wlog/middleware/gin v0.8.0
+	github.com/jeremygprawira/wlog/rpc/grpc v0.8.0
 )
 
 require (

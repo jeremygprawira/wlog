@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/store/gorm
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	gorm.io/gorm v1.20.0
 )
 

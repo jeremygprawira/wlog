@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/rpc/twirp
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	github.com/twitchtv/twirp v8.1.0+incompatible
 )
 

@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/rpc/grpc
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142
 	google.golang.org/grpc v1.67.3
 )

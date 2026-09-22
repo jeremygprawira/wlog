@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/job/river
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	github.com/riverqueue/river v0.14.1
 	github.com/riverqueue/river/rivertype v0.14.1
 )

@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.0.1
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	google.golang.org/api v0.247.0
 	google.golang.org/grpc v1.74.2
 )

@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/cockroachdb/errors v1.12.0
 	github.com/cockroachdb/redact v1.1.5
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 )
 
 require (

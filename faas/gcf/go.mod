@@ -5,8 +5,8 @@ go 1.21
 require (
 	github.com/GoogleCloudPlatform/functions-framework-go v1.9.2
 	github.com/cloudevents/sdk-go/v2 v2.15.2
-	github.com/jeremygprawira/wlog v0.7.0
-	github.com/jeremygprawira/wlog/queue/cloudevents v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog/queue/cloudevents v0.8.0
 )
 
 require (

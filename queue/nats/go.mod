@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/queue/nats
 go 1.21.0
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	github.com/nats-io/nats-server/v2 v2.10.22 // test only
 	github.com/nats-io/nats.go v1.38.0
 )

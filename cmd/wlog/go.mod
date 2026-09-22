@@ -6,9 +6,9 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golangci/plugin-module-register v0.1.2
 	github.com/gorilla/mux v1.8.1
-	github.com/jeremygprawira/wlog/middleware/echo v0.7.0
-	github.com/jeremygprawira/wlog/middleware/echo5 v0.7.0
-	github.com/jeremygprawira/wlog/middleware/gin v0.7.0
+	github.com/jeremygprawira/wlog/middleware/echo v0.8.0
+	github.com/jeremygprawira/wlog/middleware/echo5 v0.8.0
+	github.com/jeremygprawira/wlog/middleware/gin v0.8.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -59,7 +59,7 @@ require (
 )
 
 require (
-	github.com/jeremygprawira/wlog v0.7.0
+	github.com/jeremygprawira/wlog v0.8.0
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 )
