@@ -135,6 +135,25 @@ func TestSqs_FailedMessageIsNotDeleted(t *testing.T) {
 	}
 }
 
+// TestSqs_DeleteErrorKeepsTheBatch proves that a delete error leaves the rest of the batch
+// running, and the caller sees the error once.
+func TestSqs_DeleteErrorKeepsTheBatch(t *testing.T) {
+	client := &fakeSQSClient{
+		messages:  []sqstypes.Message{message(1, time.Now()), message(1, time.Now())},
+		readErr:   io.EOF,
+		deleteErr: errString("delete refused"),
+	}
+	log, rec := wlogtest.New(t)
+
+	err := Receive(context.Background(), log, client, receiveInput("orders"), func(context.Context, sqstypes.Message) error { return nil })
+	if err == nil || err.Error() != "delete refused" {
+		t.Fatalf("Receive returned %v, want the delete error", err)
+	}
+	if count := len(rec.Events()); count != 2 {
+		t.Errorf("events = %d, want one per message of the batch", count)
+	}
+}
+
 // message builds one received message with a receive count, a send time, and a trace attribute.
 func message(count int, sent time.Time) sqstypes.Message {
 	return sqstypes.Message{

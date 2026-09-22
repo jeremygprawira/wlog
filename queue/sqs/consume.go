@@ -43,6 +43,7 @@ func Receive(ctx context.Context, log *wlog.Logger, client SQSClient, input *sqs
 		if err != nil {
 			return err
 		}
+		var batchErr error
 		for _, msg := range out.Messages {
 			err := work.Run(ctx, log, unitOf(msg, input.QueueUrl), func(ctx context.Context) error {
 				return fn(ctx, msg)
@@ -52,9 +53,14 @@ func Receive(ctx context.Context, log *wlog.Logger, client SQSClient, input *sqs
 			}
 			if _, err := client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 				QueueUrl: input.QueueUrl, ReceiptHandle: msg.ReceiptHandle,
-			}); err != nil {
-				return err
+			}); err != nil && batchErr == nil {
+				// The message comes back after its visibility timeout. The rest of the
+				// batch still runs, and the caller sees the error once.
+				batchErr = err
 			}
+		}
+		if batchErr != nil {
+			return batchErr
 		}
 	}
 }

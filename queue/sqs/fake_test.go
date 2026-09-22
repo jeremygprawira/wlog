@@ -15,13 +15,14 @@ import (
 // fakeSQSClient serves messages from a slice, records every receive, delete, and send, and
 // reports readErr when the slice ends.
 type fakeSQSClient struct {
-	mu       sync.Mutex
-	messages []sqstypes.Message
-	readErr  error
-	sendErr  error
-	receives []*sqs.ReceiveMessageInput
-	deletes  []*sqs.DeleteMessageInput
-	sends    []*sqs.SendMessageInput
+	mu        sync.Mutex
+	messages  []sqstypes.Message
+	readErr   error
+	sendErr   error
+	deleteErr error
+	receives  []*sqs.ReceiveMessageInput
+	deletes   []*sqs.DeleteMessageInput
+	sends     []*sqs.SendMessageInput
 }
 
 // ReceiveMessage returns the messages of the slice, and readErr when the slice is empty. It
@@ -52,11 +53,14 @@ func (c *fakeSQSClient) ReceiveMessage(_ context.Context, params *sqs.ReceiveMes
 	return &sqs.ReceiveMessageOutput{Messages: messages}, nil
 }
 
-// DeleteMessage records one delete.
+// DeleteMessage records one delete, and reports deleteErr when the test set one.
 func (c *fakeSQSClient) DeleteMessage(_ context.Context, params *sqs.DeleteMessageInput, _ ...func(*sqs.Options)) (*sqs.DeleteMessageOutput, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.deletes = append(c.deletes, params)
+	if c.deleteErr != nil {
+		return nil, c.deleteErr
+	}
 	return &sqs.DeleteMessageOutput{}, nil
 }
 
