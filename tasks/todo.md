@@ -193,7 +193,12 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 13-D-11 faas-gcf
 - [x] 13-D-12 command-cobra, command-urfave, and command-kong
 - [x] 13-D-13 Recipes: kafka-consumer, cron-job, and lambda
-- [ ] Review point 13, v0.8.0: human review, then ask before tagging
+- [x] Review point 13, v0.8.0: human review, then ask before tagging
+  - Approved 2026-09-22. The user asked for the tag. Every Track D module passes its suites
+    and its floor, and `queue/confluent` passes with and without cgo. The review of
+    2026-09-22 found 15 high, 29 medium, and 32 low items. Every one is closed except the two
+    ceilings under X-2, which the work suite doc names: `queue-franz` has no panic path in its
+    per-message helper, and `queue-watermill` exports no setter for the topic.
 
 ## Phase 14, v0.9: destinations, OpenTelemetry, and AI
 
