@@ -4,6 +4,7 @@ package wlogriver
 
 import (
 	"context"
+	"fmt"
 	"errors"
 	"testing"
 	"time"
@@ -24,14 +25,32 @@ func TestRiver_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the event path the worker middleware uses. The suite
-// supplies the unit, because one River job carries no rpc, message, command, or function
-// field.
+// workFactory drives the real worker middleware with one job row, so a change that breaks the
+// adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a River job produces. The job row carries the attempt.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindJob}, Attempt: true}
+}
+
+// Process runs one unit of work through the middleware. The suite expects no panic from
+// Process, so the panic of the handler, which the middleware raises again, comes back as an
+// error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	name, _ := unit.Fields["name"].(string)
+	attempt, _ := unit.Fields["attempt"].(int)
+	job := &rivertype.JobRow{
+		Kind: name, Attempt: attempt, MaxAttempts: 5, ScheduledAt: unit.StartedAt,
+	}
+	return New(log).Work(context.Background(), job, func(ctx context.Context) error {
+		return handler(ctx)
+	})
 }
 
 // TestRiver_C1_EventNamesTheJob proves that one worked job records the job group with the

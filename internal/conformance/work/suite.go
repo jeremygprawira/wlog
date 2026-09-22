@@ -35,6 +35,10 @@ type Declaration struct {
 	// DeliveryCount reports whether the library reports a redelivery count. Kafka and core
 	// NATS report none.
 	DeliveryCount bool
+	// Attempt reports whether the factory can set the attempt of a job. A job adapter whose
+	// library keeps the attempt in a context of its own reports false, and the suite skips
+	// the attempt case.
+	Attempt bool
 }
 
 // Declarer is the optional interface a factory implements to describe its adapter. The suite
@@ -50,7 +54,7 @@ func declarationOf(factory Factory) Declaration {
 	if declarer, ok := factory.(Declarer); ok {
 		return declarer.Declare()
 	}
-	return Declaration{System: "kafka", DeliveryCount: true}
+	return Declaration{System: "kafka", DeliveryCount: true, Attempt: true}
 }
 
 // produces reports whether the adapter produces one kind.
@@ -252,7 +256,7 @@ func testDeliveryCountAndAttempt(t conformance.TB, factory Factory) {
 		}
 	}
 
-	if decl.produces(work.KindJob) {
+	if decl.Attempt && decl.produces(work.KindJob) {
 		job := unitFor(decl, work.KindJob)
 		job.Fields["attempt"] = 2
 		rec, _ := process(factory, job, succeed)

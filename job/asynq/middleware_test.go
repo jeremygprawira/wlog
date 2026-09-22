@@ -4,6 +4,7 @@ package wlogasynq
 
 import (
 	"context"
+	"fmt"
 	"errors"
 	"testing"
 
@@ -22,13 +23,30 @@ func TestAsynq_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the event path the middleware uses. The suite supplies
-// the unit, because one asynq task carries no rpc, message, command, or function field.
+// workFactory drives the real middleware with one task, so a change that breaks the adapter
+// fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind an asynq task produces. The retry counts of a task live in a
+// context that only asynq builds, so the suite skips the attempt case.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindJob}}
+}
+
+// Process runs one unit of work through Middleware. The suite expects no panic from Process,
+// so the panic of the handler, which the middleware raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	name, _ := unit.Fields["name"].(string)
+	task := asynq.NewTask(name, nil)
+	h := Middleware(log)(asynq.HandlerFunc(func(ctx context.Context, _ *asynq.Task) error {
+		return handler(ctx)
+	}))
+	return h.ProcessTask(context.Background(), task)
 }
 
 // TestAsynq_C1_EventNamesTheTask proves that one processed task records the job group with
