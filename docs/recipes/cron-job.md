@@ -25,10 +25,7 @@ const spec = "@every 5m"
 
 func main() {
 	logger := wlog.New(wlog.WithService("cron-job", "0.0.1", "prod"))
-	scheduler := cron.New(cron.WithChain(
-		cron.SkipIfStillRunning(cron.DefaultLogger),
-		wlogcron.Wrap(logger, "reindex", spec),
-	))
+	scheduler := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
 	_, _ = scheduler.AddJob(spec, wlogcron.Job(logger, "reindex", spec, reindex))
 	scheduler.Start()
 
@@ -45,7 +42,8 @@ func reindex(ctx context.Context) error {
 }
 ```
 
-`Wrap` sits inside `SkipIfStillRunning`, so a skipped run records nothing. `Stop` returns a
+`Job` opens one event per run, and `SkipIfStillRunning` sits outside it, so a skipped run
+records nothing. `Wrap` covers a plain `cron.Job`. Use one of the two, never both. `Stop` returns a
 context. The context is done after the running jobs finish. Flush the Logger there in a
 short-lived process. `work.Ticker` covers a plain `time.Ticker` loop.
 

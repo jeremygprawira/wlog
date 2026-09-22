@@ -163,8 +163,8 @@ func flagNames(parsed *kong.Context) []string {
 	return names
 }
 
-// flush sends the pending events of log on its own deadline, because the run context may be
-// spent when the command ends.
+// flush sends the pending events of log on its own deadline, because the run context is
+// often spent when the command ends.
 func flush(log *wlog.Logger) {
 	if log == nil {
 		log = wlog.Default()

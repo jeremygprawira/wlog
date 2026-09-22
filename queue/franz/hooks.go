@@ -50,7 +50,7 @@ func (hooks) OnFetchRecordBuffered(r *kgo.Record) {
 
 // contextOf returns the context of one record, and a background context when the record
 // carries none. franz-go fills the context of a polled record, and a record that a caller
-// built by hand may carry none.
+// built by hand can carry none.
 func contextOf(r *kgo.Record) context.Context {
 	if r.Context == nil {
 		return context.Background()

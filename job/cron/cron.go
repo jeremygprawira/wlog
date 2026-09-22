@@ -13,8 +13,11 @@ import (
 
 // Wrap returns the job wrapper that gives every run of a job one event. name and spec fill
 // the job group, because cron gives the wrapper neither the entry id nor the schedule. Place
-// Wrap inside cron.SkipIfStillRunning, so a skipped run records nothing. A nil Logger means
-// wlog.Default.
+// Wrap inside cron.SkipIfStillRunning, so a skipped run records nothing.
+//
+// Wrap names every job of the scheduler it wraps with one name and one schedule. Use Wrap for
+// a plain cron.Job, and Job for one function with a context and an error. Never combine the
+// two, because each one opens its own event. A nil Logger means wlog.Default.
 func Wrap(log *wlog.Logger, name, spec string) cron.JobWrapper {
 	return func(next cron.Job) cron.Job {
 		return cron.FuncJob(func() {

@@ -26,7 +26,7 @@ var levelRank = map[Level]int{
 
 // CurrentLevel returns the level of the current event, and reports whether SetLevel named
 // it. A finisher reads the report, so a level an earlier stage chose wins over the level the
-// finisher would set. A context with no event reports no level.
+// finisher sets. A context with no event reports no level.
 func CurrentLevel(ctx context.Context) (Level, bool) {
 	e := eventFrom(ctx)
 	if e == nil {

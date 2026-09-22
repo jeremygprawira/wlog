@@ -28,7 +28,10 @@ const flushTimeout = 2 * time.Second
 // wlog.Default.
 func Run(ctx context.Context, log *wlog.Logger, cmd *cli.Command, args []string) int {
 	code := 0
-	ctx, handle := work.Start(ctx, log, work.Unit{Kind: work.KindCommand})
+	// The leaf is resolved before the run, because the exit handler of urfave receives the
+	// root command, and the unit names the operation before any child starts.
+	leaf := leafOf(cmd, args)
+	ctx, handle := work.Start(ctx, log, work.Unit{Kind: work.KindCommand, Operation: leaf.FullName()})
 	ended := false
 	end := func(cmd *cli.Command, err error) {
 		if ended {
@@ -39,9 +42,6 @@ func Run(ctx context.Context, log *wlog.Logger, cmd *cli.Command, args []string)
 		handle.End(err)
 		flush(log)
 	}
-	// The leaf is resolved before the run, because the exit handler of urfave receives the
-	// root command.
-	leaf := leafOf(cmd, args)
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			code = 1
@@ -209,8 +209,8 @@ func flagNames(cmd *cli.Command) []string {
 	return names
 }
 
-// flush sends the pending events of log on its own deadline, because the run context may be
-// spent when the command ends.
+// flush sends the pending events of log on its own deadline, because the run context is
+// often spent when the command ends.
 func flush(log *wlog.Logger) {
 	if log == nil {
 		log = wlog.Default()

@@ -29,8 +29,9 @@ func PublishMsg(ctx context.Context, p Publisher, msg *nats.Msg) error {
 	ctx, end := wlog.StartCall(ctx, wlog.Call{
 		Kind: "queue", System: "nats", Operation: "publish", Target: msg.Subject,
 	})
-	msg.Header = withTraceHeaders(ctx, msg.Header)
-	err := p.PublishMsg(msg)
+	out := *msg
+	out.Header = withTraceHeaders(ctx, msg.Header)
+	err := p.PublishMsg(&out)
 	end(resultOf(err))
 	return err
 }

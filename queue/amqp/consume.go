@@ -32,7 +32,9 @@ func RequeueOn(errs ...error) Option {
 
 // Consume reads deliveries until the channel closes or the context ends. Each delivery gets one
 // event, and Consume acks it after the handler returns nil. A failed delivery is nacked, with a
-// requeue unless RequeueOn named the error. A nil Logger means wlog.Default.
+// requeue unless RequeueOn named the error. The channel must come from a consumer with
+// autoAck false, or the broker acks every delivery before the handler runs. A nil Logger means
+// wlog.Default.
 func Consume(ctx context.Context, log *wlog.Logger, deliveries <-chan amqp.Delivery, queue string, fn Handler, opts ...Option) error {
 	cfg := config{}
 	for _, opt := range opts {

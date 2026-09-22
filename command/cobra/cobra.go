@@ -30,7 +30,7 @@ func Execute(ctx context.Context, log *wlog.Logger, root *cobra.Command) int {
 	// defer of its own.
 	defer flush(log)
 	code := 0
-	_ = work.Run(ctx, log, work.Unit{Kind: work.KindCommand}, func(ctx context.Context) error {
+	_ = work.Run(ctx, log, work.Unit{Kind: work.KindCommand, Operation: root.Name()}, func(ctx context.Context) error {
 		cmd, err := root.ExecuteContextC(ctx)
 		code = exitCode(err)
 		record(ctx, cmd, code)
@@ -111,8 +111,8 @@ func flagNames(cmd *cobra.Command) []string {
 	return names
 }
 
-// flush sends the pending events of log on its own deadline, because the run context may be
-// spent when the command ends.
+// flush sends the pending events of log on its own deadline, because the run context is
+// often spent when the command ends.
 func flush(log *wlog.Logger) {
 	if log == nil {
 		log = wlog.Default()

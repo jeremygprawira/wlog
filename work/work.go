@@ -46,7 +46,7 @@ type Unit struct {
 	Kind      Kind
 	Operation string            // empty: built from Fields by the kind table
 	Fields    map[string]any    // the kind group, such as {"system": "kafka"}
-	Carrier   propagate.Carrier // incoming headers, may be nil
+	Carrier   propagate.Carrier // incoming headers, or nil
 	StartedAt time.Time         // zero: now. A message sets its enqueue time here for lag
 }
 

@@ -31,7 +31,7 @@ func Publish(ctx context.Context, p Publisher, msg *pubsub.Message) *pubsub.Publ
 	msg.Attributes = withTraceAttributes(ctx, msg.Attributes)
 	result := p.Publish(ctx, msg)
 	go func() {
-		// The event may end before the service answers, so the wait uses the publish
+		// The event can end before the service answers, so the wait uses the publish
 		// context and the result is read on a live one.
 		<-result.Ready()
 		_, err := result.Get(context.Background())

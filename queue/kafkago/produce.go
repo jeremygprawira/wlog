@@ -53,7 +53,7 @@ func (p *Producer) write(ctx context.Context, call wlog.Call, msgs []kafka.Messa
 }
 
 // complete records the result of one finished batch, and calls a Completion the caller set.
-// kafka-go calls it once per partition batch, and a batch may mix the messages of two writes,
+// kafka-go calls it once per partition batch, and a batch can mix the messages of two writes,
 // so every call ends once, after its last message reports.
 func (p *Producer) complete(msgs []kafka.Message, err error) {
 	counts := map[*callEnd]int{}

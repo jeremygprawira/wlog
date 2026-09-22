@@ -24,13 +24,11 @@ func reindex(ctx context.Context) error {
 	return nil
 }
 
-// newScheduler builds the scheduler with one event per run. SkipIfStillRunning sits outside
-// Wrap, so a skipped run records nothing.
+// newScheduler builds the scheduler with one event per run. Job opens the event, and
+// SkipIfStillRunning sits outside it, so a skipped run records nothing. Wrap covers a plain
+// cron.Job; use one of the two, never both, because each opens its own event.
 func newScheduler(logger *wlog.Logger) *cron.Cron {
-	c := cron.New(cron.WithChain(
-		cron.SkipIfStillRunning(cron.DefaultLogger),
-		wlogcron.Wrap(logger, "reindex", spec),
-	))
+	c := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
 	_, _ = c.AddJob(spec, wlogcron.Job(logger, "reindex", spec, reindex))
 	return c
 }
