@@ -542,7 +542,7 @@ Two ceilings stay, and the work suite doc names them:
 - `queue-watermill`: the topic lives on a message context that the library exports no setter
   for, so the suite cannot check the operation through the middleware.
 
-Seventeen of the nineteen factories now drive their real entry with a fake client, so a
-change that guts one of those entries fails the suite. The suite takes a declaration from a
+Seventeen of the nineteen factories now drive their real entry with a fake client. A change
+that guts one of those entries fails the suite. The suite takes a declaration from a
 factory: the kinds it produces, the messaging system it writes, whether its library reports a
 delivery count, and whether the factory can set a job attempt.
