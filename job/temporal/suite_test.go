@@ -5,6 +5,7 @@ package wlogtemporal
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +20,41 @@ import (
 	"github.com/jeremygprawira/wlog/wlogtest"
 	"github.com/jeremygprawira/wlog/work"
 )
+
+// TestTemporal_C6_ReplayEmitsNoEvent proves that a workflow replay records no event. The
+// history fixture is copied from the Temporal Go SDK testdata (MIT), and the replayer holds
+// the interceptor, so the workflow code runs the way it does in a worker.
+func TestTemporal_C6_ReplayEmitsNoEvent(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	replayer, err := worker.NewWorkflowReplayerWithOptions(worker.WorkflowReplayerOptions{
+		Interceptors: []interceptor.WorkerInterceptor{Interceptor(log)},
+	})
+	if err != nil {
+		t.Fatalf("build the replayer: %v", err)
+	}
+	replayer.RegisterWorkflowWithOptions(replayWorkflow, workflow.RegisterOptions{Name: "testReplayWorkflowFromFile"})
+
+	if err := replayer.ReplayWorkflowHistoryFromJSONFile(nil, "testdata/history.json"); err != nil {
+		t.Fatalf("the replay failed: %v", err)
+	}
+	if count := len(rec.Events()); count != 0 {
+		t.Errorf("a replay recorded %d events, want none", count)
+	}
+	if runs := replayRuns.Load(); runs != 1 {
+		t.Errorf("the replay ran the workflow %d times, want 1", runs)
+	}
+}
+
+// replayWorkflow matches the history fixture: one activity call, and no result. It counts its
+// runs, so the test proves that the replay ran the workflow code.
+func replayWorkflow(ctx workflow.Context) error {
+	replayRuns.Add(1)
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{ScheduleToCloseTimeout: time.Minute})
+	return workflow.ExecuteActivity(ctx, "testActivityMultipleArgs").Get(ctx, nil)
+}
+
+// replayRuns counts the runs of the replay workflow.
+var replayRuns atomic.Int64
 
 // TestTemporal_C6_WorkflowEmitsNoEvent proves that a workflow run records no event, because
 // workflow code must replay the same way on every run.
