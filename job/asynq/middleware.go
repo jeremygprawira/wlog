@@ -56,12 +56,6 @@ func run(ctx context.Context, log *wlog.Logger, task *asynq.Task, handler func(c
 	})
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered
-// panic as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // stateOf names the state asynq will keep for one task, and the level that state asks for.
 // asynq decides after the handler returns, so the middleware reads the retry counts of the
 // context. RevokeTask cancels the task, SkipRetry and an exhausted retry count discard it,

@@ -50,12 +50,6 @@ func (m *Middleware) Work(ctx context.Context, job *rivertype.JobRow, doInner fu
 	})
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered
-// panic as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // stateOf names the state River will keep for one job, and the level that state asks for.
 // River decides after the middleware returns, so the middleware reads the error and the
 // attempt. JobSnooze snoozes the job, JobCancel cancels it, an error on the last attempt

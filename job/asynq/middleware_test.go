@@ -4,8 +4,8 @@ package wlogasynq
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/hibiken/asynq"
