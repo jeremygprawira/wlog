@@ -4,6 +4,7 @@ package wlogcron
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/robfig/cron/v3"
@@ -23,11 +24,33 @@ func TestCron_C1_WorkConformance(t *testing.T) {
 
 // workFactory runs one unit through the event path the wrapper uses. The suite supplies the
 // unit, because one cron run carries no rpc, message, command, or function field.
+// workFactory drives the real Job wrapper, so a change that breaks the adapter fails the
+// suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a cron job produces. Cron reports no attempt and no delivery
+// count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindJob}}
+}
+
+// Process runs one unit of work through Job. The suite expects no panic from Process, so the
+// panic of the handler, which the wrapper raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	name, _ := unit.Fields["name"].(string)
+	var handlerErr error
+	Job(log, name, "@every 5m", func(ctx context.Context) error {
+		handlerErr = handler(ctx)
+		return handlerErr
+	}).Run()
+	// The library discards the error of a run. The suite asks for the result of the handler,
+	// so the factory reports that one.
+	return handlerErr
 }
 
 // TestCron_C1_WrapRecordsTheSchedule proves that one wrapped run records the job group with

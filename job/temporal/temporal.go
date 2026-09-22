@@ -64,12 +64,6 @@ func (a *activityInterceptor) execute(ctx context.Context, info activity.Info, i
 	return out, activityErr
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered
-// panic as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // failureOf returns the error the event records for one activity result. An asynchronous
 // completion is not a failure, so it records none, and the activity keeps its own result.
 func failureOf(err error) error {

@@ -5,6 +5,11 @@
 // The suite names a kind and a handler, and the adapter runs the unit through the work
 // package. The adapter maps its own library onto the unit, so the suite imports no
 // framework.
+//
+// A factory drives the real entry of its adapter with a fake client, so a change that breaks
+// the entry fails the suite. Two adapters keep a shim, and the reason is recorded here:
+// queue-franz returns an end func from its per-message helper and has no panic path, and
+// queue-watermill puts the topic on a message context it exports no setter for.
 package workconformance
 
 import (

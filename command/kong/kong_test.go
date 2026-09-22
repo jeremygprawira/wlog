@@ -4,6 +4,7 @@ package wlogkong
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,12 +30,46 @@ func TestKong_C1_WorkConformance(t *testing.T) {
 
 // workFactory runs one unit through the event path of this adapter. The suite supplies the
 // unit, because one command run carries no rpc, message, function, or job field.
+// workFactory drives the real Run path with a grammar whose Run method calls the handler.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a kong run produces.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindCommand}}
 }
+
+// Process runs one unit of work through Run. The suite expects no panic from Process, so the
+// panic of the handler, which Run raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	var handlerErr error
+	grammar := &suiteCLI{Map: suiteCmd{run: func(ctx context.Context) error {
+		handlerErr = handler(ctx)
+		return handlerErr
+	}}}
+	// The grammar and its one command spell the path of the suite, so the operation matches.
+	_ = Run(context.Background(), log, grammar, []string{"map"}, kong.Name("wlog"))
+	// The exit code of the run is the library's business. The suite asks for the result of
+	// the handler, so the factory reports that one.
+	return handlerErr
+}
+
+// suiteCLI is the grammar of the suite: one command, whose Run method runs the handler.
+type suiteCLI struct {
+	Map suiteCmd `cmd:"" help:"the map command"`
+}
+
+// suiteCmd runs the handler of the suite.
+type suiteCmd struct {
+	run func(context.Context) error
+}
+
+// Run runs the handler of the suite.
+func (c *suiteCmd) Run(ctx context.Context) error { return c.run(ctx) }
 
 // TestKong_C9_ParseErrorRecordsEighty proves that a fault in the command line records exit code
 // 80 and level warn, and the path of the command it reached.

@@ -5,6 +5,7 @@ package wlogcobra
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -24,13 +25,38 @@ func TestCobra_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the event path of this adapter. The suite supplies the
-// unit, because one command run carries no rpc, message, function, or job field.
+// workFactory drives the real Execute path with one command, so a change that breaks the
+// adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a command run produces.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindCommand}}
+}
+
+// Process runs one unit of work through Execute. The suite expects no panic from Process, so
+// the panic of the handler, which Execute raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	var handlerErr error
+	root := &cobra.Command{Use: "wlog", SilenceErrors: true, SilenceUsage: true}
+	root.AddCommand(&cobra.Command{
+		Use: "map",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			handlerErr = handler(cmd.Context())
+			return handlerErr
+		},
+	})
+	// The command names spell the path of the suite, so the operation matches.
+	root.SetArgs([]string{"map"})
+	_ = Execute(context.Background(), log, root)
+	// The exit code of the run is the library's business. The suite asks for the result of
+	// the handler, so the factory reports that one.
+	return handlerErr
 }
 
 // TestCobra_C9_RunEErrorRecordsExitCode proves that a RunE error records exit code 1, the

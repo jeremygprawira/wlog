@@ -4,6 +4,7 @@ package wloglambda
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -27,11 +28,32 @@ func TestLambda_C1_WorkConformance(t *testing.T) {
 
 // workFactory runs one unit through the event path Wrap uses. The suite supplies the unit,
 // because one invocation carries no rpc, message, command, or function field.
+// workFactory drives the real Wrap path with an invocation context, so a change that breaks
+// the adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind an invocation produces.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindFunction}}
+}
+
+// Process runs one unit of work through Wrap. The suite expects no panic from Process, so the
+// panic of the handler, which Wrap raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	name, _ := unit.Fields["name"].(string)
+	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
+		AwsRequestID:       "req-1",
+		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:" + name,
+	})
+	_, err = Wrap(log, func(ctx context.Context, _ struct{}) (struct{}, error) {
+		return struct{}{}, handler(ctx)
+	})(ctx, struct{}{})
+	return err
 }
 
 // TestLambda_C1_InvocationRecordsIdsAndRemaining proves that one invocation records the
@@ -259,11 +281,4 @@ func lastEvent(t *testing.T, rec *wlogtest.Recorder) map[string]any {
 		t.Fatal("no event recorded")
 	}
 	return got
-}
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }

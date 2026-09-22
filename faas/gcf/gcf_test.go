@@ -4,6 +4,7 @@ package wloggcf
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -28,20 +29,34 @@ func TestGcf_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the event path of this adapter. The suite supplies the
-// unit, because one CloudEvent carries no job, rpc, command, or function field.
+// workFactory drives the real CloudEvent wrapper with a built event, so a change that breaks
+// the adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a CloudEvent function produces. CloudEvents carries no delivery
+// count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindMessage}, System: "cloudevents"}
 }
 
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
+// Process runs one unit of work through CloudEvent. The suite expects no panic from Process,
+// so the panic of the handler, which the wrapper raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	destination, _ := unit.Fields["destination"].(string)
+	event := cloudevents.NewEvent()
+	event.SetID("evt-1")
+	event.SetSource("orders")
+	event.SetType("orders.created")
+	event.SetSubject(destination)
+	event.SetTime(unit.StartedAt)
+	return CloudEvent(log, func(ctx context.Context, _ cloudevents.Event) error {
+		return handler(ctx)
+	})(context.Background(), event)
 }
 
 // TestGcf_C1_CloudEventRecordsTheEvent proves that one CloudEvent call records the messaging

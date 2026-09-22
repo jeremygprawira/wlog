@@ -39,12 +39,6 @@ func Execute(ctx context.Context, log *wlog.Logger, root *cobra.Command) int {
 	return code
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered panic
-// as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // record writes the path, the flags, and the exit code of one run, and the level of a usage
 // fault.
 func record(ctx context.Context, cmd *cobra.Command, code int) {

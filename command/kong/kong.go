@@ -102,12 +102,6 @@ func parsedOf(parsed *kong.Context, err error) *kong.Context {
 	return nil
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered panic
-// as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // record writes the path, the flags, and the exit code of one run, and the level of a fault in
 // the command line. A nil context records the exit code alone.
 func record(ctx context.Context, parsed *kong.Context, code int) {

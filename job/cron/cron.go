@@ -42,12 +42,6 @@ func Job(log *wlog.Logger, name, spec string, fn func(ctx context.Context) error
 	})
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered
-// panic as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // unitOf maps one run onto a unit of work.
 func unitOf(name, spec string) work.Unit {
 	return work.Unit{
