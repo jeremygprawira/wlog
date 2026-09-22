@@ -515,3 +515,34 @@ dependency, or touches an ask-first boundary.
 - The three recipes have the four parts. Their setup blocks compile, and every `wlog explain` id
   resolves.
 - No test makes a real outside network call.
+
+---
+
+## Fixed, 2026-09-22
+
+Every finding is closed except the two ceilings named under X-2. The work is in the commits
+after 84da85b. The decisions in "Decisions for you" were answered as follows.
+
+1. Panic policy: the real entries record the panic and raise it again, as rule 3 says. The
+   recovering helper lives in the test file.
+2. `wlog.CurrentLevel`: kept, and recorded in SPEC-core-v2.
+3. The `client/aws` floor: restored to v0.7.0, with the two SDK modules pinned forward in
+   `go.work`.
+4. The package name: `queue/kafkago` is `wlogkafkago`, and the recipe keeps the import alias
+   that the other recipes use.
+5. The NATS test dependency: approved. `queue/nats` takes `nats-server/v2 v2.10.22` as a
+   test-only dependency, and a test drives the drain against an embedded server.
+6. `messaging.nats.subscription`: kept, and recorded under rule 10 in SPEC-track-d.
+7. The kafka-consumer recipe: it records the payload size, not the message key.
+
+Two ceilings stay, and the work suite doc names them:
+
+- `queue-franz`: `Record` returns an end func from a per-message helper, so a panic in the
+  handler emits no event. The suite cannot run its panic scenario through that shape.
+- `queue-watermill`: the topic lives on a message context that the library exports no setter
+  for, so the suite cannot check the operation through the middleware.
+
+Seventeen of the nineteen factories now drive their real entry with a fake client, so a
+change that guts one of those entries fails the suite. The suite takes a declaration from a
+factory: the kinds it produces, the messaging system it writes, whether its library reports a
+delivery count, and whether the factory can set a job attempt.
