@@ -37,6 +37,13 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 	return process(context.Background(), log, unit, handler)
 }
 
+// process runs one unit of work through the event path with a recovered panic, so the
+// conformance suite continues after the panic scenario. The real entries record a panic and
+// raise it again.
+func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
+	return work.Run(ctx, log, u, handler, work.RecoverPanics())
+}
+
 // TestGcf_C1_CloudEventRecordsTheEvent proves that one CloudEvent call records the messaging
 // group with the fields of the CloudEvents receiver, and the trace of its extension.
 func TestGcf_C1_CloudEventRecordsTheEvent(t *testing.T) {

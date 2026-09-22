@@ -59,12 +59,6 @@ func CloudEvent(log *wlog.Logger, fn func(context.Context, cloudevents.Event) er
 	}
 }
 
-// process runs one unit of work through the event path of this adapter, with a recovered panic
-// as an error, so a test continues after the panic scenario.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
-
 // flush sends the pending events of log on its own deadline, because the request context is
 // often spent when the handler returns.
 func flush(log *wlog.Logger) {
