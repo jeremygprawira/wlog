@@ -5,6 +5,7 @@ package wlogkafkago
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -25,13 +26,30 @@ func TestKafka_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the path Consume uses. The suite supplies the unit,
-// because a Kafka message carries no job, rpc, command, or function field.
+// workFactory drives the real Consume path with a fake reader, so a change that breaks the
+// adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a Kafka consumer produces. Kafka reports no delivery count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindMessage}, System: "kafka"}
+}
+
+// Process runs one unit of work through Consume. The suite expects no panic from Process, so
+// the panic of the handler, which Consume raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	destination, _ := unit.Fields["destination"].(string)
+	r := &fakeReader{group: "workers", messages: []kafka.Message{{
+		Topic: destination, Partition: 1, Offset: 7, HighWaterMark: 9, Time: unit.StartedAt,
+	}}}
+	return Consume(context.Background(), log, r, func(ctx context.Context, _ kafka.Message) error {
+		return handler(ctx)
+	})
 }
 
 // TestKafka_C1_MessageFields proves that one message fills the messaging group, the offset
@@ -202,11 +220,4 @@ func (r *fakeReader) lastOffset() int64 {
 		return -1
 	}
 	return r.messages[r.fetched-1].Offset
-}
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }

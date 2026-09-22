@@ -17,9 +17,86 @@ import (
 )
 
 // Factory runs one unit of work through one adapter, and returns the error the adapter
-// reports. An adapter recovers a panic in the handler, so Process never panics.
+// reports. The factory drives the real entry of its adapter, and it recovers a panic of the
+// handler and returns it as an error, so the suite continues. The entry itself records the
+// panic and raises it again, as the track spec says.
 type Factory interface {
 	Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error
+}
+
+// Declaration describes one adapter to the suite, so a factory that cannot produce every kind
+// still runs the scenarios that fit its adapter.
+type Declaration struct {
+	// Kinds lists the kinds the adapter produces. An empty list means every kind.
+	Kinds []work.Kind
+	// System is the messaging.system value the adapter writes. An empty value means kafka,
+	// which the reference adapter writes.
+	System string
+	// DeliveryCount reports whether the library reports a redelivery count. Kafka and core
+	// NATS report none.
+	DeliveryCount bool
+}
+
+// Declarer is the optional interface a factory implements to describe its adapter. The suite
+// runs the Kinds scenario for the declared kinds only, and it builds the unit of every other
+// scenario from the first declared kind.
+type Declarer interface {
+	Declare() Declaration
+}
+
+// declarationOf returns the declaration of one factory, and the reference declaration for a
+// factory that declares nothing.
+func declarationOf(factory Factory) Declaration {
+	if declarer, ok := factory.(Declarer); ok {
+		return declarer.Declare()
+	}
+	return Declaration{System: "kafka", DeliveryCount: true}
+}
+
+// produces reports whether the adapter produces one kind.
+func (d Declaration) produces(kind work.Kind) bool {
+	if len(d.Kinds) == 0 {
+		return true
+	}
+	for _, produced := range d.Kinds {
+		if produced == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// firstKind returns the first kind the adapter produces, and the message kind when it
+// produces none.
+func (d Declaration) firstKind() work.Kind {
+	if len(d.Kinds) > 0 {
+		return d.Kinds[0]
+	}
+	return work.KindMessage
+}
+
+// unitFor returns a unit of one kind with the fields that kind needs, so a scenario that only
+// cares about the outcome still runs through the adapter's own mapping.
+func unitFor(d Declaration, kind work.Kind) work.Unit {
+	switch kind {
+	case work.KindMessage:
+		system := d.System
+		if system == "" {
+			system = "kafka"
+		}
+		return work.Unit{Kind: work.KindMessage, Fields: map[string]any{
+			"system": system, "operation": "process", "destination": "orders",
+		}}
+	case work.KindJob:
+		return work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex"}}
+	case work.KindRPC:
+		return work.Unit{Kind: work.KindRPC, Fields: map[string]any{"service": "OrderService", "method": "Get"}}
+	case work.KindCommand:
+		return work.Unit{Kind: work.KindCommand, Fields: map[string]any{"path": "wlog map"}}
+	case work.KindFunction:
+		return work.Unit{Kind: work.KindFunction, Fields: map[string]any{"name": "handler"}}
+	}
+	return work.Unit{Kind: kind}
 }
 
 // Run runs every scenario against the adapter the factory builds.
@@ -62,48 +139,31 @@ func group(t conformance.TB, name string, got map[string]any, key string) map[st
 	return fields
 }
 
-// testKinds proves that every kind writes its own group and the operation of its table.
+// testKinds proves that every kind the adapter produces writes its own group and the
+// operation of its table.
 func testKinds(t conformance.TB, factory Factory) {
+	decl := declarationOf(factory)
 	cases := []struct {
 		name      string
-		unit      work.Unit
+		kind      work.Kind
 		operation string
 		group     string
 		field     string
-		value     any
 	}{
-		{
-			"message",
-			work.Unit{Kind: work.KindMessage, Fields: map[string]any{
-				"system": "kafka", "operation": "process", "destination": "orders",
-			}},
-			"process orders", "messaging", "system", "kafka",
-		},
-		{
-			"job",
-			work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex"}},
-			"job reindex", "job", "name", "reindex",
-		},
-		{
-			"rpc",
-			work.Unit{Kind: work.KindRPC, Fields: map[string]any{"service": "OrderService", "method": "Get"}},
-			"OrderService/Get", "rpc", "method", "Get",
-		},
-		{
-			"command",
-			work.Unit{Kind: work.KindCommand, Fields: map[string]any{"path": "wlog map"}},
-			"wlog map", "cli", "path", "wlog map",
-		},
-		{
-			"function",
-			work.Unit{Kind: work.KindFunction, Fields: map[string]any{"name": "handler"}},
-			"function handler", "faas", "name", "handler",
-		},
+		{"message", work.KindMessage, "process orders", "messaging", "system"},
+		{"job", work.KindJob, "job reindex", "job", "name"},
+		{"rpc", work.KindRPC, "OrderService/Get", "rpc", "method"},
+		{"command", work.KindCommand, "wlog map", "cli", "path"},
+		{"function", work.KindFunction, "function handler", "faas", "name"},
 	}
 
 	for _, tc := range cases {
+		if !decl.produces(tc.kind) {
+			continue
+		}
 		name := "Kinds/" + tc.name
-		rec, err := process(factory, tc.unit, succeed)
+		unit := unitFor(decl, tc.kind)
+		rec, err := process(factory, unit, succeed)
 		if err != nil {
 			t.Errorf("%s: Process returned %v", name, err)
 		}
@@ -111,8 +171,8 @@ func testKinds(t conformance.TB, factory Factory) {
 		if got == nil {
 			continue
 		}
-		if got["kind"] != string(tc.unit.Kind) {
-			t.Errorf("%s: kind = %v, want %s", name, got["kind"], tc.unit.Kind)
+		if got["kind"] != string(unit.Kind) {
+			t.Errorf("%s: kind = %v, want %s", name, got["kind"], unit.Kind)
 		}
 		if got["operation"] != tc.operation {
 			t.Errorf("%s: operation = %v, want %s", name, got["operation"], tc.operation)
@@ -120,8 +180,8 @@ func testKinds(t conformance.TB, factory Factory) {
 		if got["level"] != "info" || got["outcome"] != "success" {
 			t.Errorf("%s: level/outcome = %v/%v, want info/success", name, got["level"], got["outcome"])
 		}
-		if fields := group(t, name, got, tc.group); fields != nil && fields[tc.field] != tc.value {
-			t.Errorf("%s: %s.%s = %v, want %v", name, tc.group, tc.field, fields[tc.field], tc.value)
+		if fields := group(t, name, got, tc.group); fields != nil && fields[tc.field] != unit.Fields[tc.field] {
+			t.Errorf("%s: %s.%s = %v, want %v", name, tc.group, tc.field, fields[tc.field], unit.Fields[tc.field])
 		}
 	}
 }
@@ -130,7 +190,7 @@ func testKinds(t conformance.TB, factory Factory) {
 // error, and returns the same error to the caller.
 func testHandlerError(t conformance.TB, factory Factory) {
 	const name = "HandlerError"
-	unit := work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex"}}
+	unit := unitFor(declarationOf(factory), declarationOf(factory).firstKind())
 	failure := errString("reindex failed")
 
 	rec, err := process(factory, unit, func(context.Context) error { return failure })
@@ -153,7 +213,8 @@ func testHandlerError(t conformance.TB, factory Factory) {
 // testPanicStack proves that a panicking handler gives one error event with a stack.
 func testPanicStack(t conformance.TB, factory Factory) {
 	const name = "PanicStack"
-	unit := work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex"}}
+	decl := declarationOf(factory)
+	unit := unitFor(decl, decl.firstKind())
 
 	rec, err := process(factory, unit, func(context.Context) error { panic("boom") })
 	if err == nil || !strings.Contains(err.Error(), "boom") {
@@ -175,27 +236,33 @@ func testPanicStack(t conformance.TB, factory Factory) {
 // testDeliveryCountAndAttempt proves that a redelivered message and a retried job name
 // their count in the group and in the summary.
 func testDeliveryCountAndAttempt(t conformance.TB, factory Factory) {
-	message := work.Unit{Kind: work.KindMessage, Fields: map[string]any{
-		"system": "kafka", "operation": "process", "destination": "orders", "delivery_count": 3,
-	}}
-	rec, _ := process(factory, message, succeed)
-	if got := event(t, "DeliveryCountAndAttempt/message", rec); got != nil {
-		if fields := group(t, "DeliveryCountAndAttempt/message", got, "messaging"); fields != nil && !conformance.Equal(fields["delivery_count"], 3) {
-			t.Errorf("message: messaging.delivery_count = %v, want 3", fields["delivery_count"])
-		}
-		if summary, _ := got["summary"].(string); !strings.Contains(summary, "delivery 3") {
-			t.Errorf("message: summary = %q, want it to name delivery 3", summary)
+	decl := declarationOf(factory)
+
+	if decl.DeliveryCount {
+		message := unitFor(decl, work.KindMessage)
+		message.Fields["delivery_count"] = 3
+		rec, _ := process(factory, message, succeed)
+		if got := event(t, "DeliveryCountAndAttempt/message", rec); got != nil {
+			if fields := group(t, "DeliveryCountAndAttempt/message", got, "messaging"); fields != nil && !conformance.Equal(fields["delivery_count"], 3) {
+				t.Errorf("message: messaging.delivery_count = %v, want 3", fields["delivery_count"])
+			}
+			if summary, _ := got["summary"].(string); !strings.Contains(summary, "delivery 3") {
+				t.Errorf("message: summary = %q, want it to name delivery 3", summary)
+			}
 		}
 	}
 
-	job := work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex", "attempt": 2}}
-	rec, _ = process(factory, job, succeed)
-	if got := event(t, "DeliveryCountAndAttempt/job", rec); got != nil {
-		if fields := group(t, "DeliveryCountAndAttempt/job", got, "job"); fields != nil && !conformance.Equal(fields["attempt"], 2) {
-			t.Errorf("job: job.attempt = %v, want 2", fields["attempt"])
-		}
-		if summary, _ := got["summary"].(string); !strings.Contains(summary, "attempt 2") {
-			t.Errorf("job: summary = %q, want it to name attempt 2", summary)
+	if decl.produces(work.KindJob) {
+		job := unitFor(decl, work.KindJob)
+		job.Fields["attempt"] = 2
+		rec, _ := process(factory, job, succeed)
+		if got := event(t, "DeliveryCountAndAttempt/job", rec); got != nil {
+			if fields := group(t, "DeliveryCountAndAttempt/job", got, "job"); fields != nil && !conformance.Equal(fields["attempt"], 2) {
+				t.Errorf("job: job.attempt = %v, want 2", fields["attempt"])
+			}
+			if summary, _ := got["summary"].(string); !strings.Contains(summary, "attempt 2") {
+				t.Errorf("job: summary = %q, want it to name attempt 2", summary)
+			}
 		}
 	}
 }
@@ -205,7 +272,8 @@ func testDeliveryCountAndAttempt(t conformance.TB, factory Factory) {
 func testStarterAndFinisher(t conformance.TB, factory Factory) {
 	const name = "StarterAndFinisher"
 	plugin := &counterPlugin{}
-	unit := work.Unit{Kind: work.KindJob, Fields: map[string]any{"name": "reindex"}}
+	decl := declarationOf(factory)
+	unit := unitFor(decl, decl.firstKind())
 
 	_, _ = process(factory, unit, succeed, wlog.WithPlugins(plugin))
 
