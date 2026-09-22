@@ -188,6 +188,9 @@ The code follows the tables above, with these differences. Each one is deliberat
   is `StartedTime` minus `ScheduledTime`.
 - `queue-pubsub` records the subscription id as `messaging.destination`, because the
   subscription is the endpoint the receive loop reads.
+- A drain that fails one event of a batch reports the whole batch, so the events before the
+  failure can arrive twice. `pipeline.PartialError` (phase 14, task 14-E-1) owns the fix, and
+  the pipeline spec records the ceiling.
 
 ## Open questions
 

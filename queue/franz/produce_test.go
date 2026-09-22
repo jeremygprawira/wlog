@@ -112,6 +112,25 @@ func implements[T any](value any) bool {
 	return ok
 }
 
+// TestFranz_RepeatProduceKeepsOneCall proves that a second produce of the same record keeps the
+// call of the first, because franz-go keeps the first context of a record.
+func TestFranz_RepeatProduceKeepsOneCall(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+	ctx, end := wlog.Start(ctx, "op")
+	r := &kgo.Record{Topic: "orders", Value: []byte("payload"), Context: ctx}
+
+	h := hooks{}
+	h.OnProduceRecordBuffered(r)
+	h.OnProduceRecordBuffered(r)
+	h.OnProduceRecordUnbuffered(r, nil)
+	end()
+
+	if calls, _ := rec.Last()["calls"].([]any); len(calls) != 1 {
+		t.Errorf("calls = %d, want the one call of the first produce", len(calls))
+	}
+}
+
 // firstCall returns the first call record of one event.
 func firstCall(t *testing.T, event map[string]any) map[string]any {
 	t.Helper()

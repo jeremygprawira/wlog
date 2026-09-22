@@ -26,8 +26,17 @@ type hooks struct{}
 // OnProduceRecordBuffered starts one call for one buffered record and adds the trace headers
 // of the record context. It runs on the goroutine that calls Produce, so the context of the
 // caller is available.
+//
+// franz-go keeps the first context of a record, so a second produce of the same record carries
+// the context of the first. The call of the first produce stays, and the record keeps its
+// trace.
 func (hooks) OnProduceRecordBuffered(r *kgo.Record) {
-	ctx, end := wlog.StartCall(contextOf(r), callOf(r))
+	ctx := contextOf(r)
+	if _, open := wlog.CallFromContext(ctx); open {
+		r.Headers = withTraceHeaders(ctx, r.Headers)
+		return
+	}
+	ctx, end := wlog.StartCall(ctx, callOf(r))
 	r.Context = context.WithValue(ctx, callEndKey{}, end)
 	r.Headers = withTraceHeaders(ctx, r.Headers)
 }

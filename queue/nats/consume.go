@@ -47,6 +47,9 @@ func TermOn(errs ...error) Option {
 // acks the message after the handler returns nil, terms it when the error matches a TermOn
 // error, and nacks it otherwise so the stream delivers it again. A nil Logger means
 // wlog.Default.
+//
+// The settle runs after the event ends, so an error of the ack, the term, or the nack reaches
+// the stream and not the event. The stream reports the state of the message.
 func JetStreamHandler(log *wlog.Logger, fn JetStreamHandlerFunc, opts ...Option) jetstream.MessageHandler {
 	cfg := config{}
 	for _, opt := range opts {

@@ -40,6 +40,9 @@ func Handler(log *wlog.Logger, h asynq.Handler) asynq.Handler {
 
 // run opens one job event around the handler of one task, records the state asynq keeps for
 // the task, and ends the event. It returns the error of the handler.
+//
+// A panic is recorded in error with its stack, and no result, because asynq decides the state
+// of a panicking task after the middleware returns.
 func run(ctx context.Context, log *wlog.Logger, task *asynq.Task, handler func(context.Context) error) error {
 	return work.Run(ctx, log, unitOf(ctx, task), func(ctx context.Context) error {
 		err := handler(ctx)
