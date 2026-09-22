@@ -4,6 +4,7 @@ package wlogpubsub
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -22,13 +23,39 @@ func TestPubsub_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the path Receive uses. The suite supplies the unit, because a
-// Pub/Sub message carries no job, rpc, command, or function field.
+// workFactory drives the real Receive path with a fake subscription, so a change that breaks
+// the adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a Pub/Sub consumer produces. Pub/Sub reports a delivery attempt.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{
+		Kinds: []work.Kind{work.KindMessage}, System: "gcp_pubsub", DeliveryCount: true,
+	}
+}
+
+// Process runs one unit of work through Receive. The suite expects no panic from Process, so
+// the panic of the handler, which Receive raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	destination, _ := unit.Fields["destination"].(string)
+	msg := &pubsub.Message{ID: "msg-1", PublishTime: unit.StartedAt}
+	if count, ok := unit.Fields["delivery_count"].(int); ok {
+		msg.DeliveryAttempt = &count
+	}
+	sub := &fakeSubscriber{id: destination, messages: []*pubsub.Message{msg}}
+	var handlerErr error
+	_ = Receive(context.Background(), log, sub, func(ctx context.Context, _ *pubsub.Message) error {
+		handlerErr = handler(ctx)
+		return handlerErr
+	})
+	// The loop reports the read error that ended it. The suite asks for the result of the
+	// handler, so the factory reports that one.
+	return handlerErr
 }
 
 // TestPubsub_C1_ReceiveFields proves that one message fills the messaging group, the delivery
@@ -98,10 +125,3 @@ type errString string
 
 // Error returns the text of the error.
 func (e errString) Error() string { return string(e) }
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}

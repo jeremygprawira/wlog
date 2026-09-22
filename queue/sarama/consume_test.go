@@ -4,6 +4,7 @@ package wlogsarama
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -22,13 +23,34 @@ func TestSarama_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the path Handler uses. The suite supplies the unit,
-// because a sarama message carries no job, rpc, command, or function field.
+// workFactory drives the real Handler path with a fake claim, so a change that breaks the
+// adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a sarama consumer produces. Kafka reports no delivery count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindMessage}, System: "kafka"}
+}
+
+// Process runs one unit of work through the claim loop. The suite expects no panic from
+// Process, so the panic of the handler, which the loop raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	destination, _ := unit.Fields["destination"].(string)
+	claim := &fakeClaim{
+		topic: destination, partition: 1, highWaterMark: 10,
+		messages: []*sarama.ConsumerMessage{{
+			Topic: destination, Partition: 1, Offset: 7, Timestamp: unit.StartedAt,
+		}},
+	}
+	h := Handler(log, func(ctx context.Context, _ *sarama.ConsumerMessage) error {
+		return handler(ctx)
+	})
+	return h.ConsumeClaim(newFakeSession(), claim)
 }
 
 // TestSarama_C1_HandlerErrorStopsTheClaim proves that the claim marks a message after the
@@ -120,10 +142,3 @@ type errString string
 
 // Error returns the text of the error.
 func (e errString) Error() string { return string(e) }
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}

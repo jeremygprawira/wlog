@@ -4,6 +4,7 @@ package wlogamqp
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -22,13 +23,36 @@ func TestAmqp_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the path Consume uses. The suite supplies the unit, because
-// a delivery carries no job, rpc, command, or function field.
+// workFactory drives the real Consume path with one fake delivery, so a change that breaks
+// the adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind an AMQP consumer produces. RabbitMQ reports a redelivery flag,
+// and the delivery carries no count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindMessage}, System: "rabbitmq"}
+}
+
+// Process runs one unit of work through Consume. The suite expects no panic from Process, so
+// the panic of the handler, which Consume raises again, comes back as an error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	destination, _ := unit.Fields["destination"].(string)
+	delivery := amqp.Delivery{
+		Acknowledger: &fakeAcknowledger{}, MessageId: "msg-1", Timestamp: unit.StartedAt,
+	}
+	var handlerErr error
+	_ = Consume(context.Background(), log, closed(delivery), destination, func(ctx context.Context, _ amqp.Delivery) error {
+		handlerErr = handler(ctx)
+		return handlerErr
+	})
+	// The loop reports nothing after the channel closes. The suite asks for the result of
+	// the handler, so the factory reports that one.
+	return handlerErr
 }
 
 // TestAmqp_C1_ConsumeAcksAfterSuccess proves that the loop acks a delivery after the handler
@@ -144,10 +168,3 @@ type errString string
 
 // Error returns the text of the error.
 func (e errString) Error() string { return string(e) }
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}

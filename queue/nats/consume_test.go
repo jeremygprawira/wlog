@@ -4,6 +4,7 @@ package wlognats
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,13 +24,40 @@ func TestNats_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the path of the handlers. The suite supplies the unit,
-// because a NATS message carries no job, rpc, command, or function field.
+// workFactory drives the real JetStream handler with a fake message, so a change that breaks
+// the adapter fails the suite.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
-func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+// Declare names the one kind a NATS consumer produces. JetStream reports a delivery count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{
+		Kinds: []work.Kind{work.KindMessage}, System: "nats", DeliveryCount: true,
+	}
+}
+
+// Process runs one unit of work through JetStreamHandler. The suite expects no panic from
+// Process, so the panic of the handler, which the handler raises again, comes back as an
+// error.
+func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic: %v", recovered)
+		}
+	}()
+	destination, _ := unit.Fields["destination"].(string)
+	delivered := 0
+	if count, ok := unit.Fields["delivery_count"].(int); ok {
+		delivered = count
+	}
+	msg := &fakeJetStreamMsg{subject: destination, metadata: &jetstream.MsgMetadata{
+		NumDelivered: uint64(delivered), Timestamp: unit.StartedAt,
+	}}
+	var handlerErr error
+	JetStreamHandler(log, func(ctx context.Context, _ jetstream.Msg) error {
+		handlerErr = handler(ctx)
+		return handlerErr
+	})(msg)
+	return handlerErr
 }
 
 // TestNats_C1_CoreHandlerFields proves that a core message fills the messaging group from the
@@ -145,10 +173,3 @@ type errString string
 
 // Error returns the text of the error.
 func (e errString) Error() string { return string(e) }
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
-}
