@@ -46,6 +46,9 @@ func runCommand(args []string, stdout, stderr io.Writer) int {
 		return run(args, stdout, stderr)
 	}
 	log := wlog.New(setup.FromEnv(), wlog.WithSilent(), wlog.OnProblem(func(wlog.Problem) {}))
+	// The flush runs even when the run panics, because os.Exit after the panic runs no
+	// defer of its own.
+	defer flushSelf(log)
 	code := 0
 	_ = work.Run(context.Background(), log, work.Unit{
 		Kind:   work.KindCommand,
@@ -53,21 +56,36 @@ func runCommand(args []string, stdout, stderr io.Writer) int {
 	}, func(ctx context.Context) error {
 		code = run(args, stdout, stderr)
 		wlog.SetGroup(ctx, "cli", "exit_code", code)
-		if work.ClassOf(work.KindCommand, strconv.Itoa(code)) == work.StatusClientError {
+		switch work.ClassOf(work.KindCommand, strconv.Itoa(code)) {
+		case work.StatusClientError:
 			wlog.SetLevel(ctx, wlog.LevelWarn)
+		case work.StatusServerError:
+			wlog.SetLevel(ctx, wlog.LevelError)
 		}
 		return nil
 	})
-	flush, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	_ = log.Flush(flush)
 	return code
 }
 
-// selfPath returns the subcommand path of one run, such as wlog map.
+// flushSelf sends the pending events of one self run on its own deadline.
+func flushSelf(log *wlog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = log.Flush(ctx)
+}
+
+// selfPath returns the subcommand path of one run, such as wlog map. A word that names no
+// command stays out, so a stray argument is not a path.
 func selfPath(args []string) string {
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		return "wlog " + args[0]
+	if len(args) > 0 {
+		for _, name := range []string{
+			"map", "init", "doctor", "agents", "query", "tail", "mcp",
+			"explain", "rules", "schema", "version", "env", "help",
+		} {
+			if args[0] == name {
+				return "wlog " + name
+			}
+		}
 	}
 	return "wlog"
 }

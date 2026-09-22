@@ -22,12 +22,13 @@ import (
 func ProcessSQS(ctx context.Context, log *wlog.Logger, e events.SQSEvent, fn func(context.Context, events.SQSMessage) error) events.SQSEventResponse {
 	var out events.SQSEventResponse
 	for _, record := range e.Records {
-		if err := process(ctx, log, sqsUnit(record), func(ctx context.Context) error {
+		if err := work.Run(ctx, log, sqsUnit(record), func(ctx context.Context) error {
 			return fn(ctx, record)
 		}); err != nil {
 			out.BatchItemFailures = append(out.BatchItemFailures, events.SQSBatchItemFailure{ItemIdentifier: record.MessageId})
 		}
 	}
+	setBatchFailures(ctx, len(out.BatchItemFailures))
 	return out
 }
 
@@ -36,12 +37,13 @@ func ProcessSQS(ctx context.Context, log *wlog.Logger, e events.SQSEvent, fn fun
 func ProcessKinesis(ctx context.Context, log *wlog.Logger, e events.KinesisEvent, fn func(context.Context, events.KinesisEventRecord) error) events.KinesisEventResponse {
 	var out events.KinesisEventResponse
 	for _, record := range e.Records {
-		if err := process(ctx, log, kinesisUnit(record), func(ctx context.Context) error {
+		if err := work.Run(ctx, log, kinesisUnit(record), func(ctx context.Context) error {
 			return fn(ctx, record)
 		}); err != nil {
 			out.BatchItemFailures = append(out.BatchItemFailures, events.KinesisBatchItemFailure{ItemIdentifier: record.Kinesis.SequenceNumber})
 		}
 	}
+	setBatchFailures(ctx, len(out.BatchItemFailures))
 	return out
 }
 
@@ -51,13 +53,22 @@ func ProcessKinesis(ctx context.Context, log *wlog.Logger, e events.KinesisEvent
 func ProcessDynamoDB(ctx context.Context, log *wlog.Logger, e events.DynamoDBEvent, fn func(context.Context, events.DynamoDBEventRecord) error) events.DynamoDBEventResponse {
 	var out events.DynamoDBEventResponse
 	for _, record := range e.Records {
-		if err := process(ctx, log, dynamoUnit(record), func(ctx context.Context) error {
+		if err := work.Run(ctx, log, dynamoUnit(record), func(ctx context.Context) error {
 			return fn(ctx, record)
 		}); err != nil {
 			out.BatchItemFailures = append(out.BatchItemFailures, events.DynamoDBBatchItemFailure{ItemIdentifier: record.Change.SequenceNumber})
 		}
 	}
+	setBatchFailures(ctx, len(out.BatchItemFailures))
 	return out
+}
+
+// setBatchFailures records the failed record count on the invocation event, when one is open,
+// so a reader of the function event sees how much of the batch failed.
+func setBatchFailures(ctx context.Context, failed int) {
+	if failed > 0 && wlog.HasEvent(ctx) {
+		wlog.SetGroup(ctx, "faas", "batch_failures", failed)
+	}
 }
 
 // sqsUnit maps one SQS record onto a unit of work. The receive count and the send time come

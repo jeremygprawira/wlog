@@ -26,6 +26,9 @@ const flushTimeout = 2 * time.Second
 // the command path, the names of the flags that were set, and the exit code. A nil Logger
 // means wlog.Default.
 func Execute(ctx context.Context, log *wlog.Logger, root *cobra.Command) int {
+	// The flush runs even when the run panics, because os.Exit after the panic runs no
+	// defer of its own.
+	defer flush(log)
 	code := 0
 	_ = work.Run(ctx, log, work.Unit{Kind: work.KindCommand}, func(ctx context.Context) error {
 		cmd, err := root.ExecuteContextC(ctx)
@@ -33,7 +36,6 @@ func Execute(ctx context.Context, log *wlog.Logger, root *cobra.Command) int {
 		record(ctx, cmd, code)
 		return err
 	})
-	flush(log)
 	return code
 }
 
@@ -79,7 +81,7 @@ func exitCode(err error) int {
 // command line.
 var usagePrefixes = []string{
 	"unknown command", "unknown flag", "unknown shorthand flag", "flag needs an argument",
-	"invalid argument", "required flag", "accepts ", "requires ",
+	"invalid argument", "required flag",
 }
 
 // usageFault reports whether one error names a fault in the command line.

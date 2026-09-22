@@ -53,7 +53,7 @@ func Wrap[TIn, TOut any](log *wlog.Logger, h func(context.Context, TIn) (TOut, e
 	var cold atomic.Bool
 	return func(ctx context.Context, in TIn) (TOut, error) {
 		var out TOut
-		defer flush(log, cfg.flushTimeout)
+		defer flush(log, ctx, cfg.flushTimeout)
 
 		err := work.Run(ctx, log, unitOf(ctx, in, cold.CompareAndSwap(false, true)), func(ctx context.Context) error {
 			setHTTPRequest(ctx, in)
@@ -66,15 +66,21 @@ func Wrap[TIn, TOut any](log *wlog.Logger, h func(context.Context, TIn) (TOut, e
 	}
 }
 
-// flush sends the pending events of log on its own deadline, because the invocation context
-// is often spent when the handler returns.
-func flush(log *wlog.Logger, timeout time.Duration) {
+// flush sends the pending events of log on its own deadline, because the invocation context is
+// often spent when the handler returns. The deadline of the invocation caps the budget, so the
+// flush never outlives the runtime.
+func flush(log *wlog.Logger, ctx context.Context, timeout time.Duration) {
 	if log == nil {
 		log = wlog.Default()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline); remaining < timeout {
+			timeout = remaining
+		}
+	}
+	flushCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	_ = log.Flush(ctx)
+	_ = log.Flush(flushCtx)
 }
 
 // unitOf maps one invocation onto a unit of work. The remaining time comes from the
@@ -197,8 +203,15 @@ func carrierOf(ctx context.Context) propagate.Carrier {
 		return nil
 	}
 	ctx = propagate.Extract(ctx, propagate.HeaderCarrier{"X-Amzn-Trace-Id": {value}}, propagate.WithXRay())
+	trace, ok := propagate.FromContext(ctx)
+	if !ok || trace.ParentSpanID == "" {
+		return nil
+	}
+	// The X-Ray span is the parent of this invocation, so the W3C header carries it as the
+	// parent and not the synthetic span that Extract made.
+	trace.SpanID = trace.ParentSpanID
 	carrier := propagate.HeaderCarrier{}
-	propagate.Inject(ctx, carrier)
+	propagate.Inject(propagate.ContextWith(ctx, trace), carrier)
 	return carrier
 }
 

@@ -75,6 +75,21 @@ func TestCobra_C9_UnknownCommandRecordsUsageFault(t *testing.T) {
 	}
 }
 
+// TestCobra_C9_AppErrorIsNotAUsageFault proves that a RunE error whose text starts like a
+// command line fault still gives exit code 1, because only the cobra and pflag texts count.
+func TestCobra_C9_AppErrorIsNotAUsageFault(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	root := newRoot()
+	root.RunE = func(*cobra.Command, []string) error { return errString("requires a running database") }
+
+	if code := Execute(context.Background(), log, root); code != 1 {
+		t.Errorf("code = %d, want 1 for an app error", code)
+	}
+	if got := lastEvent(t, rec); got["level"] != "error" {
+		t.Errorf("level = %v, want error", got["level"])
+	}
+}
+
 // TestCobra_C1_SubcommandRecordsItsPath proves that a subcommand records the full path as the
 // operation.
 func TestCobra_C1_SubcommandRecordsItsPath(t *testing.T) {

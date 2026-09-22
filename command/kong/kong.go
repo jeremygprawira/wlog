@@ -5,7 +5,9 @@ package wlogkong
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"time"
@@ -27,38 +29,65 @@ const flushTimeout = 2 * time.Second
 // wlog.Default.
 func Run(ctx context.Context, log *wlog.Logger, grammar any, args []string, opts ...kong.Option) int {
 	code := 0
-	_ = work.Run(ctx, log, work.Unit{Kind: work.KindCommand}, func(ctx context.Context) error {
-		parser, err := kong.New(grammar, withExit(opts, ctx, log)...)
-		var parsed *kong.Context
-		if err == nil {
-			parsed, err = parser.Parse(args)
-			if err == nil {
-				parsed.BindTo(ctx, (*context.Context)(nil))
-				err = parsed.Run()
-			}
+	ctx, handle := work.Start(ctx, log, work.Unit{Kind: work.KindCommand})
+	ended := false
+	end := func(parsed *kong.Context, exitCode int, err error) {
+		if ended {
+			return
 		}
-		code = codeOf(err)
-		record(ctx, parsedOf(parsed, err), code)
+		ended = true
+		record(ctx, parsed, exitCode)
 		if isUsage(err) {
 			wlog.SetLevel(ctx, wlog.LevelWarn)
 		}
-		return err
-	})
-	flush(log)
+		handle.End(err)
+		flush(log)
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			wlog.Error(ctx, &panicError{value: recovered, stack: string(debug.Stack())})
+			end(nil, 1, nil)
+			panic(recovered)
+		}
+	}()
+
+	parser, err := kong.New(grammar, withExit(opts, func(exitCode int) {
+		// kong exits inside Parse for --help, and os.Exit runs no defer, so the event
+		// ends and the drains flush here.
+		end(nil, exitCode, nil)
+		os.Exit(exitCode)
+	})...)
+	var parsed *kong.Context
+	if err == nil {
+		parsed, err = parser.Parse(args)
+		if err == nil {
+			parsed.BindTo(ctx, (*context.Context)(nil))
+			err = parsed.Run()
+		}
+	}
+	code = codeOf(err)
+	end(parsedOf(parsed, err), code, err)
 	return code
 }
 
-// withExit returns the caller options with the exit function of this adapter. kong exits inside
-// Parse for --help, and os.Exit runs no defer, so the function records the exit code and
-// flushes before it ends the process.
-func withExit(opts []kong.Option, ctx context.Context, log *wlog.Logger) []kong.Option {
+// withExit returns the caller options with the exit function of this adapter.
+func withExit(opts []kong.Option, exit func(int)) []kong.Option {
 	out := append([]kong.Option{}, opts...)
-	return append(out, kong.Exit(func(code int) {
-		record(ctx, nil, code)
-		flush(log)
-		os.Exit(code)
-	}))
+	return append(out, kong.Exit(exit))
 }
+
+// panicError carries a recovered panic value and the stack of the moment it was recovered. Its
+// Stack method is read by the default ErrorExtractor of core.
+type panicError struct {
+	value any
+	stack string
+}
+
+// Error returns the panic value as a message.
+func (e *panicError) Error() string { return fmt.Sprintf("panic: %v", e.value) }
+
+// Stack returns the stack of the panic.
+func (e *panicError) Stack() string { return e.stack }
 
 // parsedOf returns the parse context of one run, from the run itself or from a parse error, so
 // a fault in the command line still names the command.

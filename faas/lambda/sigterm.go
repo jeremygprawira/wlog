@@ -2,6 +2,7 @@
 package wloglambda
 
 import (
+	"context"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -18,6 +19,6 @@ const sigtermFlushTimeout = 400 * time.Millisecond
 // lambda.Start next to the other options.
 func SIGTERMFlush(log *wlog.Logger) lambda.Option {
 	return lambda.WithEnableSIGTERM(func() {
-		flush(log, sigtermFlushTimeout)
+		flush(log, context.Background(), sigtermFlushTimeout)
 	})
 }

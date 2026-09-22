@@ -160,6 +160,9 @@ func TestLambda_C1_XRayHeaderJoinsTheTrace(t *testing.T) {
 	if trace["trace_id"] != "5759e988bd862e3fe1be46a994272793" {
 		t.Errorf("trace.trace_id = %v, want the trace id of the X-Ray header", trace["trace_id"])
 	}
+	if trace["parent_span_id"] != "53995c3f42cd8ad8" {
+		t.Errorf("trace.parent_span_id = %v, want the span of the X-Ray header", trace["parent_span_id"])
+	}
 }
 
 // TestLambda_C7_PipelineDeliversEveryEvent proves that a handler behind a pipeline delivers

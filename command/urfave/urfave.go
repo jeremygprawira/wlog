@@ -39,10 +39,14 @@ func Run(ctx context.Context, log *wlog.Logger, cmd *cli.Command, args []string)
 		handle.End(err)
 		flush(log)
 	}
+	// The leaf is resolved before the run, because the exit handler of urfave receives the
+	// root command.
+	leaf := leafOf(cmd, args)
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			code = 1
 			wlog.Error(ctx, &panicError{value: recovered, stack: string(debug.Stack())})
-			end(cmd, nil)
+			end(leaf, nil)
 			panic(recovered)
 		}
 	}()
@@ -51,7 +55,7 @@ func Run(ctx context.Context, log *wlog.Logger, cmd *cli.Command, args []string)
 	previous := root.ExitErrHandler
 	root.ExitErrHandler = func(handlerCtx context.Context, handlerCmd *cli.Command, err error) {
 		code = exitCode(err)
-		end(handlerCmd, err)
+		end(leaf, err)
 		if previous != nil {
 			previous(handlerCtx, handlerCmd, err)
 			return
@@ -63,20 +67,27 @@ func Run(ctx context.Context, log *wlog.Logger, cmd *cli.Command, args []string)
 	if err != nil {
 		code = exitCode(err)
 	}
-	end(leafOf(cmd, args), err)
+	end(leaf, err)
 	return code
 }
 
 // leafOf returns the command that args select, walking the tree by name. The first argument is
-// the program name, and an argument that names no child ends the walk, because it is a flag or
-// a value.
+// the program name, and an argument that names no child ends the walk, because it is a value.
 func leafOf(cmd *cli.Command, args []string) *cli.Command {
 	leaf := cmd
 	if len(args) == 0 {
 		return leaf
 	}
+	skipValue := false
 	for _, arg := range args[1:] {
+		if skipValue {
+			skipValue = false
+			continue
+		}
 		if strings.HasPrefix(arg, "-") {
+			if !strings.Contains(arg, "=") && takesValue(leaf, arg) {
+				skipValue = true
+			}
 			continue
 		}
 		next := leaf.Command(arg)
@@ -86,6 +97,26 @@ func leafOf(cmd *cli.Command, args []string) *cli.Command {
 		leaf = next
 	}
 	return leaf
+}
+
+// takesValue reports whether one flag argument expects a value, which decides whether the
+// token after it is a value or a command.
+func takesValue(cmd *cli.Command, arg string) bool {
+	name := strings.TrimLeft(arg, "-")
+	for _, node := range cmd.Lineage() {
+		for _, flag := range node.Flags {
+			for _, candidate := range flag.Names() {
+				if candidate != name {
+					continue
+				}
+				if withValue, ok := flag.(interface{ TakesValue() bool }); ok {
+					return withValue.TakesValue()
+				}
+				return false
+			}
+		}
+	}
+	return false
 }
 
 // process runs one unit of work through the event path of this adapter, with a recovered panic

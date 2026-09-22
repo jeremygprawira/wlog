@@ -4,6 +4,10 @@ package wlogkong
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/kong"
@@ -12,6 +16,7 @@ import (
 	"github.com/jeremygprawira/wlog/internal/conformance"
 	workconformance "github.com/jeremygprawira/wlog/internal/conformance/work"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/setup"
 	"github.com/jeremygprawira/wlog/wlogtest"
 	"github.com/jeremygprawira/wlog/work"
 )
@@ -83,6 +88,37 @@ func TestKong_C1_FlushesBeforeReturn(t *testing.T) {
 
 	if count := sender.count(); count != 1 {
 		t.Errorf("delivered %d events, want 1", count)
+	}
+}
+
+// TestKong_C1_HelpEndsTheEvent proves that --help ends the event and flushes it before kong
+// exits, because os.Exit runs no defer. The help flag exits inside Parse, so the check runs in
+// a child process.
+func TestKong_C1_HelpEndsTheEvent(t *testing.T) {
+	if path := os.Getenv("WLOG_KONG_HELP_FILE"); path != "" {
+		log := wlog.New(setup.FromEnv())
+		Run(context.Background(), log, &testCLI{}, []string{"--help"}, kong.Name("app"))
+		os.Exit(3) // kong exits on --help, so this line is unreachable
+	}
+
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	child := exec.Command(os.Args[0], "-test.run=TestKong_C1_HelpEndsTheEvent")
+	child.Env = append(os.Environ(),
+		"WLOG_KONG_HELP_FILE="+path,
+		"WLOG_DRAINS=file",
+		"WLOG_FILE_PATH="+path,
+	)
+	if out, err := child.CombinedOutput(); err != nil {
+		t.Fatalf("the child exited with %v:\n%s", err, out)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the drain file: %v", err)
+	}
+	// kong exits inside Parse, so the command path is not resolved. The event still ends
+	// and carries the exit code.
+	if !strings.Contains(string(body), `"kind":"command"`) || !strings.Contains(string(body), `"exit_code":0`) {
+		t.Errorf("the drain file holds no command event: %s", body)
 	}
 }
 

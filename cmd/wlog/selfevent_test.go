@@ -50,6 +50,29 @@ func TestSelfEvent_RecordsTheRun(t *testing.T) {
 	}
 }
 
+// TestSelfEvent_UnknownWordKeepsThePathClean proves that a word which names no command stays
+// out of cli.path, and that a usage fault records level warn.
+func TestSelfEvent_UnknownWordKeepsThePathClean(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	t.Setenv("WLOG_DRAINS", "file")
+	t.Setenv("WLOG_FILE_PATH", path)
+	t.Setenv("WLOG_DEBUG", "")
+	t.Setenv("WLOG_OUTPUT", "")
+
+	var stdout, stderr bytes.Buffer
+	if code := runCommand([]string{"nosuchcommand"}, &stdout, &stderr); code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	got := readSelfEvent(t, path)
+	cli, _ := got["cli"].(map[string]any)
+	if cli["path"] != "wlog" {
+		t.Errorf("cli.path = %v, want wlog", cli["path"])
+	}
+	if got["level"] != "warn" {
+		t.Errorf("level = %v, want warn for a usage fault", got["level"])
+	}
+}
+
 // TestSelfEvent_NoDrainsBuildsNoLogger proves that a run without WLOG_DRAINS writes no file.
 func TestSelfEvent_NoDrainsBuildsNoLogger(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")

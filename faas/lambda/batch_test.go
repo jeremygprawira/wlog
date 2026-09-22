@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 
+	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/internal/conformance"
 	"github.com/jeremygprawira/wlog/wlogtest"
 )
@@ -35,6 +36,23 @@ func TestLambda_C8_ProcessSQSReturnsTheFailingRecord(t *testing.T) {
 	}
 	if count := len(rec.Events()); count != 3 {
 		t.Errorf("events = %d, want one per record", count)
+	}
+}
+
+// TestLambda_C1_BatchFailuresLandOnTheInvocation proves that the failed record count lands on
+// the open invocation event.
+func TestLambda_C1_BatchFailuresLandOnTheInvocation(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+	ctx, end := wlog.Start(ctx, "function handler")
+
+	_ = ProcessSQS(ctx, log, events.SQSEvent{Records: []events.SQSMessage{{MessageId: "a"}}},
+		func(context.Context, events.SQSMessage) error { return errString("boom") })
+	end()
+
+	faas, _ := rec.Last()["faas"].(map[string]any)
+	if !conformance.Equal(faas["batch_failures"], 1) {
+		t.Errorf("faas.batch_failures = %v, want 1", faas["batch_failures"])
 	}
 }
 
