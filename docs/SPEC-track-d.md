@@ -181,6 +181,9 @@ The code follows the tables above, with these differences. Each one is deliberat
   rule 10.
 - `faas-lambda.ProcessSQS` and its siblings record `faas.batch_failures` on an open
   invocation event.
+- `queue-sqs.SendMessage` records the queue call itself, and `client-aws` records the rpc
+  call of the same send. Both stay, because a reader of the queue side and a reader of the
+  transport side ask different questions.
 
 ## Open questions
 
