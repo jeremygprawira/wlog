@@ -7,4 +7,5 @@
 // Read top to bottom: New returns the worker middleware that opens one job event, and
 // InsertMiddleware returns the insert middleware that records one call and writes the trace
 // of the context into the job metadata.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogriver

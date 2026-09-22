@@ -7,4 +7,5 @@
 // Read top to bottom: HTTP wraps an HTTP function with http-core and adds the execution id
 // and the Cloud Run trace, and CloudEvent wraps a CloudEvent function with the field set of
 // the CloudEvents receiver.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wloggcf

@@ -6,4 +6,5 @@
 //
 // Read top to bottom: Run parses a grammar, runs the selected command, and returns the code for
 // os.Exit.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogkong

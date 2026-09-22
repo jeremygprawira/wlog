@@ -5,4 +5,5 @@
 // loop, so it marks a message after the handler succeeds. Message is the helper for a loop
 // that a caller owns. SyncProducer and AsyncProducer wrap a producer, add the trace headers
 // of the context, and record one call per send.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogsarama

@@ -145,6 +145,58 @@ func TestLambda_C1_BatchEventNamesTriggerAndSize(t *testing.T) {
 	}
 }
 
+// TestLambda_C1_EveryKnownEventNamesItsTrigger proves that each known event type fills its
+// own fields: the http group for a request event, and faas.trigger and faas.batch_size for a
+// batch event.
+func TestLambda_C1_EveryKnownEventNamesItsTrigger(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      any
+		trigger string
+		batch   int
+		method  string
+	}{
+		{
+			"apigateway-v2",
+			events.APIGatewayV2HTTPRequest{
+				RawPath: "/orders/42", RouteKey: "GET /orders/{id}",
+				RequestContext: events.APIGatewayV2HTTPRequestContext{
+					HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{Method: "GET", Protocol: "HTTP/1.1"},
+				},
+			},
+			"http", 0, "GET",
+		},
+		{"alb", events.ALBTargetGroupRequest{HTTPMethod: "GET", Path: "/orders/42"}, "http", 0, "GET"},
+		{"sns", events.SNSEvent{Records: []events.SNSEventRecord{{}, {}}}, "sns", 2, ""},
+		{"eventbridge", events.EventBridgeEvent{}, "eventbridge", 1, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			log, rec := wlogtest.New(t)
+			h := Wrap(log, func(context.Context, any) (any, error) { return nil, nil })
+
+			if _, err := h(context.Background(), tc.in); err != nil {
+				t.Fatalf("the handler returned %v", err)
+			}
+			got := lastEvent(t, rec)
+			faas, _ := got["faas"].(map[string]any)
+			if faas["trigger"] != tc.trigger {
+				t.Errorf("faas.trigger = %v, want %s", faas["trigger"], tc.trigger)
+			}
+			if tc.batch > 0 && !conformance.Equal(faas["batch_size"], tc.batch) {
+				t.Errorf("faas.batch_size = %v, want %d", faas["batch_size"], tc.batch)
+			}
+			if tc.method != "" {
+				http, _ := got["http"].(map[string]any)
+				if http["method"] != tc.method {
+					t.Errorf("http.method = %v, want %s", http["method"], tc.method)
+				}
+			}
+		})
+	}
+}
+
 // TestLambda_C1_XRayHeaderJoinsTheTrace proves that the X-Ray header of the invocation
 // context sets the trace id of the event.
 func TestLambda_C1_XRayHeaderJoinsTheTrace(t *testing.T) {

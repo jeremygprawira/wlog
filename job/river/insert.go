@@ -12,6 +12,9 @@ import (
 	"github.com/jeremygprawira/wlog/propagate"
 )
 
+// The insert middleware satisfies the River interface, which a newer River asks for by name.
+var _ rivertype.JobInsertMiddleware = (*Insert)(nil)
+
 // Insert is the River insert middleware that writes the trace headers of the context into
 // the metadata of every inserted job, and records one call on the event of the context. Set
 // it in Config.JobInsertMiddleware.

@@ -4,4 +4,5 @@
 // Read top to bottom: Handler wraps a core NATS subscription handler, JetStreamHandler wraps a
 // JetStream consumer handler and owns the ack, Publish and PublishMsg record one call, and
 // Drain ships finished events.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlognats

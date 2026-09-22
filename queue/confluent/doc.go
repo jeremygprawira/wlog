@@ -8,4 +8,5 @@
 // Read top to bottom: Consume reads messages in a loop, commits a message after the handler
 // returns nil, and leaves a failed message uncommitted. Produce sends one message and ends
 // its call on the delivery report.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogconfluent

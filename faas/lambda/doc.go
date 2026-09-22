@@ -8,4 +8,5 @@
 // Read top to bottom: Wrap gives every invocation one event, ProcessSQS, ProcessKinesis,
 // and ProcessDynamoDB give every record of a batch its own event, and SIGTERMFlush flushes
 // the drains on the spindown signal.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wloglambda

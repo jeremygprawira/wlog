@@ -5,4 +5,5 @@
 // the command tree, records the outcome, and flushes the drains before the process exits.
 //
 // Read top to bottom: Execute runs a command tree and returns the code for os.Exit.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogcobra

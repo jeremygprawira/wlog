@@ -5,4 +5,5 @@
 // root ExitErrHandler to record and flush before the exit.
 //
 // Read top to bottom: Run runs a command and returns the code for os.Exit.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogurfave

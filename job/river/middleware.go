@@ -16,6 +16,9 @@ import (
 	"github.com/jeremygprawira/wlog/work"
 )
 
+// The worker middleware satisfies the River interface, which a newer River asks for by name.
+var _ rivertype.WorkerMiddleware = (*Middleware)(nil)
+
 // Middleware is the River worker middleware that gives every worked job one event. Set it in
 // Config.WorkerMiddleware, or in Config.Middleware on a newer River, because the type has
 // both Work and IsMiddleware.

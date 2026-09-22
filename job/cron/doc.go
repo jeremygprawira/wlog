@@ -5,4 +5,5 @@
 //
 // Place Wrap inside cron.SkipIfStillRunning, so a skipped run records nothing. In a
 // short-lived process, call Stop and wait for the context it returns, then flush the Logger.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogcron

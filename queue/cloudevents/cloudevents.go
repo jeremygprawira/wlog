@@ -188,12 +188,19 @@ func resultOf(result error) wlog.CallResult {
 }
 
 // injectTrace writes the trace headers of ctx as extensions of one event, when ctx carries a
-// trace.
+// trace. A CloudEvents extension name holds lowercase letters, digits, and hyphens, so the
+// request id of the trace stays out.
 func injectTrace(ctx context.Context, event cloudevents.Event) {
 	if _, ok := propagate.FromContext(ctx); !ok {
 		return
 	}
-	propagate.Inject(ctx, extensionCarrier{event: event})
+	carrier := propagate.MapCarrier{}
+	propagate.Inject(ctx, carrier)
+	for _, key := range []string{"traceparent", "tracestate"} {
+		if value := carrier.Get(key); value != "" {
+			event.SetExtension(key, value)
+		}
+	}
 }
 
 // EventDefaulter returns the defaulter that writes the trace headers of the context as

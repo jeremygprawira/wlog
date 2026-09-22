@@ -6,4 +6,5 @@
 //
 // Read top to bottom: Interceptor returns the worker interceptor, and the activity
 // interceptor opens one job event around one activity attempt.
+// The setup line lives in docs/async-adapters.md, which `make snippets` compiles.
 package wlogtemporal
