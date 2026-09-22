@@ -94,12 +94,16 @@ func checkPins(root string, pins []pin, out io.Writer) error {
 		floor, ok := floors[p.dir]
 		if !ok {
 			bad++
-			fmt.Fprintf(out, "%s: FLOOR2: no module at this dir\n", p.dir)
+			if _, err := fmt.Fprintf(out, "%s: FLOOR2: no module at this dir\n", p.dir); err != nil {
+				return err
+			}
 			continue
 		}
 		if want := p.values["go"]; want != "" && above(floor, want) {
 			bad++
-			fmt.Fprintf(out, "%s: FLOOR2: the go line %s is above the floor %s\n", p.dir, floor, want)
+			if _, err := fmt.Fprintf(out, "%s: FLOOR2: the go line %s is above the floor %s\n", p.dir, floor, want); err != nil {
+				return err
+			}
 		}
 		for module, want := range p.values {
 			if module == "go" {
@@ -108,12 +112,16 @@ func checkPins(root string, pins []pin, out io.Writer) error {
 			got, err := requireVersion(filepath.Join(root, p.dir), module)
 			if err != nil {
 				bad++
-				fmt.Fprintf(out, "%s: FLOOR2: %v\n", p.dir, err)
+				if _, err := fmt.Fprintf(out, "%s: FLOOR2: %v\n", p.dir, err); err != nil {
+					return err
+				}
 				continue
 			}
 			if above(got, want) {
 				bad++
-				fmt.Fprintf(out, "%s: FLOOR2: %s %s is above the floor %s\n", p.dir, module, got, want)
+				if _, err := fmt.Fprintf(out, "%s: FLOOR2: %s %s is above the floor %s\n", p.dir, module, got, want); err != nil {
+					return err
+				}
 			}
 		}
 	}
