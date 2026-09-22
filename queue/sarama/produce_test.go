@@ -129,6 +129,41 @@ func TestSarama_AsyncProducerCallRecord(t *testing.T) {
 	}
 }
 
+// TestSarama_C1_AsyncErrorEndsTheCall proves that a failure report ends the call with the
+// error of the broker.
+func TestSarama_C1_AsyncErrorEndsTheCall(t *testing.T) {
+	fake := newFakeAsyncProducer()
+	cfg := sarama.NewConfig()
+	cfg.Producer.Return.Successes = true
+	p, err := AsyncProducer(fake, cfg)
+	if err != nil {
+		t.Fatalf("AsyncProducer: %v", err)
+	}
+	log, rec := wlogtest.New(t)
+
+	ctx := log.WithContext(context.Background())
+	ctx, end := wlog.Start(ctx, "op")
+	msg := &sarama.ProducerMessage{Topic: "orders", Value: sarama.ByteEncoder("payload")}
+	p.Send(ctx, msg)
+
+	queued := <-fake.input
+	fake.failures <- &sarama.ProducerError{Msg: queued, Err: errString("refused")}
+	select {
+	case got := <-p.Errors():
+		if got == nil {
+			t.Fatal("Errors gave nothing")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the wrapper reported no failure")
+	}
+	end()
+
+	record := firstCall(t, rec.Last())
+	if record["error"] == nil {
+		t.Error("calls[0].error = nil, want the error of the broker")
+	}
+}
+
 // firstCall returns the first call record of one event.
 func firstCall(t *testing.T, event map[string]any) map[string]any {
 	t.Helper()

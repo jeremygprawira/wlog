@@ -68,11 +68,12 @@ func (c *fakeConsumer) committed() []*kafka.Message {
 // fakeSender records the messages of a produce and reports their delivery at once. It
 // satisfies Sender, because no test can build a real producer without a broker.
 type fakeSender struct {
-	mu        sync.Mutex
-	sent      []*kafka.Message
-	sendErr   error
-	reportErr error
-	eventErr  kafka.Event
+	mu          sync.Mutex
+	sent        []*kafka.Message
+	sendErr     error
+	reportErr   error
+	eventErr    kafka.Event
+	closeReport bool
 }
 
 // Produce records one message and queues one delivery report on the channel.
@@ -83,6 +84,10 @@ func (s *fakeSender) Produce(msg *kafka.Message, delivery chan kafka.Event) erro
 	s.mu.Unlock()
 	if sendErr != nil {
 		return sendErr
+	}
+	if s.closeReport {
+		close(delivery)
+		return nil
 	}
 	if eventErr != nil {
 		delivery <- eventErr

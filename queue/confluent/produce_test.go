@@ -6,6 +6,7 @@ package wlogconfluent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -99,6 +100,25 @@ func TestConfluent_ProduceDeliveryError(t *testing.T) {
 	record := firstCall(t, rec.Last())
 	if record["error"] == nil {
 		t.Errorf("calls[0].error = nil, want the error of the report")
+	}
+}
+
+// TestConfluent_C1_ClosedReportIsAnError proves that a delivery channel which closes with no
+// report records the errNoReport error and returns it.
+func TestConfluent_C1_ClosedReportIsAnError(t *testing.T) {
+	sender := &fakeSender{closeReport: true}
+	log, rec := wlogtest.New(t)
+	ctx := log.WithContext(context.Background())
+	ctx, end := wlog.Start(ctx, "op")
+
+	err := Produce(ctx, sender, message("orders", 0, 0), nil)
+	if !errors.Is(err, errNoReport) {
+		t.Fatalf("Produce returned %v, want errNoReport", err)
+	}
+	end()
+
+	if record := firstCall(t, rec.Last()); record["error"] == nil {
+		t.Error("calls[0].error = nil, want the error of the missing report")
 	}
 }
 
