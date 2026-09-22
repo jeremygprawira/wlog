@@ -156,6 +156,32 @@ Lambda event fixtures. Kafka, RabbitMQ, SQS (LocalStack), and Pub/Sub (emulator)
 - **Ask first:** capturing any message key, body, or command argument.
 - **Never:** call wlog core from Temporal workflow code, or set a library's package-level variable.
 
+## Shipped API notes (2026-09-22)
+
+The code follows the tables above, with these differences. Each one is deliberate.
+
+- Every entry takes a `*wlog.Logger`. The tables show the short form.
+- `queue-kafkago.Consume` takes a `Fetcher`, so a test drives it with a fake reader.
+  `queue-kafkago.Enqueue` does not exist. `Writer` and `Drain` take a `*kafka.Writer`.
+- `queue-sarama.AsyncProducer` takes the `*sarama.Config` and requires
+  `Producer.Return.Successes`, because a call ends at the broker report.
+- `queue-franz.Record` takes the logger and the client.
+- `job-asynq.Enqueue` builds the task from a type name and a payload, because asynq has no
+  header setter.
+- `job-river.New` returns the worker middleware, and `InsertMiddleware` returns the insert
+  middleware.
+- `job-cron.Job` takes the logger, the name, and the schedule. `Wrap` is a per-entry wrapper,
+  so a caller uses `Wrap` or `Job`, never both.
+- `command-kong.Run` takes a grammar and `kong.Option` values.
+- `queue-cloudevents.Recover` wraps one receiver function, because the observability hook
+  cannot recover a panic. The setup in the package doc shows it.
+- Each adapter holds its own carrier for its library, next to the shared carriers in
+  `propagate`. Rule 9 names the shared ones only.
+- `messaging.nats.subscription` records the pattern a core NATS subscription matched, under
+  rule 10.
+- `faas-lambda.ProcessSQS` and its siblings record `faas.batch_failures` on an open
+  invocation event.
+
 ## Open questions
 
 None.

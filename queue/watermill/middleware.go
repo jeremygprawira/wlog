@@ -80,7 +80,9 @@ var systems = map[string]string{
 	"kafka":       "kafka",
 	"amqp":        "rabbitmq",
 	"nats":        "nats",
+	"jetstream":   "nats",
 	"googlecloud": "gcp_pubsub",
+	"sqs":         "aws_sqs",
 	"aws":         "aws_sqs",
 }
 

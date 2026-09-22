@@ -1,7 +1,7 @@
 // This file runs the work conformance suite against the consumer event path, and checks
 // the two rules that only Kafka has: a failed handler does not commit its message, and one
 // message fills the messaging group.
-package wlogkafka
+package wlogkafkago
 
 import (
 	"context"

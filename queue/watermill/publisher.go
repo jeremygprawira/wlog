@@ -27,10 +27,20 @@ type publisher struct {
 // Publish writes the trace metadata of each message, calls the wrapped publisher, and records
 // one call on the event of the message context. The call names the first message context,
 // because one publish call carries one context.
+//
+// The router publishes a produced message after the handler event ends, so a publish in that
+// window writes the trace of the unit and records no call. Publish inside the handler to
+// record one.
 func (p publisher) Publish(topic string, messages ...*message.Message) error {
 	ctx := context.Background()
 	if len(messages) > 0 {
 		ctx = messages[0].Context()
+	}
+	if !wlog.HasEvent(ctx) {
+		for _, msg := range messages {
+			withTraceMetadata(ctx, msg)
+		}
+		return p.p.Publish(topic, messages...)
 	}
 	ctx, end := wlog.StartCall(ctx, wlog.Call{
 		Kind: "queue", System: "watermill", Operation: "publish", Target: topic,

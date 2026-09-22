@@ -36,6 +36,37 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 	return result.Err
 }
 
+// TestWatermill_C1_PublishAfterEndCarriesTheTrace proves that a publish after the event ends
+// still writes the trace of the unit, and records no call. The router publishes produced
+// messages in that window.
+func TestWatermill_C1_PublishAfterEndCarriesTheTrace(t *testing.T) {
+	pub := &fakePublisher{}
+	decorated, err := PublisherDecorator()(pub)
+	if err != nil {
+		t.Fatalf("PublisherDecorator: %v", err)
+	}
+	log, rec := wlogtest.New(t)
+
+	ctx := log.WithContext(context.Background())
+	ctx = propagate.Extract(ctx, propagate.HeaderCarrier{
+		"Traceparent": {"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+	})
+	ctx, end := wlog.Start(ctx, "op")
+	msg := message.NewMessage("msg-1", nil)
+	msg.SetContext(ctx)
+	end()
+
+	if err := decorated.Publish("orders", msg); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if calls, _ := rec.Last()["calls"].([]any); len(calls) != 0 {
+		t.Errorf("calls = %d, want none after the event ended", len(calls))
+	}
+	if got := msg.Metadata.Get("traceparent"); !strings.HasPrefix(got, "00-4bf92f3577b34da6a3ce929d0e0e4736-") {
+		t.Errorf("traceparent = %q, want the trace id of the unit", got)
+	}
+}
+
 // TestWatermill_C1_PublisherCallRecord proves that one publish records one queue call and
 // writes a traceparent whose span id is the span id of that call.
 func TestWatermill_C1_PublisherCallRecord(t *testing.T) {

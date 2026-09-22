@@ -28,8 +28,10 @@ func SendMessage(ctx context.Context, client SQSClient, params *sqs.SendMessageI
 	ctx, end := wlog.StartCall(ctx, wlog.Call{
 		Kind: "queue", System: "aws_sqs", Operation: "publish", Target: queueNameOf(params.QueueUrl),
 	})
-	params.MessageAttributes = withTraceAttributes(ctx, params.MessageAttributes)
-	out, err := client.SendMessage(ctx, params)
+	// The input is copied, so the caller's message and attribute map stay untouched.
+	in := *params
+	in.MessageAttributes = withTraceAttributes(ctx, params.MessageAttributes)
+	out, err := client.SendMessage(ctx, &in)
 	end(resultOf(err))
 	return out, err
 }
@@ -40,8 +42,9 @@ func Publish(ctx context.Context, client SNSClient, params *sns.PublishInput) (*
 	ctx, end := wlog.StartCall(ctx, wlog.Call{
 		Kind: "queue", System: "aws_sns", Operation: "publish", Target: topicNameOf(params.TopicArn),
 	})
-	params.MessageAttributes = withSNSTraceAttributes(ctx, params.MessageAttributes)
-	out, err := client.Publish(ctx, params)
+	in := *params
+	in.MessageAttributes = withSNSTraceAttributes(ctx, params.MessageAttributes)
+	out, err := client.Publish(ctx, &in)
 	end(resultOf(err))
 	return out, err
 }
@@ -57,40 +60,44 @@ func traceValues(ctx context.Context) map[string]string {
 	return values
 }
 
-// withTraceAttributes returns the attributes of one SQS message with the trace headers of ctx
-// added. A context with no trace context keeps the attributes as they were.
+// withTraceAttributes returns a copy of the attributes of one SQS message with the trace
+// headers of ctx added. A context with no trace context keeps the attributes as they were.
+// Only traceparent and tracestate are added, because SQS accepts ten message attributes.
 func withTraceAttributes(ctx context.Context, attributes map[string]sqstypes.MessageAttributeValue) map[string]sqstypes.MessageAttributeValue {
 	values := traceValues(ctx)
 	if len(values) == 0 {
 		return attributes
 	}
-	if attributes == nil {
-		attributes = map[string]sqstypes.MessageAttributeValue{}
+	out := make(map[string]sqstypes.MessageAttributeValue, len(attributes)+2)
+	for key, value := range attributes {
+		out[key] = value
 	}
-	for key, value := range values {
-		attributes[key] = sqstypes.MessageAttributeValue{
-			DataType: aws.String("String"), StringValue: aws.String(value),
+	for _, key := range []string{"traceparent", "tracestate"} {
+		if value, ok := values[key]; ok {
+			out[key] = sqstypes.MessageAttributeValue{DataType: aws.String("String"), StringValue: aws.String(value)}
 		}
 	}
-	return attributes
+	return out
 }
 
-// withSNSTraceAttributes returns the attributes of one SNS message with the trace headers of
-// ctx added. A context with no trace context keeps the attributes as they were.
+// withSNSTraceAttributes returns a copy of the attributes of one SNS message with the trace
+// headers of ctx added. A context with no trace context keeps the attributes as they were.
+// Only traceparent and tracestate are added, because SNS accepts ten message attributes.
 func withSNSTraceAttributes(ctx context.Context, attributes map[string]snstypes.MessageAttributeValue) map[string]snstypes.MessageAttributeValue {
 	values := traceValues(ctx)
 	if len(values) == 0 {
 		return attributes
 	}
-	if attributes == nil {
-		attributes = map[string]snstypes.MessageAttributeValue{}
+	out := make(map[string]snstypes.MessageAttributeValue, len(attributes)+2)
+	for key, value := range attributes {
+		out[key] = value
 	}
-	for key, value := range values {
-		attributes[key] = snstypes.MessageAttributeValue{
-			DataType: aws.String("String"), StringValue: aws.String(value),
+	for _, key := range []string{"traceparent", "tracestate"} {
+		if value, ok := values[key]; ok {
+			out[key] = snstypes.MessageAttributeValue{DataType: aws.String("String"), StringValue: aws.String(value)}
 		}
 	}
-	return attributes
+	return out
 }
 
 // topicNameOf returns the name of a topic from its ARN, which is the last colon separated part.

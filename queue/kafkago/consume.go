@@ -1,6 +1,6 @@
 // This file holds the consumer side: the reader contract, the handler it runs, and the
 // mapping from one Kafka message onto one unit of work.
-package wlogkafka
+package wlogkafkago
 
 import (
 	"context"

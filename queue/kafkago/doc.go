@@ -17,4 +17,4 @@
 //			return err
 //		}
 //	}
-package wlogkafka
+package wlogkafkago

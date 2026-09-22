@@ -134,9 +134,10 @@ func (h *Handle) Status(code string, class StatusClass) {
 // End records the error, picks the level and the outcome, and emits the event once. A
 // second End does nothing.
 //
-// The level follows the rule of SPEC.md: an error gives error, and two cases give warn
-// instead, which are an ErrorInfo status from 400 to 499 and a client status class. With
-// no error the status class decides, and otherwise the level stays as it is.
+// The level follows the rule of SPEC.md: a level the handler named with wlog.SetLevel wins,
+// then an error gives error, and two cases give warn instead, which are an ErrorInfo status
+// from 400 to 499 and a client status class. With no error the status class decides, and
+// otherwise the level stays as it is.
 func (h *Handle) End(err error) {
 	if h.ended {
 		return

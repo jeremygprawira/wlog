@@ -13,7 +13,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/jeremygprawira/wlog/internal/conformance"
-	wlogkafka "github.com/jeremygprawira/wlog/queue/kafkago"
+	"github.com/jeremygprawira/wlog/queue/kafkago"
 )
 
 // TestKafkaConsumer_GoldenEvent proves that one consumed message gives the event the recipe
@@ -22,7 +22,7 @@ func TestKafkaConsumer_GoldenEvent(t *testing.T) {
 	rec := conformance.NewMemoryRecorder()
 	reader := &fakeReader{message: message()}
 
-	if err := wlogkafka.Consume(context.Background(), rec.Logger(), reader, handle); err != nil {
+	if err := wlogkafkago.Consume(context.Background(), rec.Logger(), reader, handle); err != nil {
 		t.Fatalf("Consume: %v", err)
 	}
 	if !reader.committed {
@@ -36,6 +36,15 @@ func TestKafkaConsumer_GoldenEvent(t *testing.T) {
 	if diff := conformance.Diff(conformance.Normalize(golden(t)), got); diff != "" {
 		t.Errorf("the event differs from the golden:\n%s", diff)
 	}
+
+	// The normalized compare drops the trace ids, so the shape is checked here.
+	trace, _ := events[0]["trace"].(map[string]any)
+	if trace["parent_span_id"] != "00f067aa0ba902b7" {
+		t.Errorf("trace.parent_span_id = %v, want the producer span", trace["parent_span_id"])
+	}
+	if trace["span_id"] == "" || trace["span_id"] == trace["parent_span_id"] {
+		t.Errorf("trace = %v, want a span id of its own", trace)
+	}
 }
 
 // TestKafkaConsumer_FailedHandlerDoesNotCommit proves that a failed handler leaves the message
@@ -44,7 +53,7 @@ func TestKafkaConsumer_FailedHandlerDoesNotCommit(t *testing.T) {
 	rec := conformance.NewMemoryRecorder()
 	reader := &fakeReader{message: message()}
 
-	err := wlogkafka.Consume(context.Background(), rec.Logger(), reader, func(context.Context, kafka.Message) error {
+	err := wlogkafkago.Consume(context.Background(), rec.Logger(), reader, func(context.Context, kafka.Message) error {
 		return errString("boom")
 	})
 	if err == nil || err.Error() != "boom" {

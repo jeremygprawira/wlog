@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 
 	"github.com/jeremygprawira/wlog"
@@ -26,9 +27,9 @@ func main() {
 	)
 }
 
-func handle(ctx context.Context, in map[string]any) (map[string]any, error) {
-	wlog.Set(ctx, "order_id", in["order_id"])
-	return map[string]any{"ok": true}, nil
+func handle(ctx context.Context, in events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	wlog.Set(ctx, "order_id", in.PathParameters["id"])
+	return events.APIGatewayProxyResponse{StatusCode: 200, Body: `{"id":"` + in.PathParameters["id"] + `"}`}, nil
 }
 ```
 

@@ -1,7 +1,7 @@
 // This file runs the drain conformance suite against the Kafka drain, and checks what only
 // this drain has: the event JSON on the wire of a batch, and the setup factory that reads
 // the environment.
-package wlogkafka
+package wlogkafkago
 
 import (
 	"context"

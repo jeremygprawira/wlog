@@ -226,7 +226,12 @@ func (l *Logger) SetEnabled(on bool)
 func (l *Logger) Enabled() bool
 func (l *Logger) Flush(ctx context.Context) error
 func Log(ctx context.Context, level Level, msg string, kv ...any)
+func CurrentLevel(ctx context.Context) (Level, bool)
 ```
+
+- `CurrentLevel` returns the level of the event on `ctx`, and reports whether `SetLevel` named
+  it. A finisher reads the report, so a level the handler named wins over the level the error
+  asks for.
 
 - A package function uses the Logger on `ctx`. With none, it uses `Default()`. `SetEnabled` and
   `Enabled` at package level are removed.

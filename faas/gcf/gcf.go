@@ -31,8 +31,12 @@ func HTTP(log *wlog.Logger, fn func(http.ResponseWriter, *http.Request), opts ..
 		if id := funcframework.ExecutionIDFromContext(r.Context()); id != "" {
 			wlog.SetGroup(r.Context(), "faas", "invocation_id", id)
 		}
-		if traceparent := traceparentOf(r.Context()); traceparent != "" {
-			r = r.WithContext(propagate.Extract(r.Context(), propagate.MapCarrier{"traceparent": traceparent}))
+		// A request that already carries a W3C traceparent keeps it. The Cloud Run header
+		// is the fallback.
+		if r.Header.Get("traceparent") == "" {
+			if traceparent := traceparentOf(r); traceparent != "" {
+				r = r.WithContext(propagate.Extract(r.Context(), propagate.MapCarrier{"traceparent": traceparent}))
+			}
 		}
 		fn(w, r)
 	}))
@@ -72,10 +76,12 @@ func flush(log *wlog.Logger) {
 	_ = log.Flush(ctx)
 }
 
-// traceparentOf builds a W3C traceparent from the Cloud Run trace ids of one request context,
-// so the event joins the trace of the caller. The framework reads X-Cloud-Trace-Context, and
-// the W3C header needs a 32 character trace id and a 16 character span id.
-func traceparentOf(ctx context.Context) string {
+// traceparentOf builds a W3C traceparent from the Cloud Run trace ids of one request, so the
+// event joins the trace of the caller. The framework reads X-Cloud-Trace-Context, and the W3C
+// header needs a 32 character trace id and a 16 character span id. The sampled flag follows
+// the ";o=1" suffix of the header.
+func traceparentOf(r *http.Request) string {
+	ctx := r.Context()
 	traceID := funcframework.TraceIDFromContext(ctx)
 	if len(traceID) > 32 {
 		return ""
@@ -85,5 +91,9 @@ func traceparentOf(ctx context.Context) string {
 	if err != nil || span == 0 {
 		return ""
 	}
-	return "00-" + traceID + "-" + fmt.Sprintf("%016x", span) + "-01"
+	flags := "00"
+	if strings.Contains(r.Header.Get("X-Cloud-Trace-Context"), "o=1") {
+		flags = "01"
+	}
+	return "00-" + traceID + "-" + fmt.Sprintf("%016x", span) + "-" + flags
 }

@@ -6,10 +6,15 @@
 // trace of every fetched record into its context. Record starts one event for one polled
 // record.
 //
+// franz-go commits the read position on its own by default, so a failed record is not
+// delivered again. Set kgo.DisableAutoCommit(), commit a record after the end func reports
+// success, and stop the poll loop after a failure. A commit of a later offset covers the
+// failed record, because Kafka keeps one offset per partition.
+//
 // This is the whole setup:
 //
 //	cl, _ := kgo.NewClient(kgo.SeedBrokers(brokers), kgo.ConsumerGroup("workers"),
-//		kgo.WithHooks(wlogfranz.Hooks()))
+//		kgo.DisableAutoCommit(), kgo.WithHooks(wlogfranz.Hooks()))
 //	for {
 //		fetches := cl.PollFetches(ctx)
 //		fetches.EachRecord(func(r *kgo.Record) {

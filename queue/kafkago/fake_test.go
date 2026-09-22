@@ -1,6 +1,6 @@
 // This file holds the broker fake that the producer and the drain tests share. It answers
 // the metadata and produce requests of a kafka.Writer, so no test needs a real broker.
-package wlogkafka
+package wlogkafkago
 
 import (
 	"context"

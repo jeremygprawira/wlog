@@ -1,7 +1,7 @@
 // This file runs the calls conformance suite against the producer path, and checks what
 // only a Kafka writer has: the trace headers of each message, and the async call that ends
 // when the broker reports its batch.
-package wlogkafka
+package wlogkafkago
 
 import (
 	"context"
@@ -159,5 +159,26 @@ func TestKafka_C1_AsyncEndsInCompletion(t *testing.T) {
 	record, _ := calls[0].(map[string]any)
 	if record["error"] == nil {
 		t.Errorf("calls[0].error = nil, want the broker error the Completion reported")
+	}
+}
+
+// TestKafka_C1_CallEndWaitsForEveryBatch proves that a call ends after its last batch
+// reports, and that an error of any batch wins. kafka-go reports one Completion per partition
+// batch, so the first report must not decide the call.
+func TestKafka_C1_CallEndWaitsForEveryBatch(t *testing.T) {
+	var results []wlog.CallResult
+	finished := &callEnd{end: func(result wlog.CallResult) { results = append(results, result) }}
+	finished.expect(3)
+
+	finished.report(nil, 1)
+	if len(results) != 0 {
+		t.Fatalf("the call ended after one of three messages")
+	}
+	finished.report(errString("refused"), 2)
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want one", len(results))
+	}
+	if results[0].Err == nil {
+		t.Error("the call result is ok, want the error of the failed batch")
 	}
 }

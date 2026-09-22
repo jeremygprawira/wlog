@@ -10,7 +10,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/jeremygprawira/wlog"
-	wlogkafka "github.com/jeremygprawira/wlog/queue/kafkago"
+	"github.com/jeremygprawira/wlog/queue/kafkago"
 )
 
 // handle is the work of one message. The handler adds the field a searcher asks for.
@@ -28,10 +28,14 @@ func main() {
 	})
 	// Consume fetches one message, runs the handler inside one event, and commits the
 	// message after the handler returns nil. A failed handler leaves the message
-	// uncommitted, so the group delivers it again.
+	// uncommitted, and the loop stops, because a reader moves its read position on every
+	// fetch. Start a new reader to retry the failed message.
 	for {
-		if err := wlogkafka.Consume(context.Background(), logger, reader, handle); err != nil {
-			log.Fatal(err)
+		if err := wlogkafkago.Consume(context.Background(), logger, reader, handle); err != nil {
+			log.Printf("consume: %v", err)
+			break
 		}
 	}
+	// The process ends here, so the pending events are sent now.
+	_ = logger.Flush(context.Background())
 }

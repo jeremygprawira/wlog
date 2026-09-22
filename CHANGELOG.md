@@ -9,11 +9,25 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ### Added
 
+- Track D gives one event per unit of async work. The queues `queue/kafkago`,
+  `queue/sarama`, `queue/franz`, `queue/confluent`, `queue/watermill`, `queue/sqs`,
+  `queue/nats`, `queue/amqp`, `queue/pubsub`, and `queue/cloudevents`. The jobs
+  `job/asynq`, `job/river`, `job/temporal`, and `job/cron`. The functions `faas/lambda`
+  and `faas/gcf`. The commands `command/cobra`, `command/urfave`, and `command/kong`.
+  Every consumer passes the `work` suite, and every producer passes the `calls` suite.
 - `wlog.CurrentLevel` returns the level of the current event and reports whether `SetLevel`
   named it, so a finisher keeps a level an earlier stage chose.
+- `wlogcloudevents.Unit` maps one CloudEvent onto the unit of work of the receiver, so a
+  receiver outside that module emits the same fields.
+- With `WLOG_DRAINS` set, `cmd/wlog` records its own runs through `work`. It prints nothing
+  extra.
+- `docs/recipes/` gains `kafka-consumer.md`, `cron-job.md`, and `lambda.md`. `examples/`
+  gains the three runnable examples, each with a golden event.
 
 ### Changed
 
+- `wlog rules`, `wlog schema`, `wlog version`, and `wlog env` pass the subcommand name to the
+  explain package, so the four commands work. Before, each one printed its usage and exited 2.
 - The middleware budget is 55µs p50, and the measured p50 is about 52µs on an Apple M4
   Pro. The audit set 50µs before the realistic benchmark existed, and no run met it
   without weakening redaction.
@@ -24,6 +38,22 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
   replaced it, so a job that cancels or snoozes records the wrong level.
 - `work.Start` reads the carrier after it starts the event, so a consumed message joins the
   trace of its producer. Before, the fresh trace of the event replaced the extracted trace.
+- `work.Ticker` gives its function the context of the tick event, so a field inside the
+  function lands on the event.
+- A handler panic reaches the caller of every Track D consumer entry, as track rule 3 says.
+  The queue loops stop after a failed message, so a later commit never covers it.
+- The NATS and Kafka drains flush each batch and close their clients, and the Kafka writer
+  waits for the broker acks.
+
+### Removed
+
+- The tagged `examples/lambda` module. The lambda recipe and its example replace it.
+
+## [0.7.0] - 2026-09-21
+
+v0.7.0 lands the everyday stack, search, and agents. Every HTTP router, RPC layer, outbound
+client, store, logger bridge, error library, and flag library emits the same event shape.
+The query commands and the MCP server read it back.
 
 ## [0.6.0] - 2026-09-19
 

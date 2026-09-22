@@ -16,7 +16,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/jeremygprawira/wlog"
-	wlogkafka "github.com/jeremygprawira/wlog/queue/kafkago"
+	"github.com/jeremygprawira/wlog/queue/kafkago"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 		Topic:   "orders",
 	})
 	for {
-		if err := wlogkafka.Consume(context.Background(), logger, reader, handle); err != nil {
+		if err := wlogkafkago.Consume(context.Background(), logger, reader, handle); err != nil {
 			log.Fatal(err)
 		}
 	}

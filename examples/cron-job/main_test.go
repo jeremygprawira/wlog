@@ -24,6 +24,12 @@ func TestCronJob_GoldenEvent(t *testing.T) {
 	if diff := conformance.Diff(conformance.Normalize(golden(t)), got); diff != "" {
 		t.Errorf("the event differs from the golden:\n%s", diff)
 	}
+
+	// The normalized compare drops the trace ids, so the shape is checked here.
+	trace, _ := events[0]["trace"].(map[string]any)
+	if trace["span_id"] == "" || trace["span_id"] == trace["parent_span_id"] {
+		t.Errorf("trace = %v, want a span id of its own", trace)
+	}
 }
 
 // golden reads the recipe's hand-written event.

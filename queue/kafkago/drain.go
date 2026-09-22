@@ -1,6 +1,6 @@
 // This file holds the drain side: it ships every finished event to a Kafka topic, and it
 // builds itself from the environment for setup.
-package wlogkafka
+package wlogkafkago
 
 import (
 	"context"

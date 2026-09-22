@@ -66,7 +66,7 @@ between runs, so the example test normalizes them.
 | Which runs are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="cron-job"} \| json \| unwrap duration_ms [5m])` |
 | Which schedules fire | `wlog query --group-by job.schedule --count ./logs` | `jq -r '.job.schedule' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `job.schedule: "@every 5m"` |
 | One trace across services | `wlog query --trace 4bf92f3577b34da6a3ce929d0e0e4736 ./logs` | `jq -r 'select(.trace.trace_id=="4bf92f3577b34da6a3ce929d0e0e4736")' logs.ndjson` | Tempo: search by trace id |
-| How much one run moved | `wlog query --where rows --format summary ./logs` | `jq -r '[.job.name, .rows] \| @tsv' logs.ndjson` | ClickHouse: `SELECT job.name, sum(rows) FROM events GROUP BY 1` |
+| How much one run moved | `wlog query --where 'rows?' --format summary ./logs` | `jq -r '[.job.name, .rows] \| @tsv' logs.ndjson` | ClickHouse: `SELECT job.name, sum(rows) FROM events GROUP BY 1` |
 
 ## 4. Explain ids
 
