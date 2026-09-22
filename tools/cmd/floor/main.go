@@ -23,6 +23,8 @@ import (
 	"runtime"
 	"strings"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
 
@@ -31,6 +33,124 @@ type runner func(dir, floor string) ([]byte, error)
 
 // knownBrokenPath lists the modules whose upgraded dependency set fails.
 const knownBrokenPath = "tools/floor-known-broken.txt"
+
+// pinsPath lists the floor of each module, so a raised go line or a raised library version
+// fails the gate. The spec tables and the go.mod files stay together that way.
+const pinsPath = "tools/floor-pins.txt"
+
+// readPins reads the floor list. A missing list is not an error, so an older tree still runs.
+func readPins(path string) ([]pin, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	pins := []pin{}
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return nil, fmt.Errorf("%s: %q holds no floor", path, line)
+		}
+		p := pin{dir: fields[0], values: map[string]string{}}
+		for _, field := range fields[1:] {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok || key == "" || value == "" {
+				return nil, fmt.Errorf("%s: %q is not key=value", path, field)
+			}
+			p.values[key] = value
+		}
+		pins = append(pins, p)
+	}
+	return pins, nil
+}
+
+// pin is one line of the floor list: the go line of a module, and the version of every library
+// it integrates.
+type pin struct {
+	dir    string
+	values map[string]string
+}
+
+// checkPins fails when one module sits above its floor: a go line above the pin, or a library
+// above the pinned version. A module the list does not name is not checked.
+func checkPins(root string, pins []pin, out io.Writer) error {
+	mods, err := workspace.Modules(root)
+	if err != nil {
+		return err
+	}
+	floors := map[string]string{}
+	for _, m := range mods {
+		floors[m.Dir] = m.Floor
+	}
+
+	bad := 0
+	for _, p := range pins {
+		floor, ok := floors[p.dir]
+		if !ok {
+			bad++
+			fmt.Fprintf(out, "%s: FLOOR2: no module at this dir\n", p.dir)
+			continue
+		}
+		if want := p.values["go"]; want != "" && above(floor, want) {
+			bad++
+			fmt.Fprintf(out, "%s: FLOOR2: the go line %s is above the floor %s\n", p.dir, floor, want)
+		}
+		for module, want := range p.values {
+			if module == "go" {
+				continue
+			}
+			got, err := requireVersion(filepath.Join(root, p.dir), module)
+			if err != nil {
+				bad++
+				fmt.Fprintf(out, "%s: FLOOR2: %v\n", p.dir, err)
+				continue
+			}
+			if above(got, want) {
+				bad++
+				fmt.Fprintf(out, "%s: FLOOR2: %s %s is above the floor %s\n", p.dir, module, got, want)
+			}
+		}
+	}
+	if bad > 0 {
+		return fmt.Errorf("%d floor pin(s) moved", bad)
+	}
+	return nil
+}
+
+// requireVersion returns the version of one required module in the go.mod of a directory.
+func requireVersion(dir, module string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return "", err
+	}
+	for _, raw := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(strings.TrimSpace(raw))
+		switch {
+		case len(fields) >= 2 && fields[0] == module:
+			return fields[1], nil
+		case len(fields) >= 3 && fields[0] == "require" && fields[1] == module:
+			return fields[2], nil
+		}
+	}
+	return "", fmt.Errorf("%s is not required by the go.mod of %s", module, dir)
+}
+
+// above reports whether one version sits above another. A go line and a module version both
+// compare as semantic versions, and a version that does not parse counts as above, so a
+// strange pin fails the gate instead of passing it.
+func above(got, want string) bool {
+	g, w := semver.Canonical("v"+strings.TrimPrefix(got, "v")), semver.Canonical("v"+strings.TrimPrefix(want, "v"))
+	if g == "" || w == "" {
+		return true
+	}
+	return semver.Compare(g, w) > 0
+}
 
 // readKnownBroken reads the list of modules whose upgrade is skipped. A missing
 // list is not an error.
@@ -67,6 +187,14 @@ func main() {
 
 	broken, err := readKnownBroken(filepath.Join(root, knownBrokenPath))
 	if err != nil {
+		fail(err)
+	}
+
+	pins, err := readPins(filepath.Join(root, pinsPath))
+	if err != nil {
+		fail(err)
+	}
+	if err := checkPins(root, pins, os.Stdout); err != nil {
 		fail(err)
 	}
 

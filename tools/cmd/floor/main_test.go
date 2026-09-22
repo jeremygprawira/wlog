@@ -8,6 +8,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -96,6 +97,51 @@ type stubError struct{}
 
 // Error returns the text of a build failure.
 func (stubError) Error() string { return "exit status 1" }
+
+// TestFloor_Pins proves that a raised go line and a raised library version fail the pin
+// check, that a module at its pin passes, and that a pin for no module fails.
+func TestFloor_Pins(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.work"), "go 1.21\n\nuse ./app\n")
+	writeFile(t, filepath.Join(root, "app", "go.mod"), "module example.com/app\n\ngo 1.21\n\nrequire example.com/lib v1.2.3\n")
+
+	cases := []struct {
+		name    string
+		line    string
+		wantErr bool
+	}{
+		{"at the pin", "./app go=1.21 example.com/lib=v1.2.3", false},
+		{"raised go line", "./app go=1.20 example.com/lib=v1.2.3", true},
+		{"raised library", "./app go=1.21 example.com/lib=v1.2.2", true},
+		{"missing module", "./gone go=1.21", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "floor-pins.txt")
+			writeFile(t, path, tc.line+"\n")
+			pins, err := readPins(path)
+			if err != nil {
+				t.Fatalf("readPins: %v", err)
+			}
+			var out bytes.Buffer
+			err = checkPins(root, pins, &out)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("checkPins = %v, want error %v:\n%s", err, tc.wantErr, out.String())
+			}
+		})
+	}
+}
+
+// writeFile writes one file, and makes its directory.
+func writeFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestFloor_FailsOnNewerFeature runs the real go command on a module that claims
 // a Go 1.21 floor while it uses a Go 1.22 range form. The check must fail.

@@ -1,0 +1,24 @@
+# The floor of each Track D module: its go line, and the version of the library it
+# integrates. `tools floor` fails when a go.mod moves above a line here, so a raised
+# library or a raised go line needs a decision and a spec update first.
+#
+# Format: <module dir> go=<go floor> <module path>=<version> [<module path>=<version> ...]
+./queue/kafkago go=1.21 github.com/segmentio/kafka-go=v0.4.48
+./queue/sarama go=1.21 github.com/IBM/sarama=v1.45.1
+./queue/franz go=1.21 github.com/twmb/franz-go=v1.18.1
+./queue/confluent go=1.21 github.com/confluentinc/confluent-kafka-go/v2=v2.12.0
+./queue/watermill go=1.21 github.com/ThreeDotsLabs/watermill=v1.4.7
+./queue/sqs go=1.21 github.com/aws/aws-sdk-go-v2/service/sqs=v1.37.14 github.com/aws/aws-sdk-go-v2/service/sns=v1.33.19
+./queue/nats go=1.21 github.com/nats-io/nats.go=v1.38.0
+./queue/amqp go=1.21 github.com/rabbitmq/amqp091-go=v1.15.0
+./queue/pubsub go=1.23.0 cloud.google.com/go/pubsub/v2=v2.0.1
+./queue/cloudevents go=1.21 github.com/cloudevents/sdk-go/v2=v2.15.2
+./job/asynq go=1.24.0 github.com/hibiken/asynq=v0.26.0
+./job/river go=1.21 github.com/riverqueue/river=v0.14.1
+./job/temporal go=1.21 go.temporal.io/sdk=v1.33.1
+./job/cron go=1.21 github.com/robfig/cron/v3=v3.0.1
+./faas/lambda go=1.21 github.com/aws/aws-lambda-go=v1.54.0
+./faas/gcf go=1.21 github.com/GoogleCloudPlatform/functions-framework-go=v1.9.2
+./command/cobra go=1.21 github.com/spf13/cobra=v1.2.0
+./command/urfave go=1.22 github.com/urfave/cli/v3=v3.1.0
+./command/kong go=1.21 github.com/alecthomas/kong=v1.9.0
