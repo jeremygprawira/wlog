@@ -36,7 +36,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestCloudEvents_C1_SendCallRecord proves that one sent event records one queue call and carries
 // a traceparent whose span id is the span id of that call.
-func TestCloudEvents_C1_SendCallRecord(t *testing.T) {
+func TestCloudEvents_SendCallRecord(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
 	event := newEvent()
@@ -59,7 +59,7 @@ func TestCloudEvents_C1_SendCallRecord(t *testing.T) {
 // TestCloudEvents_C1_SendTraceNamesTheCall proves that the send hook writes a traceparent
 // whose span id is the span id of the open call. The hook writes it, because the SDK runs the
 // defaulters before the hook.
-func TestCloudEvents_C1_SendTraceNamesTheCall(t *testing.T) {
+func TestCloudEvents_SendTraceNamesTheCall(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
 	event := newEvent()

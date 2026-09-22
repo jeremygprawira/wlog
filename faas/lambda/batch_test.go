@@ -41,7 +41,7 @@ func TestLambda_C8_ProcessSQSReturnsTheFailingRecord(t *testing.T) {
 
 // TestLambda_C1_BatchFailuresLandOnTheInvocation proves that the failed record count lands on
 // the open invocation event.
-func TestLambda_C1_BatchFailuresLandOnTheInvocation(t *testing.T) {
+func TestLambda_BatchFailuresLandOnTheInvocation(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx := log.WithContext(context.Background())
 	ctx, end := wlog.Start(ctx, "function handler")
@@ -58,7 +58,7 @@ func TestLambda_C1_BatchFailuresLandOnTheInvocation(t *testing.T) {
 
 // TestLambda_C1_SQSRecordRecordsDeliveryCountAndLag proves that one SQS record records its
 // queue, its id, its delivery count, and the time it waited.
-func TestLambda_C1_SQSRecordRecordsDeliveryCountAndLag(t *testing.T) {
+func TestLambda_SQSRecordRecordsDeliveryCountAndLag(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	sent := time.Now().Add(-2 * time.Second)
 	batch := events.SQSEvent{Records: []events.SQSMessage{{
@@ -91,7 +91,7 @@ func TestLambda_C1_SQSRecordRecordsDeliveryCountAndLag(t *testing.T) {
 
 // TestLambda_C1_ProcessKinesisReturnsTheFailingRecord proves that one failed Kinesis record
 // lands in BatchItemFailures.
-func TestLambda_C1_ProcessKinesisReturnsTheFailingRecord(t *testing.T) {
+func TestLambda_ProcessKinesisReturnsTheFailingRecord(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	batch := events.KinesisEvent{Records: []events.KinesisEventRecord{
 		{EventID: "e1", EventSourceArn: "arn:aws:kinesis:us-east-1:123456789012:stream/orders",
@@ -118,7 +118,7 @@ func TestLambda_C1_ProcessKinesisReturnsTheFailingRecord(t *testing.T) {
 
 // TestLambda_C1_ProcessDynamoDBReturnsTheFailingRecord proves that one failed DynamoDB
 // record lands in BatchItemFailures, and the item images never reach the event.
-func TestLambda_C1_ProcessDynamoDBReturnsTheFailingRecord(t *testing.T) {
+func TestLambda_ProcessDynamoDBReturnsTheFailingRecord(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	batch := events.DynamoDBEvent{Records: []events.DynamoDBEventRecord{
 		{EventID: "e1", EventSourceArn: "arn:aws:dynamodb:us-east-1:123456789012:table/orders/stream/2026",

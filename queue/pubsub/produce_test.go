@@ -38,7 +38,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 // TestPubsub_C1_PublishAttributes proves that one publish adds the trace headers to a copy of the
 // message attributes and leaves the attributes of the caller alone. The call itself ends when the
 // service reports the result, which needs a live service and is an integration step.
-func TestPubsub_C1_PublishAttributes(t *testing.T) {
+func TestPubsub_PublishAttributes(t *testing.T) {
 	pub := &fakePublisher{id: "orders"}
 	log, _ := wlogtest.New(t)
 	base, cancel := context.WithCancel(context.Background())

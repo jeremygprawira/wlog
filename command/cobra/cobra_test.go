@@ -92,7 +92,7 @@ func TestCobra_C9_AppErrorIsNotAUsageFault(t *testing.T) {
 
 // TestCobra_C1_SubcommandRecordsItsPath proves that a subcommand records the full path as the
 // operation.
-func TestCobra_C1_SubcommandRecordsItsPath(t *testing.T) {
+func TestCobra_SubcommandRecordsItsPath(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	root := newRoot()
 	root.AddCommand(&cobra.Command{Use: "sync", Run: func(*cobra.Command, []string) {}})
@@ -108,7 +108,7 @@ func TestCobra_C1_SubcommandRecordsItsPath(t *testing.T) {
 
 // TestCobra_C1_FlagsListTheNamesThatWereSet proves that cli.flags names the flags that were
 // set, and never their values.
-func TestCobra_C1_FlagsListTheNamesThatWereSet(t *testing.T) {
+func TestCobra_FlagsListTheNamesThatWereSet(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	root := newRoot()
 	root.Run = func(*cobra.Command, []string) {}
@@ -134,7 +134,7 @@ func TestCobra_C1_FlagsListTheNamesThatWereSet(t *testing.T) {
 
 // TestCobra_C1_FlushesBeforeReturn proves that the event reaches a pipeline before Execute
 // returns.
-func TestCobra_C1_FlushesBeforeReturn(t *testing.T) {
+func TestCobra_FlushesBeforeReturn(t *testing.T) {
 	sender := &fakeSender{}
 	log := wlog.New(
 		wlog.WithSilent(),

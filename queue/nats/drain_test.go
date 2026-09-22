@@ -27,7 +27,7 @@ func TestNats_C1_DrainShipsEvents(t *testing.T) {
 
 // TestNats_C1_DrainFlushes proves that one batch flushes the client buffer before the call
 // returns, so a process that ends does not lose the events.
-func TestNats_C1_DrainFlushes(t *testing.T) {
+func TestNats_DrainFlushes(t *testing.T) {
 	pub := &fakePublisher{}
 	drain := Drain(pub, "events")
 	drain.Send(context.Background(), map[string]any{"event_id": "e1"})
@@ -42,7 +42,7 @@ func TestNats_C1_DrainFlushes(t *testing.T) {
 
 // TestNats_C1_DrainBatch proves that a batch of three events becomes three messages, each one
 // the canonical event JSON of its own event.
-func TestNats_C1_DrainBatch(t *testing.T) {
+func TestNats_DrainBatch(t *testing.T) {
 	pub := &fakePublisher{}
 	log := wlog.New(wlog.WithSilent(), wlog.WithRedactFingerprint(false), wlog.WithDrains(Drain(pub, "events")))
 
@@ -88,7 +88,7 @@ func TestNats_C1_DrainBatch(t *testing.T) {
 
 // TestNats_C1_FactoryReadsEnv proves that the setup factory names the two variables of the NATS
 // drain and reports an error when one is missing. A live server is an integration step.
-func TestNats_C1_FactoryReadsEnv(t *testing.T) {
+func TestNats_FactoryReadsEnv(t *testing.T) {
 	factory := Factory()
 	if factory.Name != "nats" {
 		t.Errorf("factory name = %q, want nats", factory.Name)

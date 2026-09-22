@@ -152,7 +152,7 @@ func TestTemporal_C6_ResultPendingIsNotAFailure(t *testing.T) {
 
 // TestTemporal_C1_UnitNamesTheAttempt proves the mapping from one activity info onto the
 // fields of the table.
-func TestTemporal_C1_UnitNamesTheAttempt(t *testing.T) {
+func TestTemporal_UnitNamesTheAttempt(t *testing.T) {
 	scheduled := time.Now().Add(-2 * time.Second)
 	unit := unitOf(activity.Info{
 		ActivityID:        "act-1",

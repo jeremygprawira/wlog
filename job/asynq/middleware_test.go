@@ -33,7 +33,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestAsynq_C1_EventNamesTheTask proves that one processed task records the job group with
 // the system and the task type, and the operation of the kind.
-func TestAsynq_C1_EventNamesTheTask(t *testing.T) {
+func TestAsynq_EventNamesTheTask(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
 	if err := processTask(t, log, "reindex:orders", succeed); err != nil {
@@ -51,7 +51,7 @@ func TestAsynq_C1_EventNamesTheTask(t *testing.T) {
 
 // TestAsynq_C1_SkipRetryRecordsDiscard proves that a handler that returns SkipRetry records
 // result discard and keeps the level of the error.
-func TestAsynq_C1_SkipRetryRecordsDiscard(t *testing.T) {
+func TestAsynq_SkipRetryRecordsDiscard(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
 	err := processTask(t, log, "reindex", func(context.Context, *asynq.Task) error { return asynq.SkipRetry })
@@ -69,7 +69,7 @@ func TestAsynq_C1_SkipRetryRecordsDiscard(t *testing.T) {
 
 // TestAsynq_C1_RevokeRecordsCancel proves that a handler that returns RevokeTask records
 // result cancel and level warn.
-func TestAsynq_C1_RevokeRecordsCancel(t *testing.T) {
+func TestAsynq_RevokeRecordsCancel(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
 	_ = processTask(t, log, "reindex", func(context.Context, *asynq.Task) error { return asynq.RevokeTask })
@@ -85,7 +85,7 @@ func TestAsynq_C1_RevokeRecordsCancel(t *testing.T) {
 
 // TestAsynq_C1_PlainErrorRecordsRetry proves that a handler error with no retry data records
 // result retry.
-func TestAsynq_C1_PlainErrorRecordsRetry(t *testing.T) {
+func TestAsynq_PlainErrorRecordsRetry(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
 	_ = processTask(t, log, "reindex", func(context.Context, *asynq.Task) error { return errString("boom") })
@@ -97,7 +97,7 @@ func TestAsynq_C1_PlainErrorRecordsRetry(t *testing.T) {
 
 // TestAsynq_C1_PanicRecordsStackAndPanics proves that a panicking handler records one error
 // event with a stack, and the middleware panics again, so asynq keeps its own panic behavior.
-func TestAsynq_C1_PanicRecordsStackAndPanics(t *testing.T) {
+func TestAsynq_PanicRecordsStackAndPanics(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
 	func() {
@@ -121,7 +121,7 @@ func TestAsynq_C1_PanicRecordsStackAndPanics(t *testing.T) {
 
 // TestAsynq_C1_HandlerCoversAServerWithoutAMux proves that Handler wraps a plain handler, so
 // a server that runs no ServeMux still gives every task one event.
-func TestAsynq_C1_HandlerCoversAServerWithoutAMux(t *testing.T) {
+func TestAsynq_HandlerCoversAServerWithoutAMux(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	h := Handler(log, asynq.HandlerFunc(func(context.Context, *asynq.Task) error { return nil }))
 

@@ -36,7 +36,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestLambda_C1_InvocationRecordsIdsAndRemaining proves that one invocation records the
 // invocation id, the function name, the cold start flag, and the remaining time.
-func TestLambda_C1_InvocationRecordsIdsAndRemaining(t *testing.T) {
+func TestLambda_InvocationRecordsIdsAndRemaining(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	h := Wrap(log, func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil })
 
@@ -69,7 +69,7 @@ func TestLambda_C1_InvocationRecordsIdsAndRemaining(t *testing.T) {
 
 // TestLambda_C1_ColdStartIsTheFirstInvocation proves that exactly one event of many
 // concurrent invocations carries cold_start true.
-func TestLambda_C1_ColdStartIsTheFirstInvocation(t *testing.T) {
+func TestLambda_ColdStartIsTheFirstInvocation(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	h := Wrap(log, func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil })
 
@@ -97,7 +97,7 @@ func TestLambda_C1_ColdStartIsTheFirstInvocation(t *testing.T) {
 
 // TestLambda_C1_APIRequestFillsHTTPAndStatus proves that an API Gateway v1 event fills the
 // http group, and a server error response gives level error.
-func TestLambda_C1_APIRequestFillsHTTPAndStatus(t *testing.T) {
+func TestLambda_APIRequestFillsHTTPAndStatus(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	h := Wrap(log, func(context.Context, events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 		return events.APIGatewayProxyResponse{StatusCode: 503}, nil
@@ -133,7 +133,7 @@ func TestLambda_C1_APIRequestFillsHTTPAndStatus(t *testing.T) {
 
 // TestLambda_C1_BatchEventNamesTriggerAndSize proves that an SQS event names its trigger and
 // its batch size.
-func TestLambda_C1_BatchEventNamesTriggerAndSize(t *testing.T) {
+func TestLambda_BatchEventNamesTriggerAndSize(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	h := Wrap(log, func(context.Context, events.SQSEvent) (string, error) { return "ok", nil })
 
@@ -148,7 +148,7 @@ func TestLambda_C1_BatchEventNamesTriggerAndSize(t *testing.T) {
 // TestLambda_C1_EveryKnownEventNamesItsTrigger proves that each known event type fills its
 // own fields: the http group for a request event, and faas.trigger and faas.batch_size for a
 // batch event.
-func TestLambda_C1_EveryKnownEventNamesItsTrigger(t *testing.T) {
+func TestLambda_EveryKnownEventNamesItsTrigger(t *testing.T) {
 	cases := []struct {
 		name    string
 		in      any
@@ -199,7 +199,7 @@ func TestLambda_C1_EveryKnownEventNamesItsTrigger(t *testing.T) {
 
 // TestLambda_C1_XRayHeaderJoinsTheTrace proves that the X-Ray header of the invocation
 // context sets the trace id of the event.
-func TestLambda_C1_XRayHeaderJoinsTheTrace(t *testing.T) {
+func TestLambda_XRayHeaderJoinsTheTrace(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	h := Wrap(log, func(context.Context, struct{}) (struct{}, error) { return struct{}{}, nil })
 

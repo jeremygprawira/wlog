@@ -34,7 +34,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestAsynq_C1_EnqueueCallRecord proves that one enqueue records one queue call, and the task
 // carries a traceparent header whose span id is the span id of that call.
-func TestAsynq_C1_EnqueueCallRecord(t *testing.T) {
+func TestAsynq_EnqueueCallRecord(t *testing.T) {
 	client := &fakeClient{}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
@@ -65,7 +65,7 @@ func TestAsynq_C1_EnqueueCallRecord(t *testing.T) {
 
 // TestAsynq_C1_EnqueueErrorIsReturned proves that a client error comes back unchanged, and
 // the call records it.
-func TestAsynq_C1_EnqueueErrorIsReturned(t *testing.T) {
+func TestAsynq_EnqueueErrorIsReturned(t *testing.T) {
 	client := &fakeClient{err: errString("queue refused")}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)

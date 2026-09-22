@@ -37,7 +37,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestAmqp_C1_PublishCallRecord proves that one publish records one queue call and writes a
 // traceparent whose span id is the span id of that call.
-func TestAmqp_C1_PublishCallRecord(t *testing.T) {
+func TestAmqp_PublishCallRecord(t *testing.T) {
 	pub := &fakePublisher{}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
@@ -69,7 +69,7 @@ func TestAmqp_C1_PublishCallRecord(t *testing.T) {
 
 // TestAmqp_C1_PublishError proves that a publish the channel refuses records the error and hands
 // it back.
-func TestAmqp_C1_PublishError(t *testing.T) {
+func TestAmqp_PublishError(t *testing.T) {
 	pub := &fakePublisher{err: errString("publish refused")}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)

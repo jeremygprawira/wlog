@@ -36,7 +36,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestKafka_C1_MessageFields proves that one message fills the messaging group, the offset
 // lag, the time lag, and the trace carrier.
-func TestKafka_C1_MessageFields(t *testing.T) {
+func TestKafka_MessageFields(t *testing.T) {
 	msg := kafka.Message{
 		Topic: "orders", Partition: 3, Offset: 41, HighWaterMark: 100,
 		Time: time.Now().Add(-2 * time.Second),
@@ -123,7 +123,7 @@ func TestKafka_C2_FailedHandlerDoesNotCommit(t *testing.T) {
 
 // TestKafka_C1_PanicReachesCaller proves that a panicking handler records the panic with a
 // stack, and the panic continues, so the caller decides the retry.
-func TestKafka_C1_PanicReachesCaller(t *testing.T) {
+func TestKafka_PanicReachesCaller(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	r := &fakeReader{group: "workers", messages: []kafka.Message{{Topic: "orders", Offset: 7}}}
 

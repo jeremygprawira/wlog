@@ -39,7 +39,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestRiver_C1_InsertWritesTraceMetadata proves that one insert records one queue call, and
 // writes a traceparent into the job metadata whose span id is the span id of that call.
-func TestRiver_C1_InsertWritesTraceMetadata(t *testing.T) {
+func TestRiver_InsertWritesTraceMetadata(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
 	params := &rivertype.JobInsertParams{Kind: "reindex", Metadata: []byte(`{"user_id":"u1"}`)}
@@ -70,7 +70,7 @@ func TestRiver_C1_InsertWritesTraceMetadata(t *testing.T) {
 
 // TestRiver_C1_InsertKeepsBadMetadata proves that metadata which does not parse stays as the
 // caller wrote it, because a trace helper never damages an insert.
-func TestRiver_C1_InsertKeepsBadMetadata(t *testing.T) {
+func TestRiver_InsertKeepsBadMetadata(t *testing.T) {
 	log, _ := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
 	params := &rivertype.JobInsertParams{Kind: "reindex", Metadata: []byte("not json")}
@@ -87,7 +87,7 @@ func TestRiver_C1_InsertKeepsBadMetadata(t *testing.T) {
 
 // TestRiver_C1_InsertErrorIsReturned proves that an insert error comes back unchanged, and
 // the call records it.
-func TestRiver_C1_InsertErrorIsReturned(t *testing.T) {
+func TestRiver_InsertErrorIsReturned(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
 	failure := errString("insert refused")

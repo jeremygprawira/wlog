@@ -46,7 +46,7 @@ func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(co
 
 // TestGcf_C1_CloudEventRecordsTheEvent proves that one CloudEvent call records the messaging
 // group with the fields of the CloudEvents receiver, and the trace of its extension.
-func TestGcf_C1_CloudEventRecordsTheEvent(t *testing.T) {
+func TestGcf_CloudEventRecordsTheEvent(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	event := cloudevents.NewEvent()
 	event.SetID("evt-1")
@@ -84,7 +84,7 @@ func TestGcf_C1_CloudEventRecordsTheEvent(t *testing.T) {
 
 // TestGcf_C1_CloudEventPanicRecordsStack proves that a panicking CloudEvent function records
 // one error event with a stack, and the panic continues.
-func TestGcf_C1_CloudEventPanicRecordsStack(t *testing.T) {
+func TestGcf_CloudEventPanicRecordsStack(t *testing.T) {
 	log, rec := wlogtest.New(t)
 
 	func() {
@@ -104,7 +104,7 @@ func TestGcf_C1_CloudEventPanicRecordsStack(t *testing.T) {
 
 // TestGcf_C1_BothFlushBeforeReturn proves that both wrappers deliver their event through a
 // pipeline before they return.
-func TestGcf_C1_BothFlushBeforeReturn(t *testing.T) {
+func TestGcf_BothFlushBeforeReturn(t *testing.T) {
 	sender := &fakeSender{}
 	log := wlog.New(
 		wlog.WithSilent(),
@@ -128,7 +128,7 @@ func TestGcf_C1_BothFlushBeforeReturn(t *testing.T) {
 // event the execution id of the request and the trace of X-Cloud-Trace-Context. The framework
 // serves the function on a real listener and offers no stop, so this test leaves one loopback
 // server behind. The test process ends with it.
-func TestGcf_C1_HTTPRecordsExecutionIDAndTrace(t *testing.T) {
+func TestGcf_HTTPRecordsExecutionIDAndTrace(t *testing.T) {
 	t.Setenv("FUNCTION_TARGET", "gcf-test")
 	log, rec := wlogtest.New(t)
 	handler := HTTP(log, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })

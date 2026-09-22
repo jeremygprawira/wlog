@@ -32,7 +32,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestCron_C1_WrapRecordsTheSchedule proves that one wrapped run records the job group with
 // the name and the schedule.
-func TestCron_C1_WrapRecordsTheSchedule(t *testing.T) {
+func TestCron_WrapRecordsTheSchedule(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ran := false
 	job := Wrap(log, "reindex", "@every 5m")(cron.FuncJob(func() { ran = true }))
@@ -47,7 +47,7 @@ func TestCron_C1_WrapRecordsTheSchedule(t *testing.T) {
 
 // TestCron_C1_JobRecordsTheSchedule proves that one Job run records the job group with the
 // name and the schedule, and gives the function a context.
-func TestCron_C1_JobRecordsTheSchedule(t *testing.T) {
+func TestCron_JobRecordsTheSchedule(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	got := false
 	job := Job(log, "reindex", "0 * * * *", func(ctx context.Context) error {
@@ -65,7 +65,7 @@ func TestCron_C1_JobRecordsTheSchedule(t *testing.T) {
 
 // TestCron_C1_ErrorRecordsError proves that a run whose function fails records level and
 // outcome error with the message of the error.
-func TestCron_C1_ErrorRecordsError(t *testing.T) {
+func TestCron_ErrorRecordsError(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := Job(log, "reindex", "@every 5m", func(context.Context) error { return errString("boom") })
 
@@ -83,7 +83,7 @@ func TestCron_C1_ErrorRecordsError(t *testing.T) {
 
 // TestCron_C1_PanicRecordsStackAndPanics proves that a panicking run records one error event
 // with a stack, and the wrapper panics again, so cron keeps its own panic behavior.
-func TestCron_C1_PanicRecordsStackAndPanics(t *testing.T) {
+func TestCron_PanicRecordsStackAndPanics(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := Job(log, "reindex", "@every 5m", func(context.Context) error { panic("boom") })
 

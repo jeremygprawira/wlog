@@ -40,7 +40,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestSqs_C1_SendMessageCallRecord proves that one send records one queue call and writes a
 // traceparent attribute whose span id is the span id of that call.
-func TestSqs_C1_SendMessageCallRecord(t *testing.T) {
+func TestSqs_SendMessageCallRecord(t *testing.T) {
 	client := &fakeSQSClient{}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
@@ -70,7 +70,7 @@ func TestSqs_C1_SendMessageCallRecord(t *testing.T) {
 
 // TestSqs_C1_PublishCallRecord proves that one SNS publish records one queue call and writes a
 // traceparent attribute.
-func TestSqs_C1_PublishCallRecord(t *testing.T) {
+func TestSqs_PublishCallRecord(t *testing.T) {
 	client := &fakeSNSClient{}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
@@ -102,7 +102,7 @@ func TestSqs_C1_PublishCallRecord(t *testing.T) {
 
 // TestSqs_C1_SendMessageError proves that a send the client refuses records the error and hands
 // it back.
-func TestSqs_C1_SendMessageError(t *testing.T) {
+func TestSqs_SendMessageError(t *testing.T) {
 	client := &fakeSQSClient{sendErr: errString("send refused")}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)

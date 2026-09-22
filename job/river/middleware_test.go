@@ -36,7 +36,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestRiver_C1_EventNamesTheJob proves that one worked job records the job group with the
 // fields of the table, and the lag from its scheduled time.
-func TestRiver_C1_EventNamesTheJob(t *testing.T) {
+func TestRiver_EventNamesTheJob(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := &rivertype.JobRow{
 		ID: 42, Kind: "reindex", Queue: "critical", Attempt: 2, MaxAttempts: 5,
@@ -87,7 +87,7 @@ func TestRiver_C5_SnoozeRecordsSnoozeAndInfo(t *testing.T) {
 
 // TestRiver_C1_CancelRecordsCancelAndWarn proves that a cancelled job records result cancel
 // and level warn, which wins over the error rule.
-func TestRiver_C1_CancelRecordsCancelAndWarn(t *testing.T) {
+func TestRiver_CancelRecordsCancelAndWarn(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := &rivertype.JobRow{Kind: "reindex", Attempt: 1, MaxAttempts: 3}
 
@@ -106,7 +106,7 @@ func TestRiver_C1_CancelRecordsCancelAndWarn(t *testing.T) {
 
 // TestRiver_C1_LastAttemptRecordsDiscard proves that an error on the last attempt records
 // result discard.
-func TestRiver_C1_LastAttemptRecordsDiscard(t *testing.T) {
+func TestRiver_LastAttemptRecordsDiscard(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := &rivertype.JobRow{Kind: "reindex", Attempt: 3, MaxAttempts: 3}
 
@@ -123,7 +123,7 @@ func TestRiver_C1_LastAttemptRecordsDiscard(t *testing.T) {
 
 // TestRiver_C1_ErrorRecordsRetry proves that an error with attempts left records result
 // retry.
-func TestRiver_C1_ErrorRecordsRetry(t *testing.T) {
+func TestRiver_ErrorRecordsRetry(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := &rivertype.JobRow{Kind: "reindex", Attempt: 1, MaxAttempts: 3}
 
@@ -137,7 +137,7 @@ func TestRiver_C1_ErrorRecordsRetry(t *testing.T) {
 // TestRiver_C1_PanicRecordsStackAndPanics proves that a panicking job records one error
 // event with a stack, and the middleware panics again, so River keeps its own panic
 // behavior.
-func TestRiver_C1_PanicRecordsStackAndPanics(t *testing.T) {
+func TestRiver_PanicRecordsStackAndPanics(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := &rivertype.JobRow{Kind: "reindex", Attempt: 1, MaxAttempts: 3}
 
@@ -158,7 +158,7 @@ func TestRiver_C1_PanicRecordsStackAndPanics(t *testing.T) {
 
 // TestRiver_C1_MetadataLinksTrace proves that the worker reads the trace of the insert
 // metadata, so a job joins the trace of its inserter.
-func TestRiver_C1_MetadataLinksTrace(t *testing.T) {
+func TestRiver_MetadataLinksTrace(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	job := &rivertype.JobRow{
 		Kind: "reindex", Attempt: 1, MaxAttempts: 3,

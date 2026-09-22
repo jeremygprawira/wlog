@@ -80,7 +80,7 @@ func TestSqs_C4_ThirdReceiveRecordsDeliveryCount(t *testing.T) {
 
 // TestSqs_C1_ReceiveAsksForAttributes proves that every receive asks for the receive count and
 // the send time, so the event can carry them.
-func TestSqs_C1_ReceiveAsksForAttributes(t *testing.T) {
+func TestSqs_ReceiveAsksForAttributes(t *testing.T) {
 	client := &fakeSQSClient{readErr: io.EOF}
 	log, _ := wlogtest.New(t)
 
@@ -114,7 +114,7 @@ func TestSqs_C1_ReceiveAsksForAttributes(t *testing.T) {
 
 // TestSqs_C1_FailedMessageIsNotDeleted proves that a failed handler leaves the message for its
 // visibility timeout, and the loop continues.
-func TestSqs_C1_FailedMessageIsNotDeleted(t *testing.T) {
+func TestSqs_FailedMessageIsNotDeleted(t *testing.T) {
 	client := &fakeSQSClient{
 		messages: []sqstypes.Message{message(1, time.Now())},
 		readErr:  io.EOF,

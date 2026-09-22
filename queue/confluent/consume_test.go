@@ -37,7 +37,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestConfluent_C1_HandlerErrorStopsTheLoop proves that the loop commits a message after the
 // handler returns nil, and stops on a handler error before the next message is committed.
-func TestConfluent_C1_HandlerErrorStopsTheLoop(t *testing.T) {
+func TestConfluent_HandlerErrorStopsTheLoop(t *testing.T) {
 	good := message("orders", 1, 7)
 	bad := message("orders", 1, 8)
 	c := &fakeConsumer{messages: []*kafka.Message{good, bad}, readErr: io.EOF}
@@ -60,7 +60,7 @@ func TestConfluent_C1_HandlerErrorStopsTheLoop(t *testing.T) {
 
 // TestConfluent_C1_MessageFields proves that one message fills the messaging group and the
 // trace carrier.
-func TestConfluent_C1_MessageFields(t *testing.T) {
+func TestConfluent_MessageFields(t *testing.T) {
 	msg := message("orders", 3, 41)
 	msg.Timestamp = time.Now().Add(-2 * time.Second)
 	msg.Headers = []kafka.Header{{
@@ -105,7 +105,7 @@ func (e errString) Error() string { return string(e) }
 
 // TestConfluent_C1_ConsumeReadEdges proves that the loop ignores a read timeout, ends on a
 // commit error, and records no destination for a message with no topic.
-func TestConfluent_C1_ConsumeReadEdges(t *testing.T) {
+func TestConfluent_ConsumeReadEdges(t *testing.T) {
 	succeed := func(context.Context, *kafka.Message) error { return nil }
 
 	t.Run("timeout then message", func(t *testing.T) {

@@ -37,7 +37,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestNats_C1_PublishCallRecord proves that one publish records one queue call and writes a
 // traceparent whose span id is the span id of that call.
-func TestNats_C1_PublishCallRecord(t *testing.T) {
+func TestNats_PublishCallRecord(t *testing.T) {
 	pub := &fakePublisher{}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)
@@ -66,7 +66,7 @@ func TestNats_C1_PublishCallRecord(t *testing.T) {
 
 // TestNats_C1_PublishError proves that a publish the connection refuses records the error and
 // hands it back.
-func TestNats_C1_PublishError(t *testing.T) {
+func TestNats_PublishError(t *testing.T) {
 	pub := &fakePublisher{err: errString("publish refused")}
 	log, rec := wlogtest.New(t)
 	ctx, end := tracedContext(t, log)

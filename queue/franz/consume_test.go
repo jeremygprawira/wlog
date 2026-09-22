@@ -33,7 +33,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestFranz_C1_RecordFields proves that one record fills the messaging group, the consumer
 // group, and the trace carrier.
-func TestFranz_C1_RecordFields(t *testing.T) {
+func TestFranz_RecordFields(t *testing.T) {
 	cl, err := kgo.NewClient(kgo.SeedBrokers("127.0.0.1:1"), kgo.ConsumerGroup("workers"))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)

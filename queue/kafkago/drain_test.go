@@ -38,7 +38,7 @@ func TestKafka_C1_DrainShipsEvents(t *testing.T) {
 
 // TestKafka_C1_FactoryReadsEnv proves that the setup factory names the two variables of the
 // Kafka drain, builds a drain when both are set, and reports an error when one is missing.
-func TestKafka_C1_FactoryReadsEnv(t *testing.T) {
+func TestKafka_FactoryReadsEnv(t *testing.T) {
 	factory := Factory()
 	if factory.Name != "kafka" {
 		t.Errorf("factory name = %q, want kafka", factory.Name)
@@ -69,7 +69,7 @@ func TestKafka_C1_FactoryReadsEnv(t *testing.T) {
 
 // TestKafka_C1_DrainBatch proves that a batch of three events becomes three Kafka records,
 // each one the canonical event JSON of its own event.
-func TestKafka_C1_DrainBatch(t *testing.T) {
+func TestKafka_DrainBatch(t *testing.T) {
 	broker := &fakeBroker{}
 	w := &kafka.Writer{
 		Addr:         kafka.TCP("broker:9092"),

@@ -63,7 +63,7 @@ func (f *callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call,
 // TestKafka_C1_ProducerCallRecord proves that one write records one queue call with the
 // topic as its target, and that each message carries a traceparent whose span id is the
 // span id of that call.
-func TestKafka_C1_ProducerCallRecord(t *testing.T) {
+func TestKafka_ProducerCallRecord(t *testing.T) {
 	broker := &fakeBroker{}
 	w := &kafka.Writer{
 		Addr:         kafka.TCP("broker:9092"),
@@ -123,7 +123,7 @@ func TestKafka_C1_ProducerCallRecord(t *testing.T) {
 
 // TestKafka_C1_AsyncEndsInCompletion proves that an async write ends its call when the
 // broker reports the batch, and not when WriteMessages returns.
-func TestKafka_C1_AsyncEndsInCompletion(t *testing.T) {
+func TestKafka_AsyncEndsInCompletion(t *testing.T) {
 	broker := &fakeBroker{hold: make(chan struct{})}
 	broker.failWith(errString("broker refused the batch"))
 	w := &kafka.Writer{
@@ -165,7 +165,7 @@ func TestKafka_C1_AsyncEndsInCompletion(t *testing.T) {
 // TestKafka_C1_CallEndWaitsForEveryBatch proves that a call ends after its last batch
 // reports, and that an error of any batch wins. kafka-go reports one Completion per partition
 // batch, so the first report must not decide the call.
-func TestKafka_C1_CallEndWaitsForEveryBatch(t *testing.T) {
+func TestKafka_CallEndWaitsForEveryBatch(t *testing.T) {
 	var results []wlog.CallResult
 	finished := &callEnd{end: func(result wlog.CallResult) { results = append(results, result) }}
 	finished.expect(3)

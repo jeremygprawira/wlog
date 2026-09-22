@@ -36,7 +36,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestCloudEvents_C1_UnitNamesTheEvent proves that Unit maps one CloudEvent onto the fields of
 // this module, so a receiver outside this module emits the same event.
-func TestCloudEvents_C1_UnitNamesTheEvent(t *testing.T) {
+func TestCloudEvents_UnitNamesTheEvent(t *testing.T) {
 	unit := Unit(newEvent())
 
 	if unit.Kind != work.KindMessage {
@@ -53,7 +53,7 @@ func TestCloudEvents_C1_UnitNamesTheEvent(t *testing.T) {
 
 // TestCloudEvents_C1_AckIsNotAFailure proves that an acknowledgement result records level
 // info and no error, because the SDK reports an acknowledgement as a non-nil result.
-func TestCloudEvents_C1_AckIsNotAFailure(t *testing.T) {
+func TestCloudEvents_AckIsNotAFailure(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	event := newEvent()
 
@@ -74,7 +74,7 @@ func TestCloudEvents_C1_AckIsNotAFailure(t *testing.T) {
 
 // TestCloudEvents_C1_ReceiveFields proves that the observability service fills the messaging
 // group and the cloudevents group from one received event.
-func TestCloudEvents_C1_ReceiveFields(t *testing.T) {
+func TestCloudEvents_ReceiveFields(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	event := newEvent()
 	event.SetExtension("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
@@ -117,7 +117,7 @@ func TestCloudEvents_C1_ReceiveFields(t *testing.T) {
 
 // TestCloudEvents_C1_RecoverPanic proves that the recover wrapper turns a panic into an error
 // with a stack, so the event of a panicking function still ends.
-func TestCloudEvents_C1_RecoverPanic(t *testing.T) {
+func TestCloudEvents_RecoverPanic(t *testing.T) {
 	wrapped := Recover(func(context.Context, cloudevents.Event) error {
 		panic("boom")
 	})

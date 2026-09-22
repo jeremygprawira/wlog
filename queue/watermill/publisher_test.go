@@ -39,7 +39,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 // TestWatermill_C1_PublishAfterEndCarriesTheTrace proves that a publish after the event ends
 // still writes the trace of the unit, and records no call. The router publishes produced
 // messages in that window.
-func TestWatermill_C1_PublishAfterEndCarriesTheTrace(t *testing.T) {
+func TestWatermill_PublishAfterEndCarriesTheTrace(t *testing.T) {
 	pub := &fakePublisher{}
 	decorated, err := PublisherDecorator()(pub)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestWatermill_C1_PublishAfterEndCarriesTheTrace(t *testing.T) {
 
 // TestWatermill_C1_PublisherCallRecord proves that one publish records one queue call and
 // writes a traceparent whose span id is the span id of that call.
-func TestWatermill_C1_PublisherCallRecord(t *testing.T) {
+func TestWatermill_PublisherCallRecord(t *testing.T) {
 	pub := &fakePublisher{}
 	decorated, err := PublisherDecorator()(pub)
 	if err != nil {

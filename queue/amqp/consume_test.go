@@ -33,7 +33,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestAmqp_C1_ConsumeAcksAfterSuccess proves that the loop acks a delivery after the handler
 // returns nil, and records the fields of the delivery.
-func TestAmqp_C1_ConsumeAcksAfterSuccess(t *testing.T) {
+func TestAmqp_ConsumeAcksAfterSuccess(t *testing.T) {
 	acknowledger := &fakeAcknowledger{}
 	delivery := amqp.Delivery{
 		Acknowledger: acknowledger,
@@ -85,7 +85,7 @@ func TestAmqp_C1_ConsumeAcksAfterSuccess(t *testing.T) {
 
 // TestAmqp_C1_ConsumeNacksFailedDelivery proves that a failed handler nacks the delivery, with a
 // requeue by default and without one when RequeueOn does not match.
-func TestAmqp_C1_ConsumeNacksFailedDelivery(t *testing.T) {
+func TestAmqp_ConsumeNacksFailedDelivery(t *testing.T) {
 	failure := errString("handler failed")
 
 	t.Run("requeue by default", func(t *testing.T) {

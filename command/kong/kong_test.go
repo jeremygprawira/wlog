@@ -55,7 +55,7 @@ func TestKong_C9_ParseErrorRecordsEighty(t *testing.T) {
 
 // TestKong_C1_SubcommandRecordsPathAndFlags proves that a subcommand records its full path, the
 // names of the flags that were set, and the event context that BindTo gives the command.
-func TestKong_C1_SubcommandRecordsPathAndFlags(t *testing.T) {
+func TestKong_SubcommandRecordsPathAndFlags(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	cli := &testCLI{}
 
@@ -76,7 +76,7 @@ func TestKong_C1_SubcommandRecordsPathAndFlags(t *testing.T) {
 }
 
 // TestKong_C1_FlushesBeforeReturn proves that the event reaches a pipeline before Run returns.
-func TestKong_C1_FlushesBeforeReturn(t *testing.T) {
+func TestKong_FlushesBeforeReturn(t *testing.T) {
 	sender := &fakeSender{}
 	log := wlog.New(
 		wlog.WithSilent(),
@@ -94,7 +94,7 @@ func TestKong_C1_FlushesBeforeReturn(t *testing.T) {
 // TestKong_C1_HelpEndsTheEvent proves that --help ends the event and flushes it before kong
 // exits, because os.Exit runs no defer. The help flag exits inside Parse, so the check runs in
 // a child process.
-func TestKong_C1_HelpEndsTheEvent(t *testing.T) {
+func TestKong_HelpEndsTheEvent(t *testing.T) {
 	if path := os.Getenv("WLOG_KONG_HELP_FILE"); path != "" {
 		log := wlog.New(setup.FromEnv())
 		Run(context.Background(), log, &testCLI{}, []string{"--help"}, kong.Name("app"))
@@ -102,7 +102,7 @@ func TestKong_C1_HelpEndsTheEvent(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "events.jsonl")
-	child := exec.Command(os.Args[0], "-test.run=TestKong_C1_HelpEndsTheEvent")
+	child := exec.Command(os.Args[0], "-test.run=TestKong_HelpEndsTheEvent")
 	child.Env = append(os.Environ(),
 		"WLOG_KONG_HELP_FILE="+path,
 		"WLOG_DRAINS=file",

@@ -38,7 +38,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestFranz_C1_ProduceHooksRecordCall proves that the produce hooks record one queue call
 // and add the trace headers of the record context.
-func TestFranz_C1_ProduceHooksRecordCall(t *testing.T) {
+func TestFranz_ProduceHooksRecordCall(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx := log.WithContext(context.Background())
 	ctx = propagate.Extract(ctx, propagate.HeaderCarrier{
@@ -71,7 +71,7 @@ func TestFranz_C1_ProduceHooksRecordCall(t *testing.T) {
 
 // TestFranz_C1_FetchHookSetsTrace proves that the fetch hook reads the trace headers of a
 // record into its context, so the event of Record joins the trace of the producer.
-func TestFranz_C1_FetchHookSetsTrace(t *testing.T) {
+func TestFranz_FetchHookSetsTrace(t *testing.T) {
 	r := &kgo.Record{
 		Topic: "orders",
 		Headers: []kgo.RecordHeader{{
@@ -93,7 +93,7 @@ func TestFranz_C1_FetchHookSetsTrace(t *testing.T) {
 
 // TestFranz_C1_HooksImplementTheInterfaces proves at build time that one Hooks value covers
 // both sides of a client.
-func TestFranz_C1_HooksImplementTheInterfaces(t *testing.T) {
+func TestFranz_HooksImplementTheInterfaces(t *testing.T) {
 	hook := Hooks()
 	for name, ok := range map[string]bool{
 		"produce buffered":   implements[kgo.HookProduceRecordBuffered](hook),

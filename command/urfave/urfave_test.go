@@ -76,7 +76,7 @@ func TestUrfave_C9_UsageFaultRecordsTwo(t *testing.T) {
 
 // TestUrfave_C1_SubcommandRecordsItsPathAndFlags proves that a subcommand records its full
 // path, and the names of the flags that were set.
-func TestUrfave_C1_SubcommandRecordsItsPathAndFlags(t *testing.T) {
+func TestUrfave_SubcommandRecordsItsPathAndFlags(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	cmd := newCommand()
 	cmd.Commands = []*cli.Command{{
@@ -103,7 +103,7 @@ func TestUrfave_C1_SubcommandRecordsItsPathAndFlags(t *testing.T) {
 
 // TestUrfave_C1_FlushesBeforeReturn proves that the event reaches a pipeline before Run
 // returns.
-func TestUrfave_C1_FlushesBeforeReturn(t *testing.T) {
+func TestUrfave_FlushesBeforeReturn(t *testing.T) {
 	sender := &fakeSender{}
 	log := wlog.New(
 		wlog.WithSilent(),
@@ -121,7 +121,7 @@ func TestUrfave_C1_FlushesBeforeReturn(t *testing.T) {
 
 // TestUrfave_C1_PanicRecordsStackAndPanics proves that a panicking command records one error
 // event with a stack, and the panic continues.
-func TestUrfave_C1_PanicRecordsStackAndPanics(t *testing.T) {
+func TestUrfave_PanicRecordsStackAndPanics(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	cmd := newCommand()
 	cmd.Action = func(context.Context, *cli.Command) error { panic("boom") }

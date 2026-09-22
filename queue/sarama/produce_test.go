@@ -44,7 +44,7 @@ func (f *callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call,
 
 // TestSarama_C1_SyncProducerCallRecord proves that one send records one queue call, adds the
 // trace headers of the event, and leaves the headers of the caller alone.
-func TestSarama_C1_SyncProducerCallRecord(t *testing.T) {
+func TestSarama_SyncProducerCallRecord(t *testing.T) {
 	fake := &fakeSyncProducer{}
 	p := SyncProducer(fake)
 	log, rec := wlogtest.New(t)
@@ -90,7 +90,7 @@ func TestSarama_C1_SyncProducerCallRecord(t *testing.T) {
 
 // TestSarama_C1_AsyncProducerCallRecord proves that an async send records one call that ends
 // when the producer reports the message on Successes.
-func TestSarama_C1_AsyncProducerCallRecord(t *testing.T) {
+func TestSarama_AsyncProducerCallRecord(t *testing.T) {
 	fake := newFakeAsyncProducer()
 	cfg := sarama.NewConfig()
 	cfg.Producer.Return.Successes = true

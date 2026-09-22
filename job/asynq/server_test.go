@@ -16,7 +16,7 @@ import (
 
 // TestAsynq_C1_ServerRecordsTask proves that a server which processes one task records its
 // id, its queue, its attempt, its max attempts, and the trace of the enqueue headers.
-func TestAsynq_C1_ServerRecordsTask(t *testing.T) {
+func TestAsynq_ServerRecordsTask(t *testing.T) {
 	mr := miniredis.RunT(t)
 	redis := asynq.RedisClientOpt{Addr: mr.Addr()}
 	log, rec := wlogtest.New(t)
@@ -89,7 +89,7 @@ func waitForEvent(t *testing.T, rec *wlogtest.Recorder, kind string) map[string]
 
 // TestAsynq_C1_ExhaustedRetryRecordsDiscard proves that a task on its last attempt records
 // result discard, which is the state asynq keeps for it.
-func TestAsynq_C1_ExhaustedRetryRecordsDiscard(t *testing.T) {
+func TestAsynq_ExhaustedRetryRecordsDiscard(t *testing.T) {
 	mr := miniredis.RunT(t)
 	redis := asynq.RedisClientOpt{Addr: mr.Addr()}
 	log, rec := wlogtest.New(t)

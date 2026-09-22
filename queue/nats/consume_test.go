@@ -34,7 +34,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestNats_C1_CoreHandlerFields proves that a core message fills the messaging group from the
 // subject and the subscription.
-func TestNats_C1_CoreHandlerFields(t *testing.T) {
+func TestNats_CoreHandlerFields(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	msg := &nats.Msg{
 		Subject: "orders.created",
@@ -74,7 +74,7 @@ func TestNats_C1_CoreHandlerFields(t *testing.T) {
 
 // TestNats_C1_JetStreamAckRule proves that the JetStream handler acks on success, naks on
 // error, and terms an error that TermOn names.
-func TestNats_C1_JetStreamAckRule(t *testing.T) {
+func TestNats_JetStreamAckRule(t *testing.T) {
 	refusal := errString("no retry can fix this")
 
 	cases := []struct {
@@ -101,7 +101,7 @@ func TestNats_C1_JetStreamAckRule(t *testing.T) {
 
 // TestNats_C1_JetStreamFields proves that the metadata fills the delivery count, the stream
 // fields, and the lag.
-func TestNats_C1_JetStreamFields(t *testing.T) {
+func TestNats_JetStreamFields(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	msg := &fakeJetStreamMsg{
 		subject: "orders.created",

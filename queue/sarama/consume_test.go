@@ -34,7 +34,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 // TestSarama_C1_HandlerErrorStopsTheClaim proves that the claim marks a message after the
 // handler returns nil, and that a handler error stops the claim before the next message is
 // marked. The group delivers the failed message again after a rebalance.
-func TestSarama_C1_HandlerErrorStopsTheClaim(t *testing.T) {
+func TestSarama_HandlerErrorStopsTheClaim(t *testing.T) {
 	claim := &fakeClaim{
 		topic: "orders", partition: 1, highWaterMark: 10,
 		messages: []*sarama.ConsumerMessage{
@@ -66,7 +66,7 @@ func TestSarama_C1_HandlerErrorStopsTheClaim(t *testing.T) {
 
 // TestSarama_C1_MessageFields proves that one message fills the messaging group and the
 // kafka member fields.
-func TestSarama_C1_MessageFields(t *testing.T) {
+func TestSarama_MessageFields(t *testing.T) {
 	msg := &sarama.ConsumerMessage{
 		Topic: "orders", Partition: 2, Offset: 41, Timestamp: time.Now().Add(-2 * time.Second),
 		Headers: []*sarama.RecordHeader{{

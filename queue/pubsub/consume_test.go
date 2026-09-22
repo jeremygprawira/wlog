@@ -33,7 +33,7 @@ func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(contex
 
 // TestPubsub_C1_ReceiveFields proves that one message fills the messaging group, the delivery
 // count, the lag, and the trace carrier, including the googclient prefix of the client.
-func TestPubsub_C1_ReceiveFields(t *testing.T) {
+func TestPubsub_ReceiveFields(t *testing.T) {
 	attempt := 3
 	msg := &pubsub.Message{
 		ID:              "msg-1",
@@ -78,7 +78,7 @@ func TestPubsub_C1_ReceiveFields(t *testing.T) {
 // TestPubsub_C1_FailedHandlerRecordsError proves that a failed handler records an error event and
 // leaves the message to its acknowledgement rule. The ack itself needs a live service, which is an
 // integration step.
-func TestPubsub_C1_FailedHandlerRecordsError(t *testing.T) {
+func TestPubsub_FailedHandlerRecordsError(t *testing.T) {
 	sub := &fakeSubscriber{id: "orders-sub", messages: []*pubsub.Message{{ID: "msg-1"}}}
 	log, rec := wlogtest.New(t)
 

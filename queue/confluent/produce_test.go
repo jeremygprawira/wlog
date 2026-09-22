@@ -42,7 +42,7 @@ func (callsFactory) Call(ctx context.Context, _ *wlog.Logger, call wlog.Call, re
 
 // TestConfluent_C1_ProduceCallRecord proves that one produce records one queue call, adds the
 // trace headers of the event, and leaves the header slice of the caller alone.
-func TestConfluent_C1_ProduceCallRecord(t *testing.T) {
+func TestConfluent_ProduceCallRecord(t *testing.T) {
 	sender := &fakeSender{}
 	log, rec := wlogtest.New(t)
 
@@ -85,7 +85,7 @@ func TestConfluent_C1_ProduceCallRecord(t *testing.T) {
 
 // TestConfluent_C1_ProduceDeliveryError proves that a report which carries an error ends the
 // call with that error and hands the error back.
-func TestConfluent_C1_ProduceDeliveryError(t *testing.T) {
+func TestConfluent_ProduceDeliveryError(t *testing.T) {
 	sender := &fakeSender{reportErr: errString("delivery failed")}
 	log, rec := wlogtest.New(t)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
@@ -130,7 +130,7 @@ func headerMap(msg *kafka.Message) map[string]string {
 
 // TestConfluent_C1_ProduceRefused proves that a sender which refuses the message ends the call
 // with that error, and that a delivery event of type kafka.Error does the same.
-func TestConfluent_C1_ProduceRefused(t *testing.T) {
+func TestConfluent_ProduceRefused(t *testing.T) {
 	t.Run("sender error", func(t *testing.T) {
 		sender := &fakeSender{sendErr: errString("produce refused")}
 		log, rec := wlogtest.New(t)
