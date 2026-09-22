@@ -25,13 +25,33 @@ func TestCloudEvents_C1_WorkConformance(t *testing.T) {
 	workconformance.Run(conformance.Tester{T: t}, workFactory{})
 }
 
-// workFactory runs one unit through the event path of this adapter. The suite supplies the unit,
-// because a CloudEvent carries no job, rpc, command, or function field.
+// workFactory drives the real receiver path, the observability hook and the recover wrapper,
+// with a built event.
 type workFactory struct{}
 
-// Process runs one unit of work and returns what the handler returned.
+// Declare names the one kind a CloudEvents receiver produces. CloudEvents carries no delivery
+// count.
+func (workFactory) Declare() workconformance.Declaration {
+	return workconformance.Declaration{Kinds: []work.Kind{work.KindMessage}, System: "cloudevents"}
+}
+
+// Process runs one unit of work through RecordCallingInvoker, with Recover around the handler,
+// which is the setup the package doc shows.
 func (workFactory) Process(log *wlog.Logger, unit work.Unit, handler func(context.Context) error) error {
-	return process(context.Background(), log, unit, handler)
+	destination, _ := unit.Fields["destination"].(string)
+	event := cloudevents.NewEvent()
+	event.SetID("evt-1")
+	event.SetSource("orders")
+	event.SetType("orders.created")
+	event.SetSubject(destination)
+	event.SetTime(unit.StartedAt)
+
+	ctx, end := Observability(log).RecordCallingInvoker(context.Background(), &event)
+	err := Recover(func(ctx context.Context, _ cloudevents.Event) error {
+		return handler(ctx)
+	})(ctx, event)
+	end(err)
+	return err
 }
 
 // TestCloudEvents_C1_UnitNamesTheEvent proves that Unit maps one CloudEvent onto the fields of
@@ -141,11 +161,4 @@ func newEvent() cloudevents.Event {
 	event.SetSubject("orders.created")
 	event.SetTime(time.Now().Add(-2 * time.Second))
 	return event
-}
-
-// process runs one unit of work through the event path with a recovered panic, so the
-// conformance suite continues after the panic scenario. The real entries record a panic and
-// raise it again, which is the rule of the track spec.
-func process(ctx context.Context, log *wlog.Logger, u work.Unit, handler func(context.Context) error) error {
-	return work.Run(ctx, log, u, handler, work.RecoverPanics())
 }
