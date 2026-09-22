@@ -141,6 +141,28 @@ func TestUrfave_C1_PanicRecordsStackAndPanics(t *testing.T) {
 	}
 }
 
+// TestUrfave_C9_FlushesBeforeExit proves that the exit path delivers the event before
+// cli.HandleExitCoder ends the process.
+func TestUrfave_C9_FlushesBeforeExit(t *testing.T) {
+	sender := &fakeSender{}
+	log := wlog.New(
+		wlog.WithSilent(),
+		wlog.WithService("urfave-test", "0.0.1", "prod"),
+		wlog.WithDrains(pipeline.Wrap(sender)),
+	)
+	cmd := newCommand()
+	cmd.Action = func(context.Context, *cli.Command) error { return cli.Exit("boom", 3) }
+	exited := 0
+	quietExit(t, &exited)
+
+	if code := Run(context.Background(), log, cmd, []string{"app"}); code != 3 {
+		t.Errorf("code = %d, want 3", code)
+	}
+	if count := sender.count(); count != 1 {
+		t.Errorf("delivered %d events, want 1 before the exit", count)
+	}
+}
+
 // newCommand returns a quiet root command that runs.
 func newCommand() *cli.Command {
 	return &cli.Command{

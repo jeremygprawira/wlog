@@ -17,7 +17,11 @@ import (
 //
 // Wrap names every job of the scheduler it wraps with one name and one schedule. Use Wrap for
 // a plain cron.Job, and Job for one function with a context and an error. Never combine the
-// two, because each one opens its own event. A nil Logger means wlog.Default.
+// two, because each one opens its own event.
+//
+// The flush point of a short-lived process is the context that Stop returns. A panic reaches
+// the caller before any flush, so a process that ends on a panic loses its pending events. A
+// nil Logger means wlog.Default.
 func Wrap(log *wlog.Logger, name, spec string) cron.JobWrapper {
 	return func(next cron.Job) cron.Job {
 		return cron.FuncJob(func() {

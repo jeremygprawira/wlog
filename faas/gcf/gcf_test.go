@@ -125,7 +125,9 @@ func TestGcf_C1_BothFlushBeforeReturn(t *testing.T) {
 }
 
 // TestGcf_C1_HTTPRecordsExecutionIDAndTrace proves that the framework dispatch gives the
-// event the execution id of the request and the trace of X-Cloud-Trace-Context.
+// event the execution id of the request and the trace of X-Cloud-Trace-Context. The framework
+// serves the function on a real listener and offers no stop, so this test leaves one loopback
+// server behind. The test process ends with it.
 func TestGcf_C1_HTTPRecordsExecutionIDAndTrace(t *testing.T) {
 	t.Setenv("FUNCTION_TARGET", "gcf-test")
 	log, rec := wlogtest.New(t)

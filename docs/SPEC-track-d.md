@@ -184,6 +184,10 @@ The code follows the tables above, with these differences. Each one is deliberat
 - `queue-sqs.SendMessage` records the queue call itself, and `client-aws` records the rpc
   call of the same send. Both stay, because a reader of the queue side and a reader of the
   transport side ask different questions.
+- `job-temporal` measures `lag_ms` from the scheduled time to the start of the handler, which
+  is `StartedTime` minus `ScheduledTime`.
+- `queue-pubsub` records the subscription id as `messaging.destination`, because the
+  subscription is the endpoint the receive loop reads.
 
 ## Open questions
 

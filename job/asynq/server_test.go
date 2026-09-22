@@ -87,6 +87,47 @@ func waitForEvent(t *testing.T, rec *wlogtest.Recorder, kind string) map[string]
 	return nil
 }
 
+// TestAsynq_C1_ExhaustedRetryRecordsDiscard proves that a task on its last attempt records
+// result discard, which is the state asynq keeps for it.
+func TestAsynq_C1_ExhaustedRetryRecordsDiscard(t *testing.T) {
+	mr := miniredis.RunT(t)
+	redis := asynq.RedisClientOpt{Addr: mr.Addr()}
+	log, rec := wlogtest.New(t)
+
+	client := asynq.NewClient(redis)
+	t.Cleanup(func() { _ = client.Close() })
+
+	handled := make(chan struct{})
+	mux := asynq.NewServeMux()
+	mux.Use(Middleware(log))
+	mux.HandleFunc("reindex", func(context.Context, *asynq.Task) error {
+		close(handled)
+		return errString("boom")
+	})
+	srv := asynq.NewServer(redis, asynq.Config{Concurrency: 1, Queues: map[string]int{"default": 1}})
+	if err := srv.Start(mux); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(srv.Shutdown)
+
+	ctx, end := tracedContext(t, log)
+	if _, err := Enqueue(ctx, client, "reindex", nil, asynq.Queue("default"), asynq.MaxRetry(0)); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	end()
+
+	select {
+	case <-handled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the server did not process the task")
+	}
+
+	got := waitForEvent(t, rec, "job")
+	if result := jobField(t, got, "result"); result != "discard" {
+		t.Errorf("job.result = %v, want discard on the last attempt", result)
+	}
+}
+
 // eventOfKind returns the event of one kind, and stops the test when the run recorded none.
 func eventOfKind(t *testing.T, rec *wlogtest.Recorder, kind string) map[string]any {
 	t.Helper()
