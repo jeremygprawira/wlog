@@ -16,7 +16,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/jeremygprawira/wlog"
-	"github.com/jeremygprawira/wlog/queue/kafkago"
+	wlogkafkago "github.com/jeremygprawira/wlog/queue/kafkago"
 )
 
 func main() {

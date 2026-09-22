@@ -13,7 +13,7 @@ import (
 	"github.com/segmentio/kafka-go"
 
 	"github.com/jeremygprawira/wlog/internal/conformance"
-	"github.com/jeremygprawira/wlog/queue/kafkago"
+	wlogkafkago "github.com/jeremygprawira/wlog/queue/kafkago"
 )
 
 // TestKafkaConsumer_GoldenEvent proves that one consumed message gives the event the recipe
