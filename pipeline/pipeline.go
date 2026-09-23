@@ -470,6 +470,15 @@ func (w *wrapped) closeSender(ctx context.Context) error {
 	return nil
 }
 
+// Setup gives the wrapped Sender the configured Logger when it wants one, so a Sender can
+// report its own faults through Logger.Report. A Sender without Setup is left alone.
+func (w *wrapped) Setup(l *wlog.Logger) error {
+	if s, ok := w.next.(interface{ Setup(*wlog.Logger) error }); ok {
+		return s.Setup(l)
+	}
+	return nil
+}
+
 // senderCloser is the optional Close a Sender may implement, so Wrap can release a file,
 // a connection, or a client pool after the last batch.
 type senderCloser interface {

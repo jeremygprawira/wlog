@@ -27,6 +27,7 @@ type Server struct {
 	mu       sync.Mutex
 	requests []Request
 	status   int
+	body     []byte
 	header   http.Header
 }
 
@@ -43,6 +44,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.requests = append(s.requests, Request{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Headers: r.Header.Clone(), Body: body})
 	status := s.status
+	reply := s.body
 	for k, vs := range s.header {
 		for _, v := range vs {
 			w.Header().Add(k, v)
@@ -51,6 +53,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	w.WriteHeader(status)
+	_, _ = w.Write(reply)
 }
 
 // SetStatus sets the status every subsequent request receives. Default 200.
@@ -58,6 +61,13 @@ func (s *Server) SetStatus(status int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.status = status
+}
+
+// SetBody sets the response body every subsequent request receives. Default empty.
+func (s *Server) SetBody(body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.body = []byte(body)
 }
 
 // SetHeader sets a response header every subsequent request receives (e.g. Retry-After).

@@ -19,9 +19,11 @@ import (
 	"github.com/jeremygprawira/wlog/drain/clickhouse"
 	"github.com/jeremygprawira/wlog/drain/datadog"
 	"github.com/jeremygprawira/wlog/drain/file"
+	"github.com/jeremygprawira/wlog/drain/honeycomb"
 	"github.com/jeremygprawira/wlog/drain/hyperdx"
 	"github.com/jeremygprawira/wlog/drain/loki"
 	"github.com/jeremygprawira/wlog/drain/memory"
+	"github.com/jeremygprawira/wlog/drain/newrelic"
 	"github.com/jeremygprawira/wlog/drain/otlp"
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/drain/sentry"
@@ -440,6 +442,40 @@ func builtins() []Factory {
 					opts = append(opts, webhook.WithSecret(secret))
 				}
 				return webhook.New(opts...)
+			},
+		},
+		{
+			Name: "honeycomb",
+			Vars: []Var{
+				required("HONEYCOMB_API_KEY"),
+				optional("HONEYCOMB_DATASET"),
+				optional("HONEYCOMB_API_URL", "HONEYCOMB_API_ENDPOINT"),
+			},
+			New: func(env Env) (wlog.Drain, error) {
+				key, _ := first(env, "HONEYCOMB_API_KEY")
+				opts := []honeycomb.Option{honeycomb.WithAPIKey(key)}
+				if dataset, ok := first(env, "HONEYCOMB_DATASET"); ok {
+					opts = append(opts, honeycomb.WithDataset(dataset))
+				}
+				if apiURL, ok := first(env, "HONEYCOMB_API_URL", "HONEYCOMB_API_ENDPOINT"); ok {
+					opts = append(opts, honeycomb.WithAPIURL(apiURL))
+				}
+				return honeycomb.New(opts...)
+			},
+		},
+		{
+			Name: "newrelic",
+			Vars: []Var{
+				required("NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY"),
+				optional("NEW_RELIC_REGION"),
+			},
+			New: func(env Env) (wlog.Drain, error) {
+				key, _ := first(env, "NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY")
+				opts := []newrelic.Option{newrelic.WithLicenseKey(key)}
+				if region, ok := first(env, "NEW_RELIC_REGION"); ok {
+					opts = append(opts, newrelic.WithRegion(region))
+				}
+				return newrelic.New(opts...)
 			},
 		},
 	}

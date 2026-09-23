@@ -3,6 +3,7 @@ package wlogotel_test
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -36,6 +37,20 @@ func findAttr(attrs []attribute.KeyValue, name string) (attribute.Value, bool) {
 		}
 	}
 	return attribute.Value{}, false
+}
+
+// attrText renders an attribute value as text, whatever its type.
+func attrText(value attribute.Value) string {
+	switch value.Type() {
+	case attribute.INT64:
+		return strconv.FormatInt(value.AsInt64(), 10)
+	case attribute.BOOL:
+		return strconv.FormatBool(value.AsBool())
+	case attribute.FLOAT64:
+		return strconv.FormatFloat(value.AsFloat64(), 'g', -1, 64)
+	default:
+		return value.AsString()
+	}
 }
 
 // TestOtel_TraceIDs proves the Starter copies the recording span's ids onto the event,
@@ -102,7 +117,7 @@ func TestOtel_SpanAttributes(t *testing.T) {
 			t.Errorf("span has no %s attribute", name)
 			continue
 		}
-		if got := value.Emit(); got != want {
+		if got := attrText(value); got != want {
 			t.Errorf("%s = %s, want %s", name, got, want)
 		}
 	}

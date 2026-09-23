@@ -1,0 +1,1 @@
+[{"logs":[{"timestamp":1790071200000,"message":"GET /orders","attributes":{"http.method":"GET","http.route":"/orders","http.status":200,"kind":"request","level":"info","operation":"GET /orders","outcome":"success","service.name":"checkout","span.id":"00f067aa0ba902b7","summary":"GET /orders","timestamp":"2026-09-22T10:00:00Z","trace.id":"4bf92f3577b34da6a3ce929d0e0e4736"}}]}]

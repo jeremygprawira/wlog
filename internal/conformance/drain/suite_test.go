@@ -17,9 +17,11 @@ import (
 	"github.com/jeremygprawira/wlog/drain/clickhouse"
 	"github.com/jeremygprawira/wlog/drain/datadog"
 	"github.com/jeremygprawira/wlog/drain/file"
+	"github.com/jeremygprawira/wlog/drain/honeycomb"
 	"github.com/jeremygprawira/wlog/drain/hyperdx"
 	"github.com/jeremygprawira/wlog/drain/loki"
 	"github.com/jeremygprawira/wlog/drain/memory"
+	"github.com/jeremygprawira/wlog/drain/newrelic"
 	"github.com/jeremygprawira/wlog/drain/otlp"
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/drain/sentry"
@@ -76,6 +78,10 @@ func everyDrain(t *testing.T) []drainconformance.Case {
 				hyperdx.WithService("checkout"),
 			)
 		}},
+		{Name: "honeycomb", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
+			srv.SetBody(`[{"status":202}]`)
+			return honeycomb.New(honeycomb.WithAPIKey("key"), honeycomb.WithAPIURL(srv.URL))
+		}},
 		{Name: "loki", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			return loki.New(loki.WithURL(srv.URL))
 		}},
@@ -94,6 +100,9 @@ func everyDrain(t *testing.T) []drainconformance.Case {
 			if _, ok := events[0]["duration_ms"].(float64); !ok {
 				t.Errorf("%s: duration_ms = %T, want float64", name, events[0]["duration_ms"])
 			}
+		}},
+		{Name: "newrelic", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
+			return newrelic.New(newrelic.WithLicenseKey("key"), newrelic.WithEndpoint(srv.URL))
 		}},
 		{Name: "otlp", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			return otlp.New(otlp.WithEndpoint(srv.URL))

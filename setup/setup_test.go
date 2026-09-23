@@ -242,6 +242,8 @@ func sampleValue(t *testing.T, name string) string {
 		return "authorization=Bearer token"
 	case name == "DD_SITE", name == "DATADOG_SITE":
 		return "datadoghq.com"
+	case name == "NEW_RELIC_REGION":
+		return "us"
 	case strings.Contains(name, "URL"), strings.Contains(name, "ENDPOINT"), strings.Contains(name, "HOST"):
 		return "http://example.invalid"
 	default:
