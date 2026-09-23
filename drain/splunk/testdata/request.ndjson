@@ -1,0 +1,1 @@
+{"time":1790071200.000,"host":"pod-1","source":"wlog","sourcetype":"_json","fields":{"env":"prod","kind":"request","level":"info","outcome":"success","service":"checkout"},"event":{"kind":"request","level":"info","outcome":"success","service":{"env":"prod","instance":"pod-1","name":"checkout"},"timestamp":"2026-09-22T10:00:00Z"}}

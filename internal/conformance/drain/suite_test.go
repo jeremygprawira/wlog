@@ -27,6 +27,8 @@ import (
 	"github.com/jeremygprawira/wlog/drain/otlp"
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/drain/sentry"
+	"github.com/jeremygprawira/wlog/drain/splunk"
+	"github.com/jeremygprawira/wlog/drain/victorialogs"
 	"github.com/jeremygprawira/wlog/drain/webhook"
 	"github.com/jeremygprawira/wlog/internal/conformance"
 	drainconformance "github.com/jeremygprawira/wlog/internal/conformance/drain"
@@ -124,6 +126,13 @@ func everyDrain(t *testing.T) []drainconformance.Case {
 		}},
 		{Name: "sentry", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			return sentry.New(sentry.WithDSN(dsnFor(srv)))
+		}},
+		{Name: "splunk", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
+			srv.SetBody(`{"text":"Success","code":0}`)
+			return splunk.New(splunk.WithURL(srv.URL), splunk.WithToken("token"))
+		}},
+		{Name: "victorialogs", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
+			return victorialogs.New(victorialogs.WithURL(srv.URL))
 		}},
 		{Name: "webhook", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			return webhook.New(webhook.WithURL(srv.URL))

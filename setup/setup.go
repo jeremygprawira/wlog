@@ -28,6 +28,8 @@ import (
 	"github.com/jeremygprawira/wlog/drain/otlp"
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/drain/sentry"
+	"github.com/jeremygprawira/wlog/drain/splunk"
+	"github.com/jeremygprawira/wlog/drain/victorialogs"
 	"github.com/jeremygprawira/wlog/drain/webhook"
 	"github.com/jeremygprawira/wlog/preset"
 )
@@ -502,6 +504,48 @@ func builtins() []Factory {
 					opts = append(opts, newrelic.WithRegion(region))
 				}
 				return newrelic.New(opts...)
+			},
+		},
+		{
+			Name: "splunk",
+			Vars: []Var{
+				required("SPLUNK_HEC_URL"),
+				required("SPLUNK_HEC_TOKEN"),
+				optional("SPLUNK_INDEX"),
+				optional("SPLUNK_SOURCETYPE"),
+			},
+			New: func(env Env) (wlog.Drain, error) {
+				url, _ := first(env, "SPLUNK_HEC_URL")
+				token, _ := first(env, "SPLUNK_HEC_TOKEN")
+				opts := []splunk.Option{splunk.WithURL(url), splunk.WithToken(token)}
+				if index, ok := first(env, "SPLUNK_INDEX"); ok {
+					opts = append(opts, splunk.WithIndex(index))
+				}
+				if sourcetype, ok := first(env, "SPLUNK_SOURCETYPE"); ok {
+					opts = append(opts, splunk.WithSourceType(sourcetype))
+				}
+				return splunk.New(opts...)
+			},
+		},
+		{
+			Name: "victorialogs",
+			Vars: []Var{
+				required("VICTORIALOGS_URL"),
+				optional("VICTORIALOGS_STREAM_FIELDS"),
+				optional("VICTORIALOGS_ACCOUNT_ID"),
+				optional("VICTORIALOGS_PROJECT_ID"),
+			},
+			New: func(env Env) (wlog.Drain, error) {
+				url, _ := first(env, "VICTORIALOGS_URL")
+				opts := []victorialogs.Option{victorialogs.WithURL(url)}
+				if fields, ok := first(env, "VICTORIALOGS_STREAM_FIELDS"); ok {
+					opts = append(opts, victorialogs.WithStreamFields(strings.Split(fields, ",")...))
+				}
+				if account, ok := first(env, "VICTORIALOGS_ACCOUNT_ID"); ok {
+					project, _ := first(env, "VICTORIALOGS_PROJECT_ID")
+					opts = append(opts, victorialogs.WithTenant(account, project))
+				}
+				return victorialogs.New(opts...)
 			},
 		},
 	}
