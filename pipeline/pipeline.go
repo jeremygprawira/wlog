@@ -264,7 +264,15 @@ func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 			return
 		}
 		var re RetryError
-		if errors.As(err, &re) && !re.Retryable() {
+		var pe *PartialError
+		if errors.As(err, &pe) {
+			// A partial batch names its own outcomes: the worker reports the refused
+			// events and tries again with the rest. An empty rest ends the batch.
+			batch = w.dropPartial(batch, pe)
+			if len(batch) == 0 {
+				return
+			}
+		} else if errors.As(err, &re) && !re.Retryable() {
 			break
 		}
 		if attempt < w.cfg.maxAttempts {
@@ -287,6 +295,46 @@ func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 	}
 	w.dropped.Add(int64(len(batch)))
 	w.reportDrop(batch, err)
+}
+
+// dropPartial handles a PartialError: it reports the events the backend refused for
+// good, counts them, and returns the events to send again.
+//
+// An index outside the batch names nothing, so the worker ignores it. An index in both
+// lists counts as dropped, because a permanent refusal wins over a retry. An event in
+// neither list reached the backend, so it counts as sent.
+func (w *wrapped) dropPartial(batch []map[string]any, pe *PartialError) []map[string]any {
+	dropped := make([]bool, len(batch))
+	for _, i := range pe.Dropped {
+		if i >= 0 && i < len(batch) {
+			dropped[i] = true
+		}
+	}
+	retry := make([]bool, len(batch))
+	for _, i := range pe.Retry {
+		if i >= 0 && i < len(batch) && !dropped[i] {
+			retry[i] = true
+		}
+	}
+
+	var refused []map[string]any
+	var again []map[string]any
+	for i := range batch {
+		switch {
+		case dropped[i]:
+			refused = append(refused, batch[i])
+		case retry[i]:
+			again = append(again, batch[i])
+		}
+	}
+	if len(refused) > 0 {
+		w.dropped.Add(int64(len(refused)))
+		w.reportDrop(refused, pe)
+	}
+	if accepted := len(batch) - len(refused) - len(again); accepted > 0 {
+		w.sent.Add(int64(accepted))
+	}
+	return again
 }
 
 // trySendBatch calls the next Sender under recover.
