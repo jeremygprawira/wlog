@@ -72,4 +72,5 @@ use (
 	./store/sql/drivertest
 	./tools
 	./trace/otel
+	./trace/otellog
 )
