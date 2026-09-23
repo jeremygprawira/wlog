@@ -1,0 +1,52 @@
+{
+  "index_patterns": [
+    "logs-wlog-*"
+  ],
+  "priority": 200,
+  "data_stream": {},
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "client.ip": {
+          "type": "ip"
+        },
+        "event.duration": {
+          "type": "long"
+        },
+        "event.id": {
+          "type": "keyword"
+        },
+        "http.response.status_code": {
+          "type": "long"
+        },
+        "log.level": {
+          "type": "keyword"
+        },
+        "service.environment": {
+          "type": "keyword"
+        },
+        "service.name": {
+          "type": "keyword"
+        },
+        "service.node.name": {
+          "type": "keyword"
+        },
+        "service.version": {
+          "type": "keyword"
+        },
+        "span.id": {
+          "type": "keyword"
+        },
+        "trace.id": {
+          "type": "keyword"
+        },
+        "wlog.fields": {
+          "type": "flattened"
+        }
+      }
+    }
+  }
+}

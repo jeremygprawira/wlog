@@ -411,6 +411,7 @@ var requiredDrains = []drainVars{
 	{"posthog.MustNew", []string{"POSTHOG_API_KEY"}},
 	{"betterstack.MustNew", []string{"BETTERSTACK_SOURCE_TOKEN"}},
 	{"hyperdx.MustNew", []string{"HYPERDX_API_KEY"}},
+	{"elastic.MustNew", []string{"ELASTICSEARCH_URL"}},
 }
 
 // readSources concatenates every Go file in dir.

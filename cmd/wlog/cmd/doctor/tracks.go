@@ -45,6 +45,7 @@ var adapterSetups = map[string]string{
 	"github.com/jeremygprawira/wlog/log/logrus":            "wloglogrus.Install(logger)",
 	"github.com/jeremygprawira/wlog/log/hclog":             "wlog.WithPlugins(wloghclog.Plugin(base))",
 	"github.com/jeremygprawira/wlog/log/std":               "wlogstdlog.Logger(ctx, prefix, flags)",
+	"github.com/jeremygprawira/wlog/drain/elastic":         "PUT _index_template/logs-wlog with elastic.Template(elastic.Elasticsearch)",
 }
 
 // adapterChecks returns one check per installed adapter, with its setup line.

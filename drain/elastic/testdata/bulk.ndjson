@@ -1,0 +1,2 @@
+{"create":{}}
+{"@timestamp":"2026-09-22T10:00:00Z","ecs.version":"9.5.0","event":{"action":"GET /orders","duration":42000000,"id":"018f4b3c-7c00-7a00-8000-000000000000","outcome":"success"},"http":{"request":{"method":"GET"},"response":{"status_code":200}},"log.level":"info","message":"GET /orders","service":{"name":"checkout"},"span":{"id":"00f067aa0ba902b7"},"trace":{"id":"4bf92f3577b34da6a3ce929d0e0e4736"}}

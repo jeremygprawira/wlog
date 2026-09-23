@@ -3,6 +3,7 @@
 package drainconformance_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/betterstack"
 	"github.com/jeremygprawira/wlog/drain/clickhouse"
 	"github.com/jeremygprawira/wlog/drain/datadog"
+	"github.com/jeremygprawira/wlog/drain/elastic"
 	"github.com/jeremygprawira/wlog/drain/file"
 	"github.com/jeremygprawira/wlog/drain/honeycomb"
 	"github.com/jeremygprawira/wlog/drain/hyperdx"
@@ -64,6 +66,16 @@ func everyDrain(t *testing.T) []drainconformance.Case {
 		}},
 		{Name: "datadog", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			return datadog.New(datadog.WithURL(srv.URL), datadog.WithAPIKey("key"))
+		}},
+		{Name: "elastic", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
+			srv.SetBody(`{"errors":false,"items":[{"create":{"status":201}}]}`)
+			return elastic.New(elastic.WithURL(srv.URL))
+		}, Check: func(t conformance.TB, name string, body []byte) {
+			for _, key := range []string{"@timestamp", "ecs.version", `"event":{`, `"duration":`, `"fields":`} {
+				if !bytes.Contains(body, []byte(key)) {
+					t.Errorf("%s: the body carries no %s, so the drain lost the ECS shape", name, key)
+				}
+			}
 		}},
 		{Name: "file", Build: func(*httpfake.Server) (wlog.Drain, error) {
 			return file.New(file.WithPath(path))

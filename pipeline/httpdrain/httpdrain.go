@@ -143,7 +143,9 @@ type StatusError struct {
 }
 
 func newStatusError(resp *http.Response) *StatusError {
-	retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+	retryable := resp.StatusCode == http.StatusRequestTimeout ||
+		resp.StatusCode == http.StatusTooManyRequests ||
+		resp.StatusCode >= 500
 	return &StatusError{
 		Status:     resp.StatusCode,
 		retryable:  retryable,
@@ -155,7 +157,7 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("httpdrain: unexpected status %d", e.Status)
 }
 
-// Retryable reports whether the error is worth retrying: 429 and 5xx are, 4xx
+// Retryable reports whether the error is worth retrying: 408, 429, and 5xx are, 4xx
 // otherwise is not (the request itself was rejected, so retrying it verbatim would
 // just fail again).
 func (e *StatusError) Retryable() bool { return e.retryable }

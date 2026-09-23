@@ -18,6 +18,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/betterstack"
 	"github.com/jeremygprawira/wlog/drain/clickhouse"
 	"github.com/jeremygprawira/wlog/drain/datadog"
+	"github.com/jeremygprawira/wlog/drain/elastic"
 	"github.com/jeremygprawira/wlog/drain/file"
 	"github.com/jeremygprawira/wlog/drain/honeycomb"
 	"github.com/jeremygprawira/wlog/drain/hyperdx"
@@ -442,6 +443,31 @@ func builtins() []Factory {
 					opts = append(opts, webhook.WithSecret(secret))
 				}
 				return webhook.New(opts...)
+			},
+		},
+		{
+			Name: "elastic",
+			Vars: []Var{
+				required("ELASTICSEARCH_URL", "OPENSEARCH_URL"),
+				{Name: "ELASTICSEARCH_API_KEY", Secret: true},
+				{Name: "ELASTICSEARCH_USERNAME"},
+				{Name: "ELASTICSEARCH_PASSWORD", Secret: true},
+				optional("ELASTICSEARCH_INDEX"),
+			},
+			New: func(env Env) (wlog.Drain, error) {
+				url, _ := first(env, "ELASTICSEARCH_URL", "OPENSEARCH_URL")
+				opts := []elastic.Option{elastic.WithURL(url)}
+				if key, ok := first(env, "ELASTICSEARCH_API_KEY"); ok {
+					opts = append(opts, elastic.WithAPIKey(key))
+				}
+				if user, ok := first(env, "ELASTICSEARCH_USERNAME"); ok {
+					password, _ := first(env, "ELASTICSEARCH_PASSWORD")
+					opts = append(opts, elastic.WithBasicAuth(user, password))
+				}
+				if index, ok := first(env, "ELASTICSEARCH_INDEX"); ok {
+					opts = append(opts, elastic.WithIndex(index))
+				}
+				return elastic.New(opts...)
 			},
 		},
 		{

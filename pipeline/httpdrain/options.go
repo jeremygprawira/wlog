@@ -1,6 +1,7 @@
 package httpdrain
 
 import (
+	"encoding/base64"
 	"net/http"
 	"time"
 )
@@ -39,6 +40,13 @@ func WithTimeout(d time.Duration) Option {
 // WithHeader sets one extra header on every request (e.g. an API key).
 func WithHeader(key, value string) Option {
 	return func(c *Client) { c.headers[key] = value }
+}
+
+// WithBasicAuth sets the Authorization header with HTTP basic auth.
+func WithBasicAuth(user, password string) Option {
+	return func(c *Client) {
+		c.headers["Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
+	}
 }
 
 // WithHeaderFunc sets a function that computes extra headers from the request body,
