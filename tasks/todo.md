@@ -205,7 +205,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-E-1 pipeline.PartialError
 - [x] 14-E-2 trace-otel spans and metrics
 - [x] 14-E-3 trace-otellog
-- [ ] 14-E-4 metrics-prometheus
+- [x] 14-E-4 metrics-prometheus
 - [ ] 14-E-5 drain-honeycomb and drain-newrelic
 - [ ] 14-E-6 drain-elastic
 - [ ] 14-E-7 drain-splunk and drain-victorialogs

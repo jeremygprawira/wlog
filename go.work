@@ -73,4 +73,5 @@ use (
 	./tools
 	./trace/otel
 	./trace/otellog
+	./metrics/prometheus
 )

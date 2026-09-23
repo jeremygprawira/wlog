@@ -1,0 +1,14 @@
+# HELP wlog_duration_seconds Duration of one wlog unit of work, in seconds.
+# TYPE wlog_duration_seconds histogram
+wlog_duration_seconds_bucket{kind="job",operation="cleanup",outcome="success",status="",le="0.5"} 0
+wlog_duration_seconds_bucket{kind="job",operation="cleanup",outcome="success",status="",le="+Inf"} 1
+wlog_duration_seconds_sum{kind="job",operation="cleanup",outcome="success",status=""} 1
+wlog_duration_seconds_count{kind="job",operation="cleanup",outcome="success",status=""} 1
+wlog_duration_seconds_bucket{kind="job",operation="import",outcome="error",status="",le="0.5"} 0
+wlog_duration_seconds_bucket{kind="job",operation="import",outcome="error",status="",le="+Inf"} 1
+wlog_duration_seconds_sum{kind="job",operation="import",outcome="error",status=""} 2
+wlog_duration_seconds_count{kind="job",operation="import",outcome="error",status=""} 1
+wlog_duration_seconds_bucket{kind="request",operation="GET /orders",outcome="error",status="502",le="0.5"} 1
+wlog_duration_seconds_bucket{kind="request",operation="GET /orders",outcome="error",status="502",le="+Inf"} 1
+wlog_duration_seconds_sum{kind="request",operation="GET /orders",outcome="error",status="502"} 0.25
+wlog_duration_seconds_count{kind="request",operation="GET /orders",outcome="error",status="502"} 1
