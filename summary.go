@@ -62,6 +62,10 @@ func (v eventView) Get(path string) (any, bool) {
 // Kind returns the kind of the event.
 func (v eventView) Kind() string { return v.kind }
 
+// Fields returns the whole redacted event map, so a hook that needs every key can read
+// it. The map belongs to core, and the hook must not change it.
+func (v eventView) Fields() map[string]any { return v.fields }
+
 // Level returns the level of the event.
 func (v eventView) Level() Level { return v.level }
 

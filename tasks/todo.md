@@ -203,7 +203,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 ## Phase 14, v0.9: destinations, OpenTelemetry, and AI
 
 - [x] 14-E-1 pipeline.PartialError
-- [ ] 14-E-2 trace-otel spans and metrics
+- [x] 14-E-2 trace-otel spans and metrics
 - [ ] 14-E-3 trace-otellog
 - [ ] 14-E-4 metrics-prometheus
 - [ ] 14-E-5 drain-honeycomb and drain-newrelic

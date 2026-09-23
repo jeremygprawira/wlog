@@ -89,6 +89,7 @@ func Inspect(dir string) []Check {
 		checkMiddleware(pkgs, points, loaded),
 		checkLoggerPerRequest(pkgs, points, loaded),
 		checkGlobalLogger(pkgs, points, loaded),
+		checkOTelOrder(dir),
 		checkDrainEnv(dir),
 		checkRedactor(dir),
 		checkScore(points, pkgs, loaded),
