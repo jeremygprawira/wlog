@@ -55,20 +55,33 @@ func New(url string, opts ...Option) *Client {
 	return c
 }
 
-// Post sends body as one request. A 2xx response returns nil; anything else returns
-// a *StatusError classifying whether it is worth retrying and, for a 429/503 with a
-// Retry-After header, how long to wait.
+// maxResponseBytes caps a response body that PostFor reads, so a backend that streams
+// an endless answer cannot grow memory without bound.
+const maxResponseBytes = 4 << 20
+
+// Post sends body as one request and discards the response body. A 2xx response returns
+// nil; anything else returns a *StatusError classifying whether it is worth retrying and,
+// for a 429/503 with a Retry-After header, how long to wait.
 func (c *Client) Post(ctx context.Context, body []byte, contentType string) error {
+	_, err := c.PostFor(ctx, body, contentType)
+	return err
+}
+
+// PostFor sends body as one request and returns the response body, for a backend that
+// reports one result per event. A 2xx response returns the body and a nil error;
+// anything else returns a *StatusError, and the body stays unread, because an error must
+// never carry a response body. The body is capped at maxResponseBytes.
+func (c *Client) PostFor(ctx context.Context, body []byte, contentType string) ([]byte, error) {
 	payload := body
 	encoding := ""
 	if c.gzip {
 		var buf bytes.Buffer
 		zw := gzip.NewWriter(&buf)
 		if _, err := zw.Write(body); err != nil {
-			return fmt.Errorf("httpdrain: gzip: %w", err)
+			return nil, fmt.Errorf("httpdrain: gzip: %w", err)
 		}
 		if err := zw.Close(); err != nil {
-			return fmt.Errorf("httpdrain: gzip: %w", err)
+			return nil, fmt.Errorf("httpdrain: gzip: %w", err)
 		}
 		payload = buf.Bytes()
 		encoding = "gzip"
@@ -76,7 +89,7 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("httpdrain: %w", c.scrubError(err))
+		return nil, fmt.Errorf("httpdrain: %w", c.scrubError(err))
 	}
 	req.Header.Set("Content-Type", contentType)
 	if encoding != "" {
@@ -107,15 +120,19 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("httpdrain: %w", c.scrubError(err))
+		return nil, fmt.Errorf("httpdrain: %w", c.scrubError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return nil
+		answer, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		if err != nil {
+			return nil, fmt.Errorf("httpdrain: read response: %w", err)
+		}
+		return answer, nil
 	}
-	return newStatusError(resp)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil, newStatusError(resp)
 }
 
 // StatusError is returned by Post for any non-2xx response.

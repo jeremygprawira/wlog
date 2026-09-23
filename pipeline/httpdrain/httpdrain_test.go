@@ -48,6 +48,24 @@ func TestHTTPDrain_Post_Success(t *testing.T) {
 	}
 }
 
+// TestHTTPDrain_PostFor_ReturnsBody proves PostFor hands the response body back, so a
+// drain that reads one result per event can map it.
+func TestHTTPDrain_PostFor_ReturnsBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"status":202}]`))
+	}))
+	defer srv.Close()
+
+	client := httpdrain.New(srv.URL)
+	body, err := client.PostFor(context.Background(), []byte(`{}`), "application/json")
+	if err != nil {
+		t.Fatalf("PostFor: %v", err)
+	}
+	if string(body) != `[{"status":202}]` {
+		t.Errorf("body = %q, want the response body", body)
+	}
+}
+
 func TestHTTPDrain_CustomHeaders(t *testing.T) {
 	srv := httpfake.New()
 	defer srv.Close()
