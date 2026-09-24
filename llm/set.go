@@ -26,6 +26,11 @@ func Set(ctx context.Context, r Record) {
 // Add is not safe to call concurrently on one event, because it reads and writes the
 // group. A request's model calls are sequential in practice.
 func Add(ctx context.Context, r Record) {
+	// The decode speed follows from the output count and the call duration, so a caller
+	// does not compute it.
+	if r.OutputTokensPerSecond == 0 && r.OutputTokens > 0 && r.Duration > 0 {
+		r.OutputTokensPerSecond = float64(r.OutputTokens) / r.Duration.Seconds()
+	}
 	current, _ := wlog.Field(ctx, group)
 	existing, _ := current.(map[string]any)
 
@@ -40,6 +45,12 @@ func Add(ctx context.Context, r Record) {
 	}
 	if written := intOf(existing["cache_write_input_tokens"]) + r.CacheWriteInputTokens; written > 0 {
 		fields["cache_write_input_tokens"] = written
+	}
+	if written := intOf(existing["cache_write_1h_input_tokens"]) + r.CacheWrite1hInputTokens; written > 0 {
+		fields["cache_write_1h_input_tokens"] = written
+	}
+	if steps := intOf(existing["steps"]) + r.Steps; steps > 0 {
+		fields["steps"] = steps
 	}
 	if reasoning := intOf(existing["reasoning_tokens"]) + r.ReasoningTokens; reasoning > 0 {
 		fields["reasoning_tokens"] = reasoning
@@ -114,6 +125,9 @@ func fieldsFor(r Record) map[string]any {
 	if r.CacheWriteInputTokens > 0 {
 		fields["cache_write_input_tokens"] = r.CacheWriteInputTokens
 	}
+	if r.CacheWrite1hInputTokens > 0 {
+		fields["cache_write_1h_input_tokens"] = r.CacheWrite1hInputTokens
+	}
 	if r.ReasoningTokens > 0 {
 		fields["reasoning_tokens"] = r.ReasoningTokens
 	}
@@ -132,6 +146,12 @@ func fieldsFor(r Record) map[string]any {
 	}
 	if r.Streamed {
 		fields["streamed"] = true
+	}
+	if r.Steps > 0 {
+		fields["steps"] = r.Steps
+	}
+	if r.OutputTokensPerSecond > 0 {
+		fields["output_tokens_per_second"] = r.OutputTokensPerSecond
 	}
 	if r.FinishReason != "" {
 		// finish_reasons is an array, because a request may finish more than one way.

@@ -29,8 +29,11 @@ type Record struct {
 	// lower cache-read rate.
 	CachedInputTokens int
 	// CacheWriteInputTokens is the part of the input written to a prompt cache, billed above
-	// the plain input rate.
+	// the plain input rate. Anthropic bills this at the five minute cache rate.
 	CacheWriteInputTokens int
+	// CacheWrite1hInputTokens is the part of the input written to a one hour prompt cache,
+	// which Anthropic bills at twice the input rate.
+	CacheWrite1hInputTokens int
 
 	OutputTokens    int
 	ReasoningTokens int // a subset of OutputTokens
@@ -40,6 +43,12 @@ type Record struct {
 	TimeToFirstToken time.Duration // stream only, zero for a whole-response call
 	Duration         time.Duration
 	Streamed         bool
+
+	// OutputTokensPerSecond is the decode speed. Add sets it from OutputTokens and Duration
+	// when the caller leaves it zero.
+	OutputTokensPerSecond float64
+	// Steps is the number of agent or chain steps, when the framework reports them.
+	Steps int
 
 	FinishReason string // "stop", "length", "tool_calls", "content_filter", or any string
 	Cost         *Cost  // nil until Price fills it
@@ -61,8 +70,11 @@ type Cost struct {
 	InputMicros      int64
 	CacheReadMicros  int64
 	CacheWriteMicros int64
-	OutputMicros     int64
-	TotalMicros      int64
+	// CacheWrite1hMicros prices the one hour cache writes, which cost more than the five
+	// minute writes.
+	CacheWrite1hMicros int64
+	OutputMicros       int64
+	TotalMicros        int64
 }
 
 // USD returns the total as dollars.

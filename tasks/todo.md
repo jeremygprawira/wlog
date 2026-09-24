@@ -211,7 +211,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-E-7 drain-splunk and drain-victorialogs
 - [x] 14-E-8 drain-syslog
 - [x] 14-E-9 drain-cloudwatch
-- [ ] 14-G-1 llm additions
+- [x] 14-G-1 llm additions
 - [ ] 14-G-2 ai-anthropic and ai-openai
 - [ ] 14-G-3 ai-genai and ai-goopenai
 - [ ] 14-G-4 ai-langchaingo and ai-eino

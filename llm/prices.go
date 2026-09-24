@@ -11,8 +11,8 @@ package llm
 //
 //   - An Anthropic cache write is billed above the input rate, and the rate depends on the
 //     cache's lifetime: 1.25x the input rate for the 5 minute cache and 2x for the 1 hour
-//     cache. One field cannot hold both, so this table carries the 5 minute rate. A service
-//     that uses the 1 hour cache must price those writes itself.
+//     cache. CacheWritePerMillion carries the 5 minute rate and CacheWrite1hPerMillion the
+//     1 hour rate, so Cost prices each write at its own rate.
 //   - An embedding model has no output, so its output rate is zero and a record with no
 //     output tokens costs only its input.
 func DefaultPrices() *Prices {
@@ -30,19 +30,20 @@ func DefaultPrices() *Prices {
 		"text-embedding-3-small": {InputPerMillion: 20_000},
 		"text-embedding-3-large": {InputPerMillion: 130_000},
 
-		// Anthropic, standard tier. The cache-write rate is the 5 minute cache.
-		"claude-fable-5-1":  {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CachedInputPerMillion: 250_000, OutputPerMillion: 50_000_000},
-		"claude-mythos-5-1": {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CachedInputPerMillion: 250_000, OutputPerMillion: 50_000_000},
-		"claude-fable-5":    {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CachedInputPerMillion: 1_000_000, OutputPerMillion: 50_000_000},
-		"claude-mythos-5":   {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CachedInputPerMillion: 1_000_000, OutputPerMillion: 50_000_000},
-		"claude-opus-5":     {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
-		"claude-opus-4-8":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
-		"claude-opus-4-7":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
-		"claude-opus-4-6":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
-		"claude-opus-4-5":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
-		"claude-sonnet-5":   {InputPerMillion: 2_000_000, CacheWritePerMillion: 2_500_000, CachedInputPerMillion: 200_000, OutputPerMillion: 10_000_000},
-		"claude-sonnet-4-6": {InputPerMillion: 3_000_000, CacheWritePerMillion: 3_750_000, CachedInputPerMillion: 300_000, OutputPerMillion: 15_000_000},
-		"claude-sonnet-4-5": {InputPerMillion: 3_000_000, CacheWritePerMillion: 3_750_000, CachedInputPerMillion: 300_000, OutputPerMillion: 15_000_000},
-		"claude-haiku-4-5":  {InputPerMillion: 1_000_000, CacheWritePerMillion: 1_250_000, CachedInputPerMillion: 100_000, OutputPerMillion: 5_000_000},
+		// Anthropic, standard tier. CacheWritePerMillion is the 5 minute cache, and
+		// CacheWrite1hPerMillion the 1 hour cache at twice the input rate.
+		"claude-fable-5-1":  {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CacheWrite1hPerMillion: 20_000_000, CachedInputPerMillion: 250_000, OutputPerMillion: 50_000_000},
+		"claude-mythos-5-1": {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CacheWrite1hPerMillion: 20_000_000, CachedInputPerMillion: 250_000, OutputPerMillion: 50_000_000},
+		"claude-fable-5":    {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CacheWrite1hPerMillion: 20_000_000, CachedInputPerMillion: 1_000_000, OutputPerMillion: 50_000_000},
+		"claude-mythos-5":   {InputPerMillion: 10_000_000, CacheWritePerMillion: 12_500_000, CacheWrite1hPerMillion: 20_000_000, CachedInputPerMillion: 1_000_000, OutputPerMillion: 50_000_000},
+		"claude-opus-5":     {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CacheWrite1hPerMillion: 10_000_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
+		"claude-opus-4-8":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CacheWrite1hPerMillion: 10_000_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
+		"claude-opus-4-7":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CacheWrite1hPerMillion: 10_000_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
+		"claude-opus-4-6":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CacheWrite1hPerMillion: 10_000_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
+		"claude-opus-4-5":   {InputPerMillion: 5_000_000, CacheWritePerMillion: 6_250_000, CacheWrite1hPerMillion: 10_000_000, CachedInputPerMillion: 500_000, OutputPerMillion: 25_000_000},
+		"claude-sonnet-5":   {InputPerMillion: 2_000_000, CacheWritePerMillion: 2_500_000, CacheWrite1hPerMillion: 4_000_000, CachedInputPerMillion: 200_000, OutputPerMillion: 10_000_000},
+		"claude-sonnet-4-6": {InputPerMillion: 3_000_000, CacheWritePerMillion: 3_750_000, CacheWrite1hPerMillion: 6_000_000, CachedInputPerMillion: 300_000, OutputPerMillion: 15_000_000},
+		"claude-sonnet-4-5": {InputPerMillion: 3_000_000, CacheWritePerMillion: 3_750_000, CacheWrite1hPerMillion: 6_000_000, CachedInputPerMillion: 300_000, OutputPerMillion: 15_000_000},
+		"claude-haiku-4-5":  {InputPerMillion: 1_000_000, CacheWritePerMillion: 1_250_000, CacheWrite1hPerMillion: 2_000_000, CachedInputPerMillion: 100_000, OutputPerMillion: 5_000_000},
 	})
 }

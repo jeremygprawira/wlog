@@ -11,11 +11,15 @@ import (
 type Price struct {
 	// CacheWritePerMillion prices the tokens written to a prompt cache. It is above the
 	// input rate for every provider that bills writes, so a writer that leaves it out prices
-	// writes at the input rate and under-counts.
-	CacheWritePerMillion  int64
-	InputPerMillion       int64
-	OutputPerMillion      int64
-	CachedInputPerMillion int64
+	// writes at the input rate and under-counts. It is the five minute write rate.
+	CacheWritePerMillion int64
+	// CacheWrite1hPerMillion prices the one hour cache writes, which Anthropic bills at
+	// twice the input rate. A row that leaves it out prices those writes with the five
+	// minute rate.
+	CacheWrite1hPerMillion int64
+	InputPerMillion        int64
+	OutputPerMillion       int64
+	CachedInputPerMillion  int64
 }
 
 // Prices is an immutable price table. NewPrices copies the input map, and With returns
@@ -57,37 +61,59 @@ func (p *Prices) Cost(r Record) (Cost, bool) {
 	}
 
 	// The cache parts are subsets of the input count. A caller that reports more cache than
-	// input is clamped, so no part can go negative and no token is billed twice.
+	// input is clamped, so no part can go negative and no token is billed twice. The one hour
+	// writes are clipped first, because they cost the most.
 	cached := r.CachedInputTokens
 	if cached > r.InputTokens {
 		cached = r.InputTokens
 	}
-	written := r.CacheWriteInputTokens
-	if written > r.InputTokens-cached {
-		written = r.InputTokens - cached
+	if cached < 0 {
+		cached = 0
 	}
-	regular := r.InputTokens - cached - written
+	written5m, written1h := r.CacheWriteInputTokens, r.CacheWrite1hInputTokens
+	if written5m < 0 {
+		written5m = 0
+	}
+	if written1h < 0 {
+		written1h = 0
+	}
+	remaining := r.InputTokens - cached
+	if written1h > remaining {
+		written1h = remaining
+	}
+	remaining -= written1h
+	if written5m > remaining {
+		written5m = remaining
+	}
+	regular := remaining - written5m
 
 	inputMicros := micros(regular, price.InputPerMillion)
 	readMicros := micros(cached, firstRate(price.CachedInputPerMillion, price.InputPerMillion))
-	writeMicros := micros(written, firstRate(price.CacheWritePerMillion, price.InputPerMillion))
+	writeMicros := micros(written5m, firstRate(price.CacheWritePerMillion, price.InputPerMillion))
+	write1hMicros := micros(written1h, firstRate(price.CacheWrite1hPerMillion, price.CacheWritePerMillion, price.InputPerMillion))
 	outputMicros := micros(r.OutputTokens, price.OutputPerMillion)
 
 	return Cost{
-		InputMicros:      inputMicros,
-		CacheReadMicros:  readMicros,
-		CacheWriteMicros: writeMicros,
-		OutputMicros:     outputMicros,
-		TotalMicros:      inputMicros + readMicros + writeMicros + outputMicros,
+		InputMicros:        inputMicros,
+		CacheReadMicros:    readMicros,
+		CacheWriteMicros:   writeMicros,
+		CacheWrite1hMicros: write1hMicros,
+		OutputMicros:       outputMicros,
+		TotalMicros:        inputMicros + readMicros + writeMicros + write1hMicros + outputMicros,
 	}, true
 }
 
-// firstRate returns the part's own rate, or the fallback when the row leaves it out.
-func firstRate(rate, fallback int64) int64 {
+// firstRate returns the part's own rate, or the first fallback that is set.
+func firstRate(rate int64, fallbacks ...int64) int64 {
 	if rate > 0 {
 		return rate
 	}
-	return fallback
+	for _, fallback := range fallbacks {
+		if fallback > 0 {
+			return fallback
+		}
+	}
+	return 0
 }
 
 // Price returns the row for a model. An exact row wins; otherwise the longest key that the
