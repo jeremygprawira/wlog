@@ -29,6 +29,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/drain/sentry"
 	"github.com/jeremygprawira/wlog/drain/splunk"
+	"github.com/jeremygprawira/wlog/drain/syslog"
 	"github.com/jeremygprawira/wlog/drain/victorialogs"
 	"github.com/jeremygprawira/wlog/drain/webhook"
 	"github.com/jeremygprawira/wlog/preset"
@@ -546,6 +547,37 @@ func builtins() []Factory {
 					opts = append(opts, victorialogs.WithTenant(account, project))
 				}
 				return victorialogs.New(opts...)
+			},
+		},
+		{
+			Name: "syslog",
+			Vars: []Var{
+				required("WLOG_SYSLOG_ADDR"),
+				optional("WLOG_SYSLOG_NETWORK"),
+				optional("WLOG_SYSLOG_APP_NAME"),
+				optional("WLOG_SYSLOG_FACILITY"),
+				optional("WLOG_SYSLOG_SD_ID"),
+			},
+			New: func(env Env) (wlog.Drain, error) {
+				addr, _ := first(env, "WLOG_SYSLOG_ADDR")
+				opts := []syslog.Option{syslog.WithAddr(addr)}
+				if network, ok := first(env, "WLOG_SYSLOG_NETWORK"); ok {
+					opts = append(opts, syslog.WithNetwork(network))
+				}
+				if appName, ok := first(env, "WLOG_SYSLOG_APP_NAME"); ok {
+					opts = append(opts, syslog.WithAppName(appName))
+				}
+				if facility, ok := first(env, "WLOG_SYSLOG_FACILITY"); ok {
+					value, err := strconv.Atoi(facility)
+					if err != nil {
+						return nil, fmt.Errorf("WLOG_SYSLOG_FACILITY: %w", err)
+					}
+					opts = append(opts, syslog.WithFacility(syslog.Facility(value)))
+				}
+				if sdID, ok := first(env, "WLOG_SYSLOG_SD_ID"); ok {
+					opts = append(opts, syslog.WithStructuredData(sdID))
+				}
+				return syslog.New(opts...)
 			},
 		},
 	}

@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/axiom"
@@ -28,6 +30,7 @@ import (
 	"github.com/jeremygprawira/wlog/drain/posthog"
 	"github.com/jeremygprawira/wlog/drain/sentry"
 	"github.com/jeremygprawira/wlog/drain/splunk"
+	"github.com/jeremygprawira/wlog/drain/syslog"
 	"github.com/jeremygprawira/wlog/drain/victorialogs"
 	"github.com/jeremygprawira/wlog/drain/webhook"
 	"github.com/jeremygprawira/wlog/internal/conformance"
@@ -46,6 +49,7 @@ func everyDrain(t *testing.T) []drainconformance.Case {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "events.ndjson")
 	mem := memory.New(0)
+	syslogFrame := make(chan []byte, 1)
 
 	return []drainconformance.Case{
 		{Name: "axiom", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
@@ -130,6 +134,28 @@ func everyDrain(t *testing.T) []drainconformance.Case {
 		{Name: "splunk", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			srv.SetBody(`{"text":"Success","code":0}`)
 			return splunk.New(splunk.WithURL(srv.URL), splunk.WithToken("token"))
+		}},
+		{Name: "syslog", Build: func(*httpfake.Server) (wlog.Drain, error) {
+			conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+			if err != nil {
+				return nil, err
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+				buf := make([]byte, 65535)
+				if n, _, err := conn.ReadFrom(buf); err == nil {
+					syslogFrame <- append([]byte(nil), buf[:n]...)
+				}
+			}()
+			return syslog.New(syslog.WithAddr(conn.LocalAddr().String()), syslog.WithNetwork("udp"))
+		}, Local: func(*httpfake.Server) []byte {
+			select {
+			case frame := <-syslogFrame:
+				return frame
+			case <-time.After(15 * time.Second):
+				return nil
+			}
 		}},
 		{Name: "victorialogs", Build: func(srv *httpfake.Server) (wlog.Drain, error) {
 			return victorialogs.New(victorialogs.WithURL(srv.URL))

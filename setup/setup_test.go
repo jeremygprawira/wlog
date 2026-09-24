@@ -244,6 +244,14 @@ func sampleValue(t *testing.T, name string) string {
 		return "datadoghq.com"
 	case name == "NEW_RELIC_REGION":
 		return "us"
+	case name == "WLOG_SYSLOG_ADDR":
+		return "127.0.0.1:1"
+	case name == "WLOG_SYSLOG_NETWORK":
+		return "tcp"
+	case name == "WLOG_SYSLOG_FACILITY":
+		return "16"
+	case name == "WLOG_SYSLOG_SD_ID":
+		return "wlog@32473"
 	case strings.Contains(name, "URL"), strings.Contains(name, "ENDPOINT"), strings.Contains(name, "HOST"):
 		return "http://example.invalid"
 	default:

@@ -209,7 +209,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-E-5 drain-honeycomb and drain-newrelic
 - [x] 14-E-6 drain-elastic
 - [x] 14-E-7 drain-splunk and drain-victorialogs
-- [ ] 14-E-8 drain-syslog
+- [x] 14-E-8 drain-syslog
 - [ ] 14-E-9 drain-cloudwatch
 - [ ] 14-G-1 llm additions
 - [ ] 14-G-2 ai-anthropic and ai-openai
