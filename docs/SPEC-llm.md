@@ -132,8 +132,10 @@ is masked before a drain sees it.
    whose exact dollar value has no float representation and compares whole micros.
 6. `With` returns a new `Prices` and leaves the original unchanged, under `-race`.
 7. `Set` and `Add` outside a `wlog.Start` do nothing and do not panic.
-8. A redacted prompt or completion never reaches the event, since this module writes no
-   prompt text at all. A test asserts no field holds message content.
+8. A redacted prompt or completion never reaches the event by default, because this module
+   writes no prompt text. A test asserts no field holds message content. Phase 14 adds one
+   exception: a Track G module can set the opt-in `Record.Content`, and only then does the
+   content reach the event, through the redactor.
 9. Zero imports outside the standard library plus `core`.
 
 ## Cost guide
@@ -151,8 +153,8 @@ in the test, never `DefaultPrices`, so a later table update cannot break them.
 
 - **Always:** keep money in whole micros inside the record and the event.
 - **Ask first:** adding a model to the built-in price table, and changing the micros unit.
-- **Never:** write prompt or completion text onto the event. This module records the shape
-  of a call, never its content.
+- **Never:** write prompt or completion text onto the event without the phase 14 opt-in
+  `Record.Content`. By default this module records the shape of a call, never its content.
 
 ## Open Questions
 

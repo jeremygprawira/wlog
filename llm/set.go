@@ -162,12 +162,26 @@ func fieldsFor(r Record) map[string]any {
 		// money never passes through one.
 		fields["cost_micros"] = r.Cost.TotalMicros
 	}
+	if r.Content != nil {
+		// The content is written only when a module's WithContent() filled it. Core redacts
+		// the values, so a masked prompt text stays masked.
+		if len(r.Content.InputMessages) > 0 {
+			fields["input_messages"] = r.Content.InputMessages
+		}
+		if len(r.Content.OutputMessages) > 0 {
+			fields["output_messages"] = r.Content.OutputMessages
+		}
+	}
 	return fields
 }
 
-// callMap is one entry for llm.calls[].
+// callMap is one entry for llm.calls[]. It leaves the content out, because the content
+// belongs to the top level of the event and not to every call entry.
 func callMap(r Record) map[string]any {
-	return fieldsFor(r)
+	fields := fieldsFor(r)
+	delete(fields, "input_messages")
+	delete(fields, "output_messages")
+	return fields
 }
 
 // toolCallMaps maps tool calls to plain maps for the event.

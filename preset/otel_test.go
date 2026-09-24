@@ -164,3 +164,23 @@ func normalize(t *testing.T, value map[string]any) map[string]any {
 	}
 	return out
 }
+
+// TestPreset_OTelLLMContent proves the opt-in prompt and completion map to their gen_ai
+// names.
+func TestPreset_OTelLLMContent(t *testing.T) {
+	record := preset.OTel().Apply(map[string]any{
+		"llm": map[string]any{
+			"input_messages":  []any{map[string]any{"role": "user"}},
+			"output_messages": []any{map[string]any{"role": "assistant"}},
+		},
+	})
+	attributes, ok := record["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("no attributes object: %v", record)
+	}
+	for _, name := range []string{"gen_ai.input.messages", "gen_ai.output.messages"} {
+		if _, ok := attributes[name]; !ok {
+			t.Errorf("attributes holds no %s", name)
+		}
+	}
+}

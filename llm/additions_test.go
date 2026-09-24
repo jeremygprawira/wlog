@@ -56,6 +56,65 @@ func TestLLM_AddSetsSpeedAndSteps(t *testing.T) {
 	}
 }
 
+// TestLLM_NoContentByDefault proves the default record writes no prompt or completion,
+// which is the SPEC-llm rule.
+func TestLLM_NoContentByDefault(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	llm.Set(ctx, llm.Record{Model: "claude-sonnet-4-6", InputTokens: 10})
+	end()
+
+	group, _ := rec.Last()["llm"].(map[string]any)
+	for _, key := range []string{"input_messages", "output_messages"} {
+		if _, ok := group[key]; ok {
+			t.Errorf("%s reached the event without WithContent", key)
+		}
+	}
+}
+
+// TestLLM_ContentOptIn proves Content writes the prompt and the completion under the llm
+// group, and Add keeps the content out of every call entry.
+func TestLLM_ContentOptIn(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	llm.Add(ctx, llm.Record{
+		Model: "claude-sonnet-4-6",
+		Content: &llm.Content{
+			InputMessages: []llm.Message{{
+				Role:  "user",
+				Parts: []llm.Part{{Type: "text", Content: "hello"}},
+			}},
+			OutputMessages: []llm.Message{{
+				Role: "assistant",
+				Parts: []llm.Part{{
+					Type:      "tool_call",
+					ID:        "toolu_1",
+					Name:      "get_weather",
+					Arguments: map[string]any{"city": "Jakarta"},
+				}},
+			}}},
+	})
+	end()
+
+	group, _ := rec.Last()["llm"].(map[string]any)
+	if _, ok := group["input_messages"]; !ok {
+		t.Error("input_messages is missing")
+	}
+	if _, ok := group["output_messages"]; !ok {
+		t.Error("output_messages is missing")
+	}
+	calls, _ := group["calls"].([]any)
+	if len(calls) != 1 {
+		t.Fatalf("calls = %v, want one entry", group["calls"])
+	}
+	call, _ := calls[0].(map[string]any)
+	for _, key := range []string{"input_messages", "output_messages"} {
+		if _, ok := call[key]; ok {
+			t.Errorf("the call entry repeats %s", key)
+		}
+	}
+}
+
 // TestLLM_TokenInvariants proves the token rules hold for each provider shape: every
 // cache count is a part of the input, reasoning is a part of the output, and the priced
 // parts add up to the total even when a caller reports more cache than input.

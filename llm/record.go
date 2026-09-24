@@ -40,6 +40,10 @@ type Record struct {
 
 	ToolCalls []ToolCall
 
+	// Content holds the prompt and the completion. It stays nil unless a module's
+	// WithContent() fills it, so the default record holds the shape of a call and no text.
+	Content *Content
+
 	TimeToFirstToken time.Duration // stream only, zero for a whole-response call
 	Duration         time.Duration
 	Streamed         bool
@@ -59,6 +63,35 @@ type ToolCall struct {
 	Name     string
 	Duration time.Duration
 	Failed   bool
+}
+
+// Content is the opt-in prompt, completion, and tool payload of one call, in the
+// OpenTelemetry gen_ai shape. It is nil by default, so no prompt text reaches an event
+// unless a module's WithContent() sets it. Core redacts it like any other value.
+type Content struct {
+	// InputMessages is the prompt: the system, user, and tool messages a caller sent.
+	InputMessages []Message
+	// OutputMessages is the completion: the assistant messages the model returned.
+	OutputMessages []Message
+}
+
+// Message is one message of an opt-in prompt or completion. The JSON tags follow the
+// OpenTelemetry gen_ai message shape.
+type Message struct {
+	Role         string `json:"role"`
+	Parts        []Part `json:"parts"`
+	Name         string `json:"name,omitempty"`          // the tool name, on a tool message
+	FinishReason string `json:"finish_reason,omitempty"` // on an output message
+}
+
+// Part is one part of a Message. Only the fields of its Type are set.
+type Part struct {
+	Type      string `json:"type"` // text, tool_call, tool_call_response, reasoning
+	Content   string `json:"content,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments any    `json:"arguments,omitempty"`
+	Response  any    `json:"response,omitempty"`
 }
 
 // Cost is money, in whole millionths of a US dollar, so no float rounding reaches the

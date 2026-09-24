@@ -213,6 +213,11 @@ var otelRules = map[string]func(*otelTarget, any){
 	"llm.reasoning_tokens": func(t *otelTarget, v any) {
 		t.attrs["gen_ai.usage.reasoning.output_tokens"] = v
 	},
+	// The message content is written only when a module's WithContent() filled it. The
+	// upstream names are marked development, so this preset pins them and this comment
+	// says so.
+	"llm.input_messages":  func(t *otelTarget, v any) { t.attrs["gen_ai.input.messages"] = v },
+	"llm.output_messages": func(t *otelTarget, v any) { t.attrs["gen_ai.output.messages"] = v },
 }
 
 // otelErrorType writes attributes.error.type from the first of error.code, error.kind,
