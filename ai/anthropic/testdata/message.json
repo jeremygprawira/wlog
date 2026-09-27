@@ -1,0 +1,19 @@
+{
+  "id": "msg_01",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-6",
+  "stop_reason": "tool_use",
+  "content": [
+    {"type": "text", "text": "hello"},
+    {"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {"city": "Jakarta"}}
+  ],
+  "usage": {
+    "input_tokens": 50,
+    "cache_read_input_tokens": 100000,
+    "cache_creation_input_tokens": 1200,
+    "cache_creation": {"ephemeral_5m_input_tokens": 1000, "ephemeral_1h_input_tokens": 200},
+    "output_tokens": 200,
+    "output_tokens_details": {"thinking_tokens": 40}
+  }
+}

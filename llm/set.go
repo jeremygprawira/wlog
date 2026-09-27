@@ -110,6 +110,9 @@ func fieldsFor(r Record) map[string]any {
 	if r.Operation != "" {
 		fields["operation"] = r.Operation
 	}
+	if r.ResponseID != "" {
+		fields["response_id"] = r.ResponseID
+	}
 	if r.InputTokens > 0 {
 		fields["input_tokens"] = r.InputTokens
 	}

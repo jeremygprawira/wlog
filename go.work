@@ -74,5 +74,6 @@ use (
 	./trace/otel
 	./trace/otellog
 	./metrics/prometheus
+	./ai/anthropic
 	./drain/cloudwatch
 )

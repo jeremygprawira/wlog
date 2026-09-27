@@ -16,6 +16,8 @@ type Record struct {
 	Provider  string // "openai", "anthropic", "google", or any string
 	Model     string // the exact model id billed, such as "claude-sonnet-5"
 	Operation string // "chat", "embedding", "rerank", or any string
+	// ResponseID is the provider's own id for the response, when it reports one.
+	ResponseID string
 
 	// InputTokens is the whole input count, the way the providers report it: it includes
 	// the cache reads and the cache writes. CachedInputTokens and CacheWriteInputTokens are
