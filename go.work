@@ -75,5 +75,6 @@ use (
 	./trace/otellog
 	./metrics/prometheus
 	./ai/anthropic
+	./ai/openai
 	./drain/cloudwatch
 )
