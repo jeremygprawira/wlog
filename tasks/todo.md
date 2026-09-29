@@ -14,10 +14,11 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 10-CI-7 Release hygiene
 - [x] Review point 10-CI: every required CI job is green, then human review
   - The nightly jobs are green on 2026-09-17: `vuln`, `integration`, and `fuzz-long`. The
-    integration job had never run to the end, which the collector pin hid, so this review
-    point also closed three faults in that stack: a registry tag that the collector project
-    had deleted, a non-root collector user that could not write the output mount, and a
-    ClickHouse default user that the image refuses from outside localhost.
+    integration job had never run to the end, because the collector pin hid the failure.
+    This review point closed three faults in that stack:
+    - a registry tag that the collector project had deleted
+    - a non-root collector user that did not write the output mount
+    - a ClickHouse default user that the image refuses from outside localhost
   - Fixed 2026-09-17: `make lint`, `tools floor`, `tools cover -min 85`, `tools tidy -check`,
     `tools requires`, `tools ste`, `tools snippets`, and `make map` all pass clean. `make race`
     passes in every module, and `make fuzz FUZZTIME=20s` finds nothing across all four targets.
@@ -214,7 +215,8 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-G-1 llm additions
 - [x] 14-G-2a ai-anthropic
 - [x] 14-G-2b ai-openai
-- [ ] 14-G-3 ai-genai and ai-goopenai
+- [x] 14-G-3a ai-genai
+- [ ] 14-G-3b ai-goopenai
 - [ ] 14-G-4 ai-langchaingo and ai-eino
 - [ ] 14-G-5 ai-mcpsdk and ai-mcpgo
 - [ ] 14-G-6 Recipes: llm-agent and mcp-server

@@ -76,5 +76,6 @@ use (
 	./metrics/prometheus
 	./ai/anthropic
 	./ai/openai
+	./ai/genai
 	./drain/cloudwatch
 )
