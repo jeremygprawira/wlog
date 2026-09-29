@@ -83,11 +83,16 @@ func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Res
 
 	outcome, code, level := classify(result, err)
 	mcpFields["result"] = outcome
-	if state := requestStateOf(result); state != "" {
-		mcpFields["request_state"] = hashState(state)
-	}
-	if content {
-		addResultContent(mcpFields, result)
+	// result is meaningless on a protocol error: the dispatcher's own concrete return
+	// type, boxed into the Result interface, is a typed nil here, and every accessor
+	// below panics on one.
+	if err == nil {
+		if state := requestStateOf(result); state != "" {
+			mcpFields["request_state"] = hashState(state)
+		}
+		if content {
+			addResultContent(mcpFields, result)
+		}
 	}
 	h.Set("mcp", mcpFields)
 	if code != "" {

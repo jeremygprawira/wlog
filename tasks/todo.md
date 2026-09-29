@@ -221,7 +221,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-G-4b ai-eino
 - [x] 14-G-5a ai-mcpsdk
 - [x] 14-G-5b ai-mcpgo
-- [ ] 14-G-6 Recipes: llm-agent and mcp-server
+- [x] 14-G-6 Recipes: llm-agent and mcp-server
 - [ ] 14-G-7 `wlog init` v2
 - [ ] Review point 14, v0.9.0: human review, then ask before tagging
 

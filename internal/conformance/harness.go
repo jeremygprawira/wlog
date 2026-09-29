@@ -218,21 +218,31 @@ func numberOf(value any) (float64, bool) {
 }
 
 // flattenEvent returns every leaf of an event under its dotted path, so a difference names
-// one field rather than one whole group.
+// one field rather than one whole group. An array, such as llm.calls, flattens under its
+// index, so a difference inside one of its objects names that one field too, instead of
+// printing the whole array on a type-width mismatch a top-level number tolerates.
 func flattenEvent(event map[string]any, prefix string) map[string]any {
 	out := map[string]any{}
-	for key, value := range event {
-		path := key
-		if prefix != "" {
-			path = prefix + "." + key
-		}
-		if nested, ok := value.(map[string]any); ok {
-			for nestedPath, leaf := range flattenEvent(nested, path) {
-				out[nestedPath] = leaf
+	flattenInto(out, event, prefix)
+	return out
+}
+
+// flattenInto adds every leaf under value to out, at its dotted or indexed path.
+func flattenInto(out map[string]any, value any, path string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			childPath := key
+			if path != "" {
+				childPath = path + "." + key
 			}
-			continue
+			flattenInto(out, child, childPath)
 		}
+	case []any:
+		for i, child := range typed {
+			flattenInto(out, child, fmt.Sprintf("%s.%d", path, i))
+		}
+	default:
 		out[path] = value
 	}
-	return out
 }
