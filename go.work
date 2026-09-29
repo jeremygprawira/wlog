@@ -79,5 +79,6 @@ use (
 	./ai/genai
 	./ai/goopenai
 	./ai/langchaingo
+	./ai/eino
 	./drain/cloudwatch
 )
