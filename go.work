@@ -80,5 +80,6 @@ use (
 	./ai/goopenai
 	./ai/langchaingo
 	./ai/eino
+	./ai/mcpsdk
 	./drain/cloudwatch
 )
