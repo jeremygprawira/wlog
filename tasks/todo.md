@@ -217,7 +217,8 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-G-2b ai-openai
 - [x] 14-G-3a ai-genai
 - [x] 14-G-3b ai-goopenai
-- [ ] 14-G-4 ai-langchaingo and ai-eino
+- [x] 14-G-4a ai-langchaingo
+- [ ] 14-G-4b ai-eino
 - [ ] 14-G-5 ai-mcpsdk and ai-mcpgo
 - [ ] 14-G-6 Recipes: llm-agent and mcp-server
 - [ ] 14-G-7 `wlog init` v2
