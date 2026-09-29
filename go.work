@@ -81,5 +81,6 @@ use (
 	./ai/langchaingo
 	./ai/eino
 	./ai/mcpsdk
+	./ai/mcpgo
 	./drain/cloudwatch
 )
