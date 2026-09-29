@@ -77,5 +77,6 @@ use (
 	./ai/anthropic
 	./ai/openai
 	./ai/genai
+	./ai/goopenai
 	./drain/cloudwatch
 )

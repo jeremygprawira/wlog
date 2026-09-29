@@ -1,0 +1,26 @@
+{
+  "id": "chatcmpl_01",
+  "object": "chat.completion",
+  "created": 1710000000,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "hello",
+        "tool_calls": [
+          {"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1000,
+    "completion_tokens": 200,
+    "total_tokens": 1200,
+    "prompt_tokens_details": {"cached_tokens": 500},
+    "completion_tokens_details": {"reasoning_tokens": 40}
+  }
+}
