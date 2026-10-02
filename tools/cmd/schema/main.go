@@ -43,8 +43,9 @@ var recipeGoldens = []string{
 	"examples/mcp-server/testdata/event.json",
 }
 
-// mapGoldens lists the documents that follow the map report shape.
-var mapGoldens = []string{"wlog.map.json", "cmd/wlog/report/testdata/map_v2.json"}
+// mapGoldens lists the documents that follow the map report shape. The map tool writes
+// wlog.map.json into the repository root, and git ignores that file, so a CI run has no copy.
+var mapGoldens = []string{"cmd/wlog/report/testdata/map_v2.json"}
 
 // main validates every golden, prints one line per document that breaks its schema, and
 // exits 1 when any of them does.

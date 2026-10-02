@@ -4,11 +4,27 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
+
+// TestSchema_T2_EveryGoldenIsTracked proves that no golden list names a file that git
+// ignores. CI failed on wlog.map.json, which git ignores, so the test passed here and failed
+// there.
+func TestSchema_T2_EveryGoldenIsTracked(t *testing.T) {
+	root := rootDir(t)
+	names := append([]string{}, mapGoldens...)
+	names = append(names, recipeGoldens...)
+	for _, name := range names {
+		cmd := exec.Command("git", "check-ignore", "-q", filepath.Join(root, name))
+		if err := cmd.Run(); err == nil {
+			t.Errorf("%s is ignored by git, so CI never sees it", name)
+		}
+	}
+}
 
 // rootDir returns the workspace root, which holds the schema files and the goldens.
 func rootDir(t *testing.T) string {
