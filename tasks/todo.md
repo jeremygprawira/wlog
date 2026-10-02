@@ -242,7 +242,7 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Done and pushed: P-1 to P-17, P-19, and the spec half of P-21. CI run 37005501695 is green on `1a1a07f`.
   - P-20 is not reproduced, with the evidence in the review.
   - Open: P-18, and the integration half of P-21, which waits for batch K.
-- [ ] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
+- [x] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
 - [ ] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24
 - [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
 - [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23

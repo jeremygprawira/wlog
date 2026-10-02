@@ -1040,3 +1040,15 @@ chain passes with the wrap and without it. The wrap is unchanged.
 
 P-21's integration half, a golden event in the Elastic integration test, needs the Compose
 stack, which is batch K.
+
+Batch D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20. CI run 37010650809 is
+green on `72c7b9e`.
+
+| Id | Commit | What changed |
+|---|---|---|
+| D-1 | `3b06021` | The HEC code is read from the body of a refused answer, and the code 6 split keeps halving |
+| D-2 | `6bfcd34` | VictoriaLogs trims the stream fields and builds the query with `url.Values` |
+| D-8 | `db4aae7` | A 413 halves the request in Splunk and VictoriaLogs, and VictoriaLogs gains the status table |
+| D-10 | `700cb98` | A failed chunk retries that chunk and the rest, in Splunk and CloudWatch |
+| D-18 | `e0cb93f` | Splunk reports backpressure once a minute |
+| D-20 | `72c7b9e` | The VictoriaLogs test asserts the URI, the absent tenant headers, and the timestamp |
