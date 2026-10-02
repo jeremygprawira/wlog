@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -200,6 +201,48 @@ func TestNewRelic_P6_GzipIsOnByDefault(t *testing.T) {
 				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
 			}
 		})
+	}
+}
+
+// TestNewRelic_P9_CapKeepsReservedKeys proves the attribute cap keeps the reserved keys, so
+// a trace id and a service name survive a wide event.
+func TestNewRelic_P9_CapKeepsReservedKeys(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	sender, err := newrelic.NewSender(newrelic.WithLicenseKey("key"), newrelic.WithEndpoint(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	event := map[string]any{
+		"level":     "info",
+		"operation": "GET /orders",
+		"kind":      "request",
+		"service":   map[string]any{"name": "checkout"},
+		"trace":     map[string]any{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"},
+	}
+	for i := 0; i < 300; i++ {
+		event[fmt.Sprintf("a%04d", i)] = i
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	req := srv.Last()
+	if req == nil {
+		t.Fatal("no request recorded")
+	}
+	var envelope []struct {
+		Logs []struct {
+			Attributes map[string]any `json:"attributes"`
+		} `json:"logs"`
+	}
+	if err := json.Unmarshal(req.Body, &envelope); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	attributes := envelope[0].Logs[0].Attributes
+	for _, key := range []string{"trace.id", "service.name", "level", "operation"} {
+		if _, ok := attributes[key]; !ok {
+			t.Errorf("the capped log lost %s", key)
+		}
 	}
 }
 

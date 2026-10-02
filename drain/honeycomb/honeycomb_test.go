@@ -334,6 +334,45 @@ func TestHoneycomb_P8_ShortResultListRetriesTheRest(t *testing.T) {
 	}
 }
 
+// TestHoneycomb_P9_CapKeepsReservedKeys proves the field cap keeps the reserved keys, so a
+// trace id and a service name survive a wide event.
+func TestHoneycomb_P9_CapKeepsReservedKeys(t *testing.T) {
+	srv := newFake(t, http.StatusOK, `[{"status":202}]`)
+	sender, err := honeycomb.NewSender(
+		honeycomb.WithAPIKey("key"),
+		honeycomb.WithAPIURL(srv.URL),
+		honeycomb.WithDataset("logs"),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	event := map[string]any{
+		"level":     "info",
+		"operation": "GET /orders",
+		"kind":      "request",
+		"service":   map[string]any{"name": "checkout"},
+		"trace":     map[string]any{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"},
+	}
+	for i := 0; i < 2100; i++ {
+		event[fmt.Sprintf("a%04d", i)] = i
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	body, _ := srv.last()
+	var items []struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &items); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	for _, key := range []string{"trace.trace_id", "service.name", "level", "operation"} {
+		if _, ok := items[0].Data[key]; !ok {
+			t.Errorf("the capped event lost %s", key)
+		}
+	}
+}
+
 // TestHoneycomb_Options proves every option reaches the sender and New wraps it.
 func TestHoneycomb_Options(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `[{"status":202}]`)

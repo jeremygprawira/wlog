@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -308,12 +309,33 @@ func attributesOf(event map[string]any) (map[string]any, int) {
 	for key := range out {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	keepOrder(keys)
 	dropped := len(keys) - maxAttributes
 	for _, key := range keys[maxAttributes:] {
 		delete(out, key)
 	}
 	return out, dropped
+}
+
+// keepOrder sorts attribute names so a reserved key survives the cap: reserved keys first,
+// then user keys, each group by name. The cap drops from the end.
+func keepOrder(keys []string) {
+	sort.Slice(keys, func(i, j int) bool {
+		ri, rj := reservedRank(keys[i]), reservedRank(keys[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return keys[i] < keys[j]
+	})
+}
+
+// reservedRank is 0 for a key under a reserved field, and 1 for a user key.
+func reservedRank(key string) int {
+	head, _, _ := strings.Cut(key, ".")
+	if slices.Contains(wlog.ReservedFields(), head) {
+		return 0
+	}
+	return 1
 }
 
 // flatten copies a nested map into dotted keys.
