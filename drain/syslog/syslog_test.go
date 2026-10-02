@@ -261,6 +261,53 @@ func TestSyslog_D13_ReportsATruncation(t *testing.T) {
 	}
 }
 
+// TestSyslog_D4_WriteDeadlineFromContext proves a collector that never reads cannot block
+// the worker: the context deadline bounds the write, so SendBatch returns and Close works.
+func TestSyslog_D4_WriteDeadlineFromContext(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		// The peer never reads, so the kernel buffer fills.
+		accepted <- conn
+	}()
+	t.Cleanup(func() {
+		select {
+		case conn := <-accepted:
+			_ = conn.Close()
+		default:
+		}
+	})
+
+	sender, err := syslog.NewSender(syslog.WithAddr(listener.Addr().String()), syslog.WithNetwork("tcp"))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	// A large frame fills the send buffer, so the write blocks until the deadline.
+	big := event()
+	big["blob"] = strings.Repeat("x", 4<<20)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if err := sender.SendBatch(ctx, []map[string]any{big}); err == nil {
+		t.Fatal("SendBatch returned nil, want a deadline error")
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("SendBatch took %v, want it bounded by the context", elapsed)
+	}
+	if err := sender.Close(context.Background()); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+}
+
 // TestSyslog_MissingConfig proves a missing address is refused.
 func TestSyslog_MissingConfig(t *testing.T) {
 	if _, err := syslog.NewSender(); err == nil {

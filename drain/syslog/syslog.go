@@ -46,9 +46,12 @@ const (
 	defaultAppName = "-"
 	defaultMaxUDP  = 2048
 	dialTimeout    = 5 * time.Second
-	bom            = "\ufeff"
-	maxHostname    = 255
-	maxAppName     = 48
+	// writeTimeout bounds one frame write, so a stalled collector cannot block the worker
+	// or Close.
+	writeTimeout = 10 * time.Second
+	bom          = "\ufeff"
+	maxHostname  = 255
+	maxAppName   = 48
 )
 
 // config holds the resolved configuration.
@@ -262,6 +265,15 @@ func (s *Sender) closeLocked() {
 func (s *Sender) write(ctx context.Context, frame []byte) error {
 	conn, err := s.dial(ctx)
 	if err != nil {
+		return err
+	}
+	// A collector that never reads would block the write forever, which holds the worker
+	// and Close, so every write carries a deadline. The context may shorten it.
+	deadline := time.Now().Add(writeTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	if err := conn.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
 	if s.network == "udp" {
