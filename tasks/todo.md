@@ -237,7 +237,7 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 Each batch ends with its gates, a push, and a CI result. Tick a batch after CI is green.
 
 - [x] A, gates: X-2, X-3, X-5, X-6, T-1, T-2, T-5. The push closes X-1
-- [ ] B, pipeline and httpdrain: P-11, P-10, P-7, P-12, P-4, D-1
+- [x] B, pipeline and httpdrain: P-11, P-10, P-7, P-12, P-4, D-1
 - [ ] C, HTTP drains: P-1, P-2, P-3, P-4, P-5, P-6, P-8, P-9, P-13 to P-21
 - [ ] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
 - [ ] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24

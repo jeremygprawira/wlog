@@ -984,3 +984,23 @@ T-2 needed two commits. The first raised `github.com/bytedance/sonic` to v1.8.0,
 compiled but did not link, so the hertz test job stayed red. The second raised it to
 v1.15.0, the lowest version that compiles and links on Go 1.26, and its companion
 indirect pins rose with it.
+
+Batch B, pipeline and httpdrain: P-11, P-10, P-7, P-12, P-4, D-1. CI run 36997767283 is
+green on `68e6b39`.
+
+| Id | Commit | What changed |
+|---|---|---|
+| P-11 | `ac7b86c` | A typed-nil `*PartialError` no longer panics the worker |
+| P-10 | `b8057d4` | `Post` never reads a response body, so a broken 2xx body cannot fail it |
+| P-7 | `1d5ff0e` | The wrapped drain reports `WLOG_DRAIN_DROPPED` through the Logger |
+| P-12 | `a811805` | `Flush` waits for a batch in flight |
+| P-4 | `1b4426d` | `httpdrain.Chunks` and `httpdrain.SendChunk`, the shared split and the 413 halving |
+| D-1 | `967eedb` | `StatusError` carries the capped body of a non-2xx answer |
+| CI | `68e6b39` | `TestMongo_B2_WithCollection` builds an ordered command document |
+
+P-4 and D-1 landed the shared helpers only. Batch C wires them into the drains, which is
+where each backend's limits live, and batch D reads the Splunk HEC code from the body.
+
+The store/mongo commit is not a review id. That test built its command with a map literal,
+which the driver marshals in random order, so it failed about one run in twenty and CI hit
+it.
