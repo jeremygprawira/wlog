@@ -1066,6 +1066,7 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-16 | `5baf25e` | The TLS config is cloned before the floor is set |
 | D-19 | `0fa66ab` | The CloudWatch error names the code and keeps the AWS message out |
 | D-11 | `6726de3` | CloudWatch drops an entry over the byte limit as `too_large` |
+| D-24 | `1d393c0` | The three credentials are marked `Secret`, and a blank answer is retried, not dropped as `hec_code_-1` |
 
-D-6, D-7, D-12, D-17, D-22, and D-24 stay open, and batches F to K are not started. CI run
-37023294224 is green on `fff7cf4`. The push was delayed by a short network outage.
+D-6, D-7, D-12, D-17, and D-22 stay open, D-24 keeps its dedup parts open, and batches F to
+K are not started. CI run 37025052174 is green on `1d393c0`.
