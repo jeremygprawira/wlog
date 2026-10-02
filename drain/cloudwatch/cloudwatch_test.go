@@ -20,13 +20,24 @@ import (
 	"github.com/jeremygprawira/wlog/setup"
 )
 
-// apiError is one CloudWatch Logs error with a code.
-type apiError struct{ code string }
+// apiError is one CloudWatch Logs error with a code and a message.
+type apiError struct {
+	code string
+	msg  string
+}
 
-func (e apiError) Error() string                 { return e.code }
+func (e apiError) Error() string                 { return e.code + ": " + e.message() }
 func (e apiError) ErrorCode() string             { return e.code }
-func (e apiError) ErrorMessage() string          { return e.code }
+func (e apiError) ErrorMessage() string          { return e.message() }
 func (e apiError) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
+
+// message returns the AWS text, which stands in for a response body.
+func (e apiError) message() string {
+	if e.msg != "" {
+		return e.msg
+	}
+	return e.code
+}
 
 // fakeAPI records every put and answers with a fixed result.
 type fakeAPI struct {
@@ -286,6 +297,50 @@ func TestCloudWatch_D10_ALaterFailureKeepsTheEarlierChunk(t *testing.T) {
 	}
 	if partial.Reason != "ThrottlingException" {
 		t.Errorf("Reason = %q, want ThrottlingException", partial.Reason)
+	}
+}
+
+// TestCloudWatch_D19_TheErrorNamesTheCodeOnly proves the error holds the AWS code and not
+// the AWS message, that a missing stream without create is permanent, and that
+// ServiceUnavailable is worth another try.
+func TestCloudWatch_D19_TheErrorNamesTheCodeOnly(t *testing.T) {
+	api := &fakeAPI{putErr: apiError{code: "ThrottlingException", msg: "Rate exceeded for account 123456789012"}}
+	sender, err := cloudwatch.NewSender(api, "group")
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{event("2026-09-22T10:00:00Z")})
+	var re interface{ Retryable() bool }
+	if !errors.As(err, &re) || !re.Retryable() {
+		t.Fatalf("SendBatch = %v, want a retryable error", err)
+	}
+	if !strings.Contains(err.Error(), "ThrottlingException") {
+		t.Errorf("the error does not name the code: %v", err)
+	}
+	if strings.Contains(err.Error(), "Rate exceeded") {
+		t.Errorf("the error holds the AWS message: %v", err)
+	}
+
+	// The stream is missing and this drain may not create it, so the fault is permanent.
+	missing := &fakeAPI{putErr: apiError{code: "ResourceNotFoundException"}}
+	plain, err := cloudwatch.NewSender(missing, "group", cloudwatch.WithCreateStream(false))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = plain.SendBatch(context.Background(), []map[string]any{event("2026-09-22T10:00:00Z")})
+	if !errors.As(err, &re) || re.Retryable() {
+		t.Fatalf("a missing stream without create = %v, want a permanent error", err)
+	}
+
+	// ServiceUnavailable is worth another try.
+	unavailable := &fakeAPI{putErr: apiError{code: "ServiceUnavailable"}}
+	third, err := cloudwatch.NewSender(unavailable, "group")
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = third.SendBatch(context.Background(), []map[string]any{event("2026-09-22T10:00:00Z")})
+	if !errors.As(err, &re) || !re.Retryable() {
+		t.Fatalf("ServiceUnavailable = %v, want a retryable error", err)
 	}
 }
 

@@ -40,6 +40,7 @@ const (
 var retryableCodes = map[string]bool{
 	"ThrottlingException":         true,
 	"ServiceUnavailableException": true,
+	"ServiceUnavailable":          true,
 	"InternalFailure":             true,
 	"RequestTimeoutException":     true,
 	"ExpiredTokenException":       true,
@@ -185,8 +186,8 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 			// A permanent fault leaves the whole batch to the pipeline. A retryable one
 			// retries this chunk and the rest, and reports the drops so far, so the
 			// chunks that landed are never sent again.
-			var permanent *codeError
-			if errors.As(err, &permanent) {
+			var re interface{ Retryable() bool }
+			if !errors.As(err, &re) || !re.Retryable() {
 				return err
 			}
 			for _, rest := range all[ci:] {
@@ -209,6 +210,10 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 
 // retryReason names a failed chunk for the PartialError. It never holds a response body.
 func retryReason(err error) string {
+	var codeErr *codeError
+	if errors.As(err, &codeErr) {
+		return codeErr.code
+	}
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
 		return apiErr.ErrorCode()
@@ -292,8 +297,8 @@ func clamp(index, size int) int {
 	return index
 }
 
-// mapError turns one API error into a retryable or a permanent error. It creates the
-// stream once on ResourceNotFoundException.
+// mapError turns one API error into a retryable or a permanent error. The error names the
+// code alone, because shared rule 6 keeps the AWS message text out of a report.
 func (s *Sender) mapError(ctx context.Context, err error) error {
 	var apiErr smithy.APIError
 	if !errors.As(err, &apiErr) {
@@ -301,18 +306,18 @@ func (s *Sender) mapError(ctx context.Context, err error) error {
 	}
 	code := apiErr.ErrorCode()
 	if code == "ResourceNotFoundException" {
-		if s.createStream {
-			if createErr := s.createStreamNow(ctx); createErr != nil {
-				return createErr
-			}
+		if !s.createStream {
+			// The stream is missing and this drain may not create it, so the fault is
+			// permanent rather than worth another try.
+			return &codeError{code: code}
+		}
+		if createErr := s.createStreamNow(ctx); createErr != nil {
+			return createErr
 		}
 		// The stream now exists, so the next attempt can put the batch.
-		return fmt.Errorf("cloudwatch: stream created, retry: %w", err)
+		return &codeError{code: code, retry: true}
 	}
-	if retryableCodes[code] {
-		return fmt.Errorf("cloudwatch: %s: %w", code, err)
-	}
-	return &codeError{code: code}
+	return &codeError{code: code, retry: retryableCodes[code]}
 }
 
 // createStreamNow creates the log stream. It runs on every missing-stream error, because a
@@ -325,25 +330,32 @@ func (s *Sender) createStreamNow(ctx context.Context) error {
 	})
 	if err != nil {
 		var apiErr smithy.APIError
-		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ResourceAlreadyExistsException" {
-			return nil
+		if errors.As(err, &apiErr) {
+			code := apiErr.ErrorCode()
+			if code == "ResourceAlreadyExistsException" {
+				return nil
+			}
+			return &codeError{code: code, retry: retryableCodes[code]}
 		}
-		return fmt.Errorf("cloudwatch: create stream: %w", err)
+		return err
 	}
 	return nil
 }
 
-// codeError is a permanent API error, so the pipeline drops the batch rather than
-// retrying it verbatim.
-type codeError struct{ code string }
+// codeError names one API error code, and says whether another try is worth it. It never
+// holds the AWS message text, so a report cannot quote a response body.
+type codeError struct {
+	code  string
+	retry bool
+}
 
 // Error names the code.
 func (e *codeError) Error() string { return "cloudwatch: " + e.code }
 
-// Retryable reports that the code is permanent.
-func (e *codeError) Retryable() bool { return false }
+// Retryable reports whether the code is worth another try.
+func (e *codeError) Retryable() bool { return e.retry }
 
-// RetryAfter is zero, because a permanent error gets no wait.
+// RetryAfter is zero, because the API sends no wait.
 func (e *codeError) RetryAfter() time.Duration { return 0 }
 
 // messageOf returns the message of one event: the preset output, or the canonical event
