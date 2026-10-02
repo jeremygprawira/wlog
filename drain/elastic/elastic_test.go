@@ -227,6 +227,31 @@ func TestElastic_P6_GzipIsOnByDefault(t *testing.T) {
 	}
 }
 
+// TestElastic_P8_ShortResultListRetriesTheRest proves that an event without a result is
+// retried, not counted as sent. A response with no items names no event.
+func TestElastic_P8_ShortResultListRetriesTheRest(t *testing.T) {
+	for _, answer := range []string{`{"errors":false,"items":[]}`, `{"errors":false,"items":null}`, `{}`} {
+		srv := newFake(t, http.StatusOK, answer)
+		sender, err := elastic.NewSender(elastic.WithURL(srv.URL))
+		if err != nil {
+			t.Fatalf("NewSender: %v", err)
+		}
+		err = sender.SendBatch(context.Background(), []map[string]any{
+			{"kind": "request"}, {"kind": "request"}, {"kind": "request"},
+		})
+		var partial *pipeline.PartialError
+		if !errors.As(err, &partial) {
+			t.Fatalf("answer %s: SendBatch = %v, want a PartialError", answer, err)
+		}
+		if len(partial.Retry) != 3 {
+			t.Errorf("answer %s: Retry = %v, want all three events", answer, partial.Retry)
+		}
+		if len(partial.Dropped) != 0 {
+			t.Errorf("answer %s: Dropped = %v, want none", answer, partial.Dropped)
+		}
+	}
+}
+
 // TestElastic_StatusTable proves the whole-request statuses classify as the spec says.
 func TestElastic_StatusTable(t *testing.T) {
 	for _, tc := range []struct {

@@ -304,6 +304,14 @@ func (s *Sender) postChunk(ctx context.Context, client *httpdrain.Client, events
 			reason = "status_" + strconv.Itoa(result.Status)
 		}
 	}
+	// An event with no result was not accepted: the answer named fewer events than the
+	// request held, so the rest are sent again.
+	for j := len(results); j < len(events); j++ {
+		retry = append(retry, j)
+		if reason == "" {
+			reason = "missing_result"
+		}
+	}
 	if len(retry) == 0 && len(dropped) == 0 {
 		return nil
 	}

@@ -305,6 +305,35 @@ func TestHoneycomb_P6_GzipIsOnByDefault(t *testing.T) {
 	}
 }
 
+// TestHoneycomb_P8_ShortResultListRetriesTheRest proves that an event without a result is
+// retried, not counted as sent. A response of [], null, or {} names no event.
+func TestHoneycomb_P8_ShortResultListRetriesTheRest(t *testing.T) {
+	for _, answer := range []string{`[]`, `null`, `{}`} {
+		srv := newFake(t, http.StatusOK, answer)
+		sender, err := honeycomb.NewSender(
+			honeycomb.WithAPIKey("key"),
+			honeycomb.WithAPIURL(srv.URL),
+			honeycomb.WithDataset("logs"),
+		)
+		if err != nil {
+			t.Fatalf("NewSender: %v", err)
+		}
+		err = sender.SendBatch(context.Background(), []map[string]any{
+			{"kind": "request"}, {"kind": "request"}, {"kind": "request"},
+		})
+		var partial *pipeline.PartialError
+		if !errors.As(err, &partial) {
+			t.Fatalf("answer %s: SendBatch = %v, want a PartialError", answer, err)
+		}
+		if len(partial.Retry) != 3 {
+			t.Errorf("answer %s: Retry = %v, want all three events", answer, partial.Retry)
+		}
+		if len(partial.Dropped) != 0 {
+			t.Errorf("answer %s: Dropped = %v, want none", answer, partial.Dropped)
+		}
+	}
+}
+
 // TestHoneycomb_Options proves every option reaches the sender and New wraps it.
 func TestHoneycomb_Options(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `[{"status":202}]`)

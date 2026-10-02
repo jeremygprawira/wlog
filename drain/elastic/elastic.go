@@ -368,6 +368,14 @@ func itemResults(answer []byte, offset, count int) (retry, dropped []int, reason
 			reason = result.Error.Type
 		}
 	}
+	// An event with no result was not accepted: the answer named fewer items than the
+	// request held, so the rest are sent again.
+	for i := len(response.Items); i < count; i++ {
+		retry = append(retry, offset+i)
+		if reason == "" {
+			reason = "missing_result"
+		}
+	}
 	return retry, dropped, reason, nil
 }
 
