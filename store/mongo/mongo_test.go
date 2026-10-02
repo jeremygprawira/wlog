@@ -95,7 +95,13 @@ func TestMongo_B2_WithCollection(t *testing.T) {
 	if monitor.Started == nil {
 		t.Fatal("the collection option left Started nil")
 	}
-	command, err := bson.Marshal(bson.M{"insert": "orders", "documents": []any{bson.M{"id": 1}}})
+	// The command document is ordered, as the driver builds it: the collection name is
+	// the first element. A map literal marshals in random order, so index 0 would
+	// sometimes hold another field and the collection would be lost.
+	command, err := bson.Marshal(bson.D{
+		{Key: "insert", Value: "orders"},
+		{Key: "documents", Value: []any{bson.M{"id": 1}}},
+	})
 	if err != nil {
 		t.Fatalf("marshal the command: %v", err)
 	}
