@@ -6,6 +6,7 @@ go 1.26.0
 
 require (
 	github.com/itchyny/gojq v0.12.17
+	github.com/jeremygprawira/wlog v0.8.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.org/x/mod v0.41.0
 	golang.org/x/perf v0.0.0-20260908200009-22c9c6c9d4da
@@ -22,3 +23,5 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.50.0 // indirect
 )
+
+replace github.com/jeremygprawira/wlog => ..

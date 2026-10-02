@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/itchyny/gojq"
+
+	"github.com/jeremygprawira/wlog/drain/elastic"
 )
 
 // searchDir is the search recipes folder, from the tools module.
 const searchDir = "../integrations/search"
 
-// TestSearchRecipes_Files proves that every file of the table exists and loads, and that
-// the phase 14 Elastic template is not here yet.
+// TestSearchRecipes_Files proves that every file of the table exists and loads.
 func TestSearchRecipes_Files(t *testing.T) {
 	for _, name := range []string{
 		"lnav/wlog.json", "grafana/loki.json", "grafana/clickhouse.json", "datadog/facets.json",
@@ -55,9 +56,18 @@ func TestSearchRecipes_Files(t *testing.T) {
 	if !strings.Contains(string(views), "CREATE VIEW") {
 		t.Error("views.sql holds no view")
 	}
+}
 
-	if _, err := os.Stat(filepath.Join(searchDir, "elastic/index-template.json")); err == nil {
-		t.Error("the elastic template exists, and it belongs to phase 14")
+// TestSearchRecipes_X2_ElasticTemplateMatches proves the Elastic index template is here, and
+// that it holds the bytes of elastic.Template(elastic.Elasticsearch). The 14-E-6 acceptance
+// asks for exactly those bytes.
+func TestSearchRecipes_X2_ElasticTemplateMatches(t *testing.T) {
+	got, err := os.ReadFile(filepath.Join(searchDir, "elastic/index-template.json"))
+	if err != nil {
+		t.Fatalf("read the elastic template: %v", err)
+	}
+	if want := elastic.Template(elastic.Elasticsearch); string(got) != string(want) {
+		t.Errorf("the elastic template does not equal elastic.Template(elastic.Elasticsearch)")
 	}
 }
 
