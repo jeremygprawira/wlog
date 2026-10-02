@@ -209,6 +209,36 @@ func TestSplunk_D10_ALaterFailureKeepsTheEarlierChunk(t *testing.T) {
 	}
 }
 
+// TestSplunk_D18_BackpressureReportsOnceAMinute proves two batches inside one minute report
+// the backpressure code once, because the spec asks for one report per minute.
+func TestSplunk_D18_BackpressureReportsOnceAMinute(t *testing.T) {
+	srv := newFake(t, http.StatusOK, `{"text":"HEC queue is approaching its capacity limit","code":24}`)
+	sender, err := splunk.NewSender(splunk.WithURL(srv.URL), splunk.WithToken("token"))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+
+	problems := make(chan wlog.Problem, 4)
+	log := wlog.New(wlog.WithSilent(), wlog.OnProblem(func(p wlog.Problem) { problems <- p }))
+	if err := sender.Setup(log); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+			t.Fatalf("SendBatch: %v", err)
+		}
+	}
+	reports := 0
+	for len(problems) > 0 {
+		if p := <-problems; p.Code == "WLOG_DRAIN_BACKPRESSURE" {
+			reports++
+		}
+	}
+	if reports != 1 {
+		t.Fatalf("backpressure reports = %d, want one inside a minute", reports)
+	}
+}
+
 // TestSplunk_ChannelIsStable proves one channel id serves the life of the drain.
 func TestSplunk_ChannelIsStable(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `{"text":"Success","code":0}`)

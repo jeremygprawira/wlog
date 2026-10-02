@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jeremygprawira/wlog"
@@ -122,6 +123,10 @@ type Sender struct {
 	sourceType string
 	maxBatch   int
 	logger     *wlog.Logger
+
+	// mu guards backpressureAt, the time of the last WLOG_DRAIN_BACKPRESSURE report.
+	mu             sync.Mutex
+	backpressureAt time.Time
 }
 
 // New returns the drain with the pipeline defaults, or with the options WithPipeline set.
@@ -446,11 +451,20 @@ func (e *hecError) Retryable() bool { return true }
 // RetryAfter is zero, because a HEC code carries no server wait.
 func (e *hecError) RetryAfter() time.Duration { return 0 }
 
-// reportBackpressure tells the caller that Splunk is near its capacity.
+// reportBackpressure tells the caller that the collector is near its capacity, at most once
+// per minute, so a hot batch loop cannot flood the console.
 func (s *Sender) reportBackpressure(code int) {
 	if s.logger == nil {
 		return
 	}
+	s.mu.Lock()
+	now := time.Now()
+	if !s.backpressureAt.IsZero() && now.Sub(s.backpressureAt) < time.Minute {
+		s.mu.Unlock()
+		return
+	}
+	s.backpressureAt = now
+	s.mu.Unlock()
 	s.logger.Report(wlog.Problem{
 		Code:    "WLOG_DRAIN_BACKPRESSURE",
 		Source:  "splunk",
