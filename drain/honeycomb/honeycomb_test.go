@@ -373,6 +373,54 @@ func TestHoneycomb_P9_CapKeepsReservedKeys(t *testing.T) {
 	}
 }
 
+// TestHoneycomb_P13_IndexMapAcrossDatasetsAndHalves proves the batch indexes stay right
+// when several datasets are sent and one of them is halved after a 413. A billing event
+// that the backend refuses must name its own batch position.
+func TestHoneycomb_P13_IndexMapAcrossDatasetsAndHalves(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var items []map[string]any
+		_ = json.Unmarshal(httpfake.Body(r), &items)
+		if len(items) == 0 {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		data, _ := items[0]["data"].(map[string]any)
+		dataset, _ := data["service.name"].(string)
+		if dataset == "checkout" && len(items) > 1 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		if dataset == "checkout" {
+			_, _ = w.Write([]byte(`[{"status":202}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[{"status":202},{"status":400}]`))
+	}))
+	defer srv.Close()
+
+	sender, err := honeycomb.NewSender(honeycomb.WithAPIKey("key"), honeycomb.WithAPIURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	events := []map[string]any{
+		{"kind": "request", "service": map[string]any{"name": "checkout"}},
+		{"kind": "request", "service": map[string]any{"name": "checkout"}},
+		{"kind": "request", "service": map[string]any{"name": "billing"}},
+		{"kind": "request", "service": map[string]any{"name": "billing"}},
+	}
+	err = sender.SendBatch(context.Background(), events)
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if len(partial.Dropped) != 1 || partial.Dropped[0] != 3 {
+		t.Errorf("Dropped = %v, want the billing event at batch index 3", partial.Dropped)
+	}
+	if len(partial.Retry) != 0 {
+		t.Errorf("Retry = %v, want none", partial.Retry)
+	}
+}
+
 // TestHoneycomb_Options proves every option reaches the sender and New wraps it.
 func TestHoneycomb_Options(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `[{"status":202}]`)

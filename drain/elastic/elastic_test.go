@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"encoding/base64"
 	"github.com/jeremygprawira/wlog/drain/elastic"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
@@ -249,6 +250,55 @@ func TestElastic_P8_ShortResultListRetriesTheRest(t *testing.T) {
 		if len(partial.Dropped) != 0 {
 			t.Errorf("answer %s: Dropped = %v, want none", answer, partial.Dropped)
 		}
+	}
+}
+
+// TestElastic_P13_RequestShape proves the bulk URL, the filter_path query, and both
+// Authorization headers, so a mutation of any of them fails.
+func TestElastic_P13_RequestShape(t *testing.T) {
+	answer := `{"errors":false,"items":[{"create":{"status":201}}]}`
+	for _, tc := range []struct {
+		name   string
+		opts   []elastic.Option
+		header string
+	}{
+		{
+			name:   "api key",
+			opts:   []elastic.Option{elastic.WithAPIKey("encoded")},
+			header: "ApiKey encoded",
+		},
+		{
+			name:   "basic",
+			opts:   []elastic.Option{elastic.WithBasicAuth("user", "pass")},
+			header: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass")),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httpfake.New()
+			defer srv.Close()
+			srv.SetBody(answer)
+			opts := append([]elastic.Option{elastic.WithURL(srv.URL)}, tc.opts...)
+			sender, err := elastic.NewSender(opts...)
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+			req := srv.Last()
+			if req == nil {
+				t.Fatal("no request recorded")
+			}
+			if req.Path != "/logs-wlog-default/_bulk" {
+				t.Errorf("path = %q, want /logs-wlog-default/_bulk", req.Path)
+			}
+			if got := req.Query.Get("filter_path"); got != "errors,items.*.status,items.*.error.type" {
+				t.Errorf("filter_path = %q", got)
+			}
+			if got := req.Headers.Get("Authorization"); got != tc.header {
+				t.Errorf("Authorization = %q, want %q", got, tc.header)
+			}
+		})
 	}
 }
 

@@ -189,6 +189,25 @@ func TestHTTPDrain_D1_Non2xxReturnsTheBody(t *testing.T) {
 	}
 }
 
+// TestHTTPDrain_P13_ResponseCap proves PostFor returns at most 4 MiB of a response body, so
+// a backend that streams an endless answer cannot grow memory without bound.
+func TestHTTPDrain_P13_ResponseCap(t *testing.T) {
+	const cap = 4 << 20
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(bytes.Repeat([]byte("x"), cap+1024))
+	}))
+	defer srv.Close()
+
+	client := httpdrain.New(srv.URL)
+	body, err := client.PostFor(context.Background(), []byte(`{}`), "application/json")
+	if err != nil {
+		t.Fatalf("PostFor: %v", err)
+	}
+	if len(body) != cap {
+		t.Errorf("body = %d bytes, want the %d byte cap", len(body), cap)
+	}
+}
+
 func TestHTTPDrain_CustomHeaders(t *testing.T) {
 	srv := httpfake.New()
 	defer srv.Close()
