@@ -34,6 +34,9 @@ type wrapped struct {
 	mu         sync.Mutex
 	buf        []map[string]any
 	oldestTime time.Time
+	// sendMu serializes one batch send. The worker holds it while a batch is in flight,
+	// and Flush holds it so it can wait for that batch before it returns.
+	sendMu sync.Mutex
 
 	closed    atomic.Bool
 	closeOnce sync.Once
@@ -223,6 +226,8 @@ func (w *wrapped) flushIfReady() {
 	if batch == nil {
 		return
 	}
+	w.sendMu.Lock()
+	defer w.sendMu.Unlock()
 	w.sendBatch(context.Background(), batch)
 }
 
@@ -491,6 +496,8 @@ func (w *wrapped) flushAll(ctx context.Context) {
 	w.buf = nil
 	w.mu.Unlock()
 	if len(batch) > 0 {
+		w.sendMu.Lock()
+		defer w.sendMu.Unlock()
 		w.sendBatch(ctx, batch)
 	}
 }
@@ -498,6 +505,9 @@ func (w *wrapped) flushAll(ctx context.Context) {
 // Flush sends every buffered event now and keeps the worker running, so a caller
 // that is about to lose its process (a Lambda freeze, a container stop) can push
 // what it holds without ending the drain.
+//
+// It also waits for a batch the worker already took, so a caller that is about to lose
+// the process never leaves one in flight.
 func (w *wrapped) Flush(ctx context.Context) error {
 	if w.closed.Load() {
 		return nil
@@ -506,6 +516,8 @@ func (w *wrapped) Flush(ctx context.Context) error {
 	batch := w.buf
 	w.buf = nil
 	w.mu.Unlock()
+	w.sendMu.Lock()
+	defer w.sendMu.Unlock()
 	if len(batch) == 0 {
 		return nil
 	}

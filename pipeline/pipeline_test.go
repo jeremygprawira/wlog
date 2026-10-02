@@ -112,6 +112,41 @@ func TestPipeline_P7_ReportsDroppedEvents(t *testing.T) {
 	}
 }
 
+// TestPipeline_P12_FlushWaitsForAnInFlightBatch proves that Flush does not return while
+// the worker is still sending a batch, so a caller that is about to lose its process, such
+// as a Lambda freeze, knows that every batch has landed.
+func TestPipeline_P12_FlushWaitsForAnInFlightBatch(t *testing.T) {
+	sender := &fakeSender{hang: true, hangCh: make(chan struct{})}
+	drain := pipeline.Wrap(sender, pipeline.BatchSize(1), pipeline.BatchInterval(time.Hour))
+	defer closeDrain(t, drain)
+
+	var once sync.Once
+	release := func() { once.Do(func() { close(sender.hangCh) }) }
+	defer release()
+
+	drain.Send(context.Background(), mkEvent(0))
+	waitFor(t, time.Second, func() bool { return sender.callsMade() == 1 })
+
+	flushed := make(chan struct{})
+	go func() {
+		_ = drain.(interface{ Flush(context.Context) error }).Flush(context.Background())
+		close(flushed)
+	}()
+
+	select {
+	case <-flushed:
+		t.Fatal("Flush returned while a batch was in flight")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	release()
+	select {
+	case <-flushed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Flush did not return after the batch finished")
+	}
+}
+
 func TestPipeline_FlushesOnBatchSize(t *testing.T) {
 	sender := &fakeSender{}
 	drain := pipeline.Wrap(sender, pipeline.BatchSize(5), pipeline.BatchInterval(time.Hour))
