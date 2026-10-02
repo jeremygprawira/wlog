@@ -30,12 +30,15 @@ func (e apiError) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
 // fakeAPI records every put and answers with a fixed result.
 type fakeAPI struct {
-	mu       sync.Mutex
-	puts     []*cloudwatchlogs.PutLogEventsInput
-	creates  int
-	putErr   error
-	rejected *types.RejectedLogEventsInfo
-	failNext bool
+	mu        sync.Mutex
+	puts      []*cloudwatchlogs.PutLogEventsInput
+	creates   int
+	putErr    error
+	createErr error
+	// failCreateNext fails the next CreateLogStream call with createErr.
+	failCreateNext bool
+	rejected       *types.RejectedLogEventsInfo
+	failNext       bool
 	// failAt is the 1-based put number that fails with putErr, or 0 for none.
 	failAt int
 }
@@ -70,6 +73,10 @@ func (f *fakeAPI) CreateLogStream(_ context.Context, _ *cloudwatchlogs.CreateLog
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.creates++
+	if f.failCreateNext {
+		f.failCreateNext = false
+		return nil, f.createErr
+	}
 	return &cloudwatchlogs.CreateLogStreamOutput{}, nil
 }
 
@@ -210,6 +217,33 @@ func TestCloudWatch_CreateStreamOnce(t *testing.T) {
 	}
 	if api.creates != 1 {
 		t.Errorf("CreateLogStream calls = %d after success, want 1", api.creates)
+	}
+}
+
+// TestCloudWatch_D3_CreatesTheStreamAfterAFailedCreate proves a later missing-stream error
+// still creates the stream, so one throttled create does not stop the drain.
+func TestCloudWatch_D3_CreatesTheStreamAfterAFailedCreate(t *testing.T) {
+	api := &fakeAPI{
+		putErr:         apiError{code: "ResourceNotFoundException"},
+		createErr:      apiError{code: "ThrottlingException"},
+		failCreateNext: true,
+	}
+	sender, err := cloudwatch.NewSender(api, "group", cloudwatch.WithCreateStream(true))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event("2026-09-22T10:00:00Z")}); err == nil {
+		t.Fatal("the first batch returned no error")
+	}
+	// The stream is still missing, so the second batch creates it again. Before the fix
+	// the flag was already set, so no later attempt created it.
+	err = sender.SendBatch(context.Background(), []map[string]any{event("2026-09-22T10:00:00Z")})
+	var re interface{ Retryable() bool }
+	if !errors.As(err, &re) || !re.Retryable() {
+		t.Fatalf("the second batch = %v, want a retryable error", err)
+	}
+	if api.creates != 2 {
+		t.Errorf("CreateLogStream calls = %d, want 2", api.creates)
 	}
 }
 

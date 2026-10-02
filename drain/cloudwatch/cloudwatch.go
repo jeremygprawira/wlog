@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -100,9 +99,6 @@ type Sender struct {
 	stream       string
 	preset       wlog.OutputPreset
 	createStream bool
-
-	mu      sync.Mutex
-	created bool
 }
 
 // New returns the drain with the pipeline defaults, or with the options WithPipeline set.
@@ -306,7 +302,7 @@ func (s *Sender) mapError(ctx context.Context, err error) error {
 	code := apiErr.ErrorCode()
 	if code == "ResourceNotFoundException" {
 		if s.createStream {
-			if createErr := s.createOnce(ctx); createErr != nil {
+			if createErr := s.createStreamNow(ctx); createErr != nil {
 				return createErr
 			}
 		}
@@ -319,19 +315,19 @@ func (s *Sender) mapError(ctx context.Context, err error) error {
 	return &codeError{code: code}
 }
 
-// createOnce creates the stream at most once.
-func (s *Sender) createOnce(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.created {
-		return nil
-	}
-	s.created = true
+// createStreamNow creates the log stream. It runs on every missing-stream error, because a
+// later attempt must still create the stream after a throttle, and it treats an existing
+// stream as success.
+func (s *Sender) createStreamNow(ctx context.Context) error {
 	_, err := s.client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
 		LogGroupName:  aws.String(s.group),
 		LogStreamName: aws.String(s.stream),
 	})
 	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "ResourceAlreadyExistsException" {
+			return nil
+		}
 		return fmt.Errorf("cloudwatch: create stream: %w", err)
 	}
 	return nil
