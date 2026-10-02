@@ -75,6 +75,11 @@ func optional(name string, aliases ...string) Var {
 	return Var{Name: name, Aliases: aliases}
 }
 
+// secret marks a required variable whose value must never be printed.
+func secret(name string, aliases ...string) Var {
+	return Var{Name: name, Aliases: aliases, Required: true, Secret: true}
+}
+
 // pairs reads a comma-separated list of key=value pairs, such as the header variable of
 // OTLP. A pair with no separator is skipped.
 func pairs(value string) map[string]string {

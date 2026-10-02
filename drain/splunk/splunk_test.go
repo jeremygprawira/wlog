@@ -239,6 +239,24 @@ func TestSplunk_D18_BackpressureReportsOnceAMinute(t *testing.T) {
 	}
 }
 
+// TestSplunk_D24_AnUnreadableAnswerIsNotADrop proves a 200 answer with no readable code is
+// retried rather than reported as hec_code_-1.
+func TestSplunk_D24_AnUnreadableAnswerIsNotADrop(t *testing.T) {
+	srv := newFake(t, http.StatusOK, `not json`)
+	sender, err := splunk.NewSender(splunk.WithURL(srv.URL), splunk.WithToken("token"))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{event()})
+	if err == nil {
+		t.Fatal("SendBatch = nil, want an error")
+	}
+	var partial *pipeline.PartialError
+	if errors.As(err, &partial) {
+		t.Errorf("SendBatch = %v, want no PartialError for an unreadable answer", err)
+	}
+}
+
 // TestSplunk_ChannelIsStable proves one channel id serves the life of the drain.
 func TestSplunk_ChannelIsStable(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `{"text":"Success","code":0}`)

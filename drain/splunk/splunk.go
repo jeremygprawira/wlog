@@ -285,6 +285,14 @@ func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes
 		answer = statusErr.Body
 	}
 	code := codeOf(answer)
+	if code < 0 {
+		// The answer held no readable code, so the request failed in a way that says
+		// nothing about the events. A retry is right; dropping them is not.
+		if err != nil {
+			return nil, nil, "", err
+		}
+		return nil, nil, "", fmt.Errorf("splunk: the answer holds no HEC code")
+	}
 	if code == 0 {
 		// A failed request whose answer holds no code keeps its own error.
 		if err != nil {

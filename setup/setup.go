@@ -476,7 +476,7 @@ func builtins() []Factory {
 		{
 			Name: "honeycomb",
 			Vars: []Var{
-				required("HONEYCOMB_API_KEY"),
+				secret("HONEYCOMB_API_KEY"),
 				optional("HONEYCOMB_DATASET"),
 				optional("HONEYCOMB_API_URL", "HONEYCOMB_API_ENDPOINT"),
 			},
@@ -495,7 +495,7 @@ func builtins() []Factory {
 		{
 			Name: "newrelic",
 			Vars: []Var{
-				required("NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY"),
+				secret("NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY"),
 				optional("NEW_RELIC_REGION"),
 			},
 			New: func(env Env) (wlog.Drain, error) {
@@ -511,7 +511,7 @@ func builtins() []Factory {
 			Name: "splunk",
 			Vars: []Var{
 				required("SPLUNK_HEC_URL"),
-				required("SPLUNK_HEC_TOKEN"),
+				secret("SPLUNK_HEC_TOKEN"),
 				optional("SPLUNK_INDEX"),
 				optional("SPLUNK_SOURCETYPE"),
 			},

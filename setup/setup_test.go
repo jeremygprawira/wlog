@@ -15,6 +15,33 @@ import (
 	"github.com/jeremygprawira/wlog/setup"
 )
 
+// TestSetup_D24_SecretVars proves the credential variables are marked Secret, so a report
+// or a log never prints their values.
+func TestSetup_D24_SecretVars(t *testing.T) {
+	want := map[string]bool{
+		"HONEYCOMB_API_KEY":     true,
+		"NEW_RELIC_LICENSE_KEY": true,
+		"SPLUNK_HEC_TOKEN":      true,
+	}
+	seen := map[string]bool{}
+	for _, factory := range setup.Builtins() {
+		for _, v := range factory.Vars {
+			if !want[v.Name] {
+				continue
+			}
+			seen[v.Name] = true
+			if !v.Secret {
+				t.Errorf("%s is not marked Secret", v.Name)
+			}
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("%s is in no factory", name)
+		}
+	}
+}
+
 // TestSetup_PAR20_MissingCredentialDisables proves that a drain with a missing required
 // variable is skipped, and that the report names the variable and never its value.
 func TestSetup_PAR20_MissingCredentialDisables(t *testing.T) {
