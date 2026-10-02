@@ -344,6 +344,32 @@ func TestCloudWatch_D19_TheErrorNamesTheCodeOnly(t *testing.T) {
 	}
 }
 
+// TestCloudWatch_D11_DropsAnEntryOverTheByteLimit proves an entry no request can carry is
+// dropped with reason too_large and never sent.
+func TestCloudWatch_D11_DropsAnEntryOverTheByteLimit(t *testing.T) {
+	api := &fakeAPI{}
+	sender, err := cloudwatch.NewSender(api, "group")
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	big := event("2026-09-22T10:00:00Z")
+	big["blob"] = strings.Repeat("x", 1<<20) // the 1 MiB entry limit
+	err = sender.SendBatch(context.Background(), []map[string]any{big, event("2026-09-22T10:00:00Z")})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if len(partial.Dropped) != 1 || partial.Dropped[0] != 0 {
+		t.Errorf("Dropped = %v, want the oversize event at index 0", partial.Dropped)
+	}
+	if partial.Reason != "too_large" {
+		t.Errorf("Reason = %q, want too_large", partial.Reason)
+	}
+	if got := api.putCount(); got != 1 {
+		t.Errorf("puts = %d, want one: the oversize entry is never sent", got)
+	}
+}
+
 // TestCloudWatch_Preset proves WithPreset writes the preset output.
 func TestCloudWatch_Preset(t *testing.T) {
 	api := &fakeAPI{}

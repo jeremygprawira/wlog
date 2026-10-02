@@ -168,18 +168,24 @@ type entry struct {
 // SendBatch sorts the events, splits them, and puts each chunk.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	entries := make([]entry, 0, len(events))
+	var retry, dropped []int
+	reason := ""
 	for i, event := range events {
 		message, err := s.messageOf(event)
 		if err != nil {
 			return fmt.Errorf("cloudwatch: build message: %w", err)
+		}
+		if len(message)+perEventOverhead > maxBytes {
+			// No request can carry this entry, so it is dropped rather than sent.
+			dropped = append(dropped, i)
+			reason = "too_large"
+			continue
 		}
 		entries = append(entries, entry{index: i, timestamp: startMillis(event), message: message})
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].timestamp < entries[j].timestamp })
 
 	all := chunks(entries)
-	var retry, dropped []int
-	reason := ""
 	for ci, chunk := range all {
 		chunkDropped, chunkReason, err := s.putChunk(ctx, chunk)
 		if err != nil {
