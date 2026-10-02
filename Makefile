@@ -9,10 +9,10 @@ FUZZTIME ?= 30s
 .PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor release-check compat cover vuln map integration
 
 test:
-	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
+	@for m in $(MODULES); do (cd $$m && go test -count=1 ./...) || exit 1; done
 
 race:
-	@for m in $(MODULES); do (cd $$m && go test -race ./...) || exit 1; done
+	@for m in $(MODULES); do (cd $$m && go test -race -count=1 ./...) || exit 1; done
 
 # fuzz runs every Fuzz target of every module, and finds them itself.
 fuzz:
