@@ -210,24 +210,50 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	}, c.pipelineOpts, nil
 }
 
-// SendBatch posts the events in one bulk request, split at the byte cap, and maps the
-// item results to a PartialError.
+// SendBatch posts the events in bulk requests that fit the byte cap, and halves a request
+// the cluster refuses with a 413. It maps the item results to a PartialError, so only the
+// events that need another try are sent again.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	var retry, dropped []int
 	reason := ""
 	for start := 0; start < len(events); {
 		end := s.chunkEnd(events, start)
-		body, err := bulkBody(events[start:end])
-		if err != nil {
-			return fmt.Errorf("elastic: build bulk body: %w", err)
+		chunk := httpdrain.Chunk{Start: start, End: end}
+		post := func(ctx context.Context, chunkEvents []map[string]any) error {
+			body, err := bulkBody(chunkEvents)
+			if err != nil {
+				return fmt.Errorf("elastic: build bulk body: %w", err)
+			}
+			answer, err := s.client.PostFor(ctx, body, "application/x-ndjson")
+			if err != nil {
+				return err
+			}
+			chunkRetry, chunkDropped, chunkReason, err := itemResults(answer, 0, len(chunkEvents))
+			if err != nil {
+				return err
+			}
+			if len(chunkRetry) == 0 && len(chunkDropped) == 0 {
+				return nil
+			}
+			return &pipeline.PartialError{Retry: chunkRetry, Dropped: chunkDropped, Reason: chunkReason}
 		}
-		answer, err := s.client.PostFor(ctx, body, "application/x-ndjson")
-		if err != nil {
-			// One chunk's failure must not resend the chunks that landed. A data
-			// stream create carries no _id, so a resend is a duplicate document. The
-			// events of this chunk are retried or dropped, and the loop moves on.
+		pe, err := httpdrain.SendChunk(ctx, events, chunk, post)
+		switch {
+		case err != nil:
+			var chunkPE *pipeline.PartialError
+			if errors.As(err, &chunkPE) {
+				// Per-item results, in batch positions.
+				retry = append(retry, chunkPE.Retry...)
+				dropped = append(dropped, chunkPE.Dropped...)
+				if chunkPE.Reason != "" {
+					reason = chunkPE.Reason
+				}
+				break
+			}
+			// The request failed as a whole: this chunk is retried or dropped, and the
+			// chunks that landed are left alone.
 			again := retryable(err)
-			for i := start; i < end; i++ {
+			for i := chunk.Start; i < chunk.End; i++ {
 				if again {
 					retry = append(retry, i)
 				} else {
@@ -237,17 +263,9 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 			if reason == "" {
 				reason = statusReason(err)
 			}
-			start = end
-			continue
-		}
-		chunkRetry, chunkDropped, chunkReason, err := itemResults(answer, start, end-start)
-		if err != nil {
-			return err
-		}
-		retry = append(retry, chunkRetry...)
-		dropped = append(dropped, chunkDropped...)
-		if chunkReason != "" {
-			reason = chunkReason
+		case pe != nil:
+			dropped = append(dropped, pe.Dropped...)
+			reason = pe.Reason
 		}
 		start = end
 	}

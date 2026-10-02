@@ -165,6 +165,39 @@ func TestElastic_P3_FailedChunkLeavesTheOthersAlone(t *testing.T) {
 	}
 }
 
+// TestElastic_P4_HalvesARequestOn413 proves that a 413 splits the chunk in half and sends
+// each half, so one large request does not lose the batch.
+func TestElastic_P4_HalvesARequestOn413(t *testing.T) {
+	var bodies []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, len(body))
+		count := strings.Count(string(body), `{"create":{}}`)
+		if count > 1 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		answers := make([]string, 0, count)
+		for i := 0; i < count; i++ {
+			answers = append(answers, `{"create":{"status":201}}`)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"errors":false,"items":[` + strings.Join(answers, ",") + `]}`))
+	}))
+	defer srv.Close()
+
+	sender, err := elastic.NewSender(elastic.WithURL(srv.URL), elastic.WithMaxBatchBytes(100000))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent(), requestEvent()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	if len(bodies) != 3 {
+		t.Errorf("requests = %d, want 3: one refusal and two halves", len(bodies))
+	}
+}
+
 // TestElastic_StatusTable proves the whole-request statuses classify as the spec says.
 func TestElastic_StatusTable(t *testing.T) {
 	for _, tc := range []struct {

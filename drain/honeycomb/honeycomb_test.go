@@ -175,6 +175,66 @@ func TestHoneycomb_P2_FailedDatasetLeavesTheOthersAlone(t *testing.T) {
 	}
 }
 
+// TestHoneycomb_P4_SplitsALargeRequestAndDropsAnOversizeEvent proves the two byte limits:
+// an event whose item passes 1 MB is dropped with reason too_large, and a group whose body
+// passes 5 MB arrives as several requests.
+func TestHoneycomb_P4_SplitsALargeRequestAndDropsAnOversizeEvent(t *testing.T) {
+	var sizes []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var items []json.RawMessage
+		_ = json.Unmarshal(body, &items)
+		sizes = append(sizes, len(body))
+		answers := make([]string, 0, len(items))
+		for range items {
+			answers = append(answers, `{"status":202}`)
+		}
+		_, _ = w.Write([]byte("[" + strings.Join(answers, ",") + "]"))
+	}))
+	defer srv.Close()
+
+	sender, err := honeycomb.NewSender(honeycomb.WithAPIKey("key"), honeycomb.WithAPIURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+
+	// The first event passes the 1 MB per-event limit. The rest pass the 5 MB per-request
+	// limit together, so the sender must split them.
+	big := strings.Repeat("x", 64*1024)
+	oversize := map[string]any{"kind": "request", "service": map[string]any{"name": "logs"}}
+	for i := 0; i < 20; i++ {
+		oversize[fmt.Sprintf("field_%d", i)] = big
+	}
+	events := []map[string]any{oversize}
+	for i := 0; i < 80; i++ {
+		events = append(events, map[string]any{
+			"kind":    "request",
+			"service": map[string]any{"name": "logs"},
+			"blob":    big + fmt.Sprint(i),
+		})
+	}
+
+	err = sender.SendBatch(context.Background(), events)
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if len(partial.Dropped) != 1 || partial.Dropped[0] != 0 {
+		t.Errorf("Dropped = %v, want the oversize event at index 0", partial.Dropped)
+	}
+	if partial.Reason != "too_large" {
+		t.Errorf("Reason = %q, want too_large", partial.Reason)
+	}
+	if len(sizes) < 2 {
+		t.Errorf("requests = %d, want more than one for a body over 5 MB", len(sizes))
+	}
+	for _, size := range sizes {
+		if size > 5<<20 {
+			t.Errorf("a request held %d bytes, want at most 5 MB", size)
+		}
+	}
+}
+
 // TestHoneycomb_Options proves every option reaches the sender and New wraps it.
 func TestHoneycomb_Options(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `[{"status":202}]`)

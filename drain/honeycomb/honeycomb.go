@@ -183,57 +183,71 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	}, c.pipelineOpts, nil
 }
 
-// SendBatch posts the events, split per dataset, and maps the per-item statuses to a
-// PartialError. A batch that Honeycomb accepts in full returns nil.
+// SendBatch posts the events, split per dataset and per request byte limit, and maps the
+// per-item statuses to a PartialError. A batch that Honeycomb accepts in full returns nil.
+//
+// An event over the per-event byte limit is dropped whole, because no request can carry it.
+// A chunk that Honeycomb refuses with a 413 is halved, so one large request does not lose
+// the batch.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	groups, order := s.group(events)
 	var retry, dropped []int
 	reason := ""
 	for _, dataset := range order {
 		indexes := groups[dataset]
-		items := make([]map[string]any, 0, len(indexes))
+		// The group's events, in batch order, so a chunk names its batch indexes.
+		group := make([]map[string]any, 0, len(indexes))
 		for _, i := range indexes {
-			items = append(items, s.itemOf(events[i]))
+			group = append(group, events[i])
 		}
-		body, err := json.Marshal(items)
-		if err != nil {
-			return fmt.Errorf("honeycomb: marshal batch: %w", err)
-		}
-		// ponytail: the request-size split is not built. A body over 5 MB reaches the
-		// backend and comes back as an error. Add a halving split when a caller sends
-		// batches that large.
-		answer, err := s.clientFor(dataset).PostFor(ctx, body, "application/json")
-		if err != nil {
-			// One dataset's failure must not resend the datasets that landed. Its
-			// events are retried or dropped, and the loop moves on.
-			if retryable(err) {
-				retry = append(retry, indexes...)
-			} else {
-				dropped = append(dropped, indexes...)
+		// An event over the per-event limit is dropped whole, because no request can
+		// carry it. The rest are split at the per-request limit.
+		kept := make([]map[string]any, 0, len(group))
+		keptIndexes := make([]int, 0, len(group))
+		for i, event := range group {
+			if s.itemBytes(event) > maxEventBytes {
+				dropped = append(dropped, indexes[i])
+				reason = "too_large"
+				continue
 			}
-			if reason == "" {
-				reason = statusReason(err)
+			kept = append(kept, event)
+			keptIndexes = append(keptIndexes, indexes[i])
+		}
+		chunks, _ := httpdrain.Chunks(kept, 0, maxRequestBytes, s.itemBytes)
+		client := s.clientFor(dataset)
+		for _, chunk := range chunks {
+			post := func(ctx context.Context, chunkEvents []map[string]any) error {
+				return s.postChunk(ctx, client, chunkEvents)
 			}
-			continue
-		}
-		var results []struct {
-			Status int `json:"status"`
-		}
-		if err := json.Unmarshal(answer, &results); err != nil {
-			return fmt.Errorf("honeycomb: read response: %w", err)
-		}
-		for j, result := range results {
-			if j >= len(indexes) {
-				break
-			}
+			pe, err := httpdrain.SendChunk(ctx, kept, chunk, post)
 			switch {
-			case result.Status == http.StatusAccepted:
-			case result.Status >= 500:
-				retry = append(retry, indexes[j])
-				reason = "status_" + strconv.Itoa(result.Status)
-			default:
-				dropped = append(dropped, indexes[j])
-				reason = "status_" + strconv.Itoa(result.Status)
+			case err != nil:
+				var chunkPE *pipeline.PartialError
+				if errors.As(err, &chunkPE) {
+					// Per-item results for this chunk, in group positions.
+					retry = append(retry, mapIndexes(keptIndexes, chunkPE.Retry)...)
+					dropped = append(dropped, mapIndexes(keptIndexes, chunkPE.Dropped)...)
+					if chunkPE.Reason != "" {
+						reason = chunkPE.Reason
+					}
+					continue
+				}
+				// The request failed as a whole: this chunk is retried or dropped, and
+				// the datasets and chunks that landed are left alone.
+				again := retryable(err)
+				for i := chunk.Start; i < chunk.End; i++ {
+					if again {
+						retry = append(retry, keptIndexes[i])
+					} else {
+						dropped = append(dropped, keptIndexes[i])
+					}
+				}
+				if reason == "" {
+					reason = statusReason(err)
+				}
+			case pe != nil:
+				dropped = append(dropped, mapIndexes(keptIndexes, pe.Dropped)...)
+				reason = pe.Reason
 			}
 		}
 	}
@@ -241,6 +255,69 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		return nil
 	}
 	return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: reason}
+}
+
+// itemBytes returns the encoded size of one event's item, which is what the request holds.
+func (s *Sender) itemBytes(event map[string]any) int {
+	body, err := json.Marshal([]map[string]any{s.itemOf(event)})
+	if err != nil {
+		return 0
+	}
+	return len(body)
+}
+
+// postChunk posts one chunk and maps the per-item statuses to a PartialError, whose
+// indexes are positions in the events the caller passed.
+func (s *Sender) postChunk(ctx context.Context, client *httpdrain.Client, events []map[string]any) error {
+	items := make([]map[string]any, 0, len(events))
+	for _, event := range events {
+		items = append(items, s.itemOf(event))
+	}
+	body, err := json.Marshal(items)
+	if err != nil {
+		return fmt.Errorf("honeycomb: marshal batch: %w", err)
+	}
+	answer, err := client.PostFor(ctx, body, "application/json")
+	if err != nil {
+		return err
+	}
+	var results []struct {
+		Status int `json:"status"`
+	}
+	if err := json.Unmarshal(answer, &results); err != nil {
+		return fmt.Errorf("honeycomb: read response: %w", err)
+	}
+	var retry, dropped []int
+	reason := ""
+	for j, result := range results {
+		if j >= len(events) {
+			break
+		}
+		switch {
+		case result.Status == http.StatusAccepted:
+		case result.Status >= 500:
+			retry = append(retry, j)
+			reason = "status_" + strconv.Itoa(result.Status)
+		default:
+			dropped = append(dropped, j)
+			reason = "status_" + strconv.Itoa(result.Status)
+		}
+	}
+	if len(retry) == 0 && len(dropped) == 0 {
+		return nil
+	}
+	return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: reason}
+}
+
+// mapIndexes turns group positions into batch positions.
+func mapIndexes(batch []int, local []int) []int {
+	out := make([]int, 0, len(local))
+	for _, i := range local {
+		if i >= 0 && i < len(batch) {
+			out = append(out, batch[i])
+		}
+	}
+	return out
 }
 
 // retryable reports whether a failed request is worth another try. A status the backend

@@ -101,8 +101,9 @@ func TestHTTPDrain_P4_ChunksSplitsByCountAndBytes(t *testing.T) {
 	if len(oversize) != 0 {
 		t.Errorf("oversize = %v, want none", oversize)
 	}
-	if len(chunks[0]) != 2 || len(chunks[2]) != 1 {
-		t.Errorf("chunk sizes = %d and %d, want 2 and 1", len(chunks[0]), len(chunks[2]))
+	if chunks[0].End-chunks[0].Start != 2 || chunks[2].End-chunks[2].Start != 1 {
+		t.Errorf("chunk sizes = %d and %d, want 2 and 1",
+			chunks[0].End-chunks[0].Start, chunks[2].End-chunks[2].Start)
 	}
 
 	chunks, oversize = httpdrain.Chunks(events, 0, 25, size)
@@ -134,7 +135,7 @@ func TestHTTPDrain_P4_SendChunkHalvesOn413(t *testing.T) {
 		}
 		return nil
 	}
-	pe, err := httpdrain.SendChunk(context.Background(), events, post)
+	pe, err := httpdrain.SendChunk(context.Background(), events, httpdrain.Chunk{Start: 0, End: len(events)}, post)
 	if err != nil {
 		t.Fatalf("SendChunk: %v", err)
 	}
@@ -148,7 +149,7 @@ func TestHTTPDrain_P4_SendChunkHalvesOn413(t *testing.T) {
 	always := func(context.Context, []map[string]any) error {
 		return &httpdrain.StatusError{Status: http.StatusRequestEntityTooLarge}
 	}
-	pe, err = httpdrain.SendChunk(context.Background(), events[:1], always)
+	pe, err = httpdrain.SendChunk(context.Background(), events[:1], httpdrain.Chunk{Start: 0, End: 1}, always)
 	if err != nil {
 		t.Fatalf("SendChunk: %v", err)
 	}

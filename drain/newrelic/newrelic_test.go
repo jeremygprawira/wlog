@@ -91,6 +91,41 @@ func TestNewRelic_P1_PostsToTheLogV1Path(t *testing.T) {
 	}
 }
 
+// TestNewRelic_P4_SplitsARequestOverTheLimit proves the drain splits a batch at the
+// 1,000,000 byte Log API limit, so one large request does not lose the batch.
+func TestNewRelic_P4_SplitsARequestOverTheLimit(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+
+	sender, err := newrelic.NewSender(newrelic.WithLicenseKey("key"), newrelic.WithEndpoint(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+
+	big := strings.Repeat("x", 64*1024)
+	var events []map[string]any
+	for i := 0; i < 40; i++ {
+		events = append(events, map[string]any{
+			"summary": "GET /orders",
+			"level":   "info",
+			"service": map[string]any{"name": "checkout"},
+			"blob":    big,
+		})
+	}
+	if err := sender.SendBatch(context.Background(), events); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	requests := srv.Requests()
+	if len(requests) < 2 {
+		t.Errorf("requests = %d, want more than one for a body over 1 MB", len(requests))
+	}
+	for _, req := range requests {
+		if len(req.Body) > 1_000_000 {
+			t.Errorf("a request held %d bytes, want at most 1,000,000", len(req.Body))
+		}
+	}
+}
+
 // TestNewRelic_GoldenBody proves the request body matches the golden written from the New
 // Relic documents.
 func TestNewRelic_GoldenBody(t *testing.T) {

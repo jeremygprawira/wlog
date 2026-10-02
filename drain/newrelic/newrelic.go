@@ -11,10 +11,12 @@ package newrelic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,8 +186,60 @@ func (s *Sender) Setup(l *wlog.Logger) error {
 	return nil
 }
 
-// SendBatch posts one envelope that holds every event.
+// SendBatch posts the events in envelopes that fit the Log API limit, and halves an
+// envelope the API refuses with a 413. An event that alone passes the limit is dropped with
+// reason too_large, because no request can carry it.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
+	var retry, dropped []int
+	reason := ""
+	chunks, oversize := httpdrain.Chunks(events, 0, maxRequestBytes-envelopeBytes, s.logBytes)
+	for _, i := range oversize {
+		dropped = append(dropped, i)
+		reason = "too_large"
+	}
+	for _, chunk := range chunks {
+		post := func(ctx context.Context, chunkEvents []map[string]any) error {
+			return s.postChunk(ctx, chunkEvents)
+		}
+		pe, err := httpdrain.SendChunk(ctx, events, chunk, post)
+		switch {
+		case err != nil:
+			// The request failed as a whole: this chunk is retried or dropped, and the
+			// chunks that landed are left alone.
+			again := retryable(err)
+			for i := chunk.Start; i < chunk.End; i++ {
+				if again {
+					retry = append(retry, i)
+				} else {
+					dropped = append(dropped, i)
+				}
+			}
+			if reason == "" {
+				reason = statusReason(err)
+			}
+		case pe != nil:
+			dropped = append(dropped, pe.Dropped...)
+			reason = pe.Reason
+		}
+	}
+	if len(retry) == 0 && len(dropped) == 0 {
+		return nil
+	}
+	return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: reason}
+}
+
+// logBytes returns the encoded size of one event's log, with its separating comma.
+func (s *Sender) logBytes(event map[string]any) int {
+	item, _ := s.buildLog(event)
+	body, err := json.Marshal(item)
+	if err != nil {
+		return 0
+	}
+	return len(body) + 1
+}
+
+// postChunk posts one envelope that holds the events.
+func (s *Sender) postChunk(ctx context.Context, events []map[string]any) error {
 	logs := make([]logItem, 0, len(events))
 	for _, event := range events {
 		logs = append(logs, s.logOf(event))
@@ -211,15 +265,22 @@ type logItem struct {
 
 // logOf builds one New Relic log from an event.
 func (s *Sender) logOf(event map[string]any) logItem {
-	attributes, dropped := attributesOf(event)
+	item, dropped := s.buildLog(event)
 	if dropped > 0 {
 		s.reportCap(dropped)
 	}
+	return item
+}
+
+// buildLog maps one event to a log, and reports how many attributes the cap dropped. The
+// caller reports the cap once, so sizing an event does not report it twice.
+func (s *Sender) buildLog(event map[string]any) (logItem, int) {
+	attributes, dropped := attributesOf(event)
 	return logItem{
 		Timestamp:  timestampMillis(event),
 		Message:    messageOf(event),
 		Attributes: attributes,
-	}
+	}, dropped
 }
 
 // attributesOf flattens an event to dotted keys, renames the New Relic fields, moves a
@@ -299,6 +360,32 @@ func (s *Sender) reportCap(dropped int) {
 		Message: "the attribute cap dropped attributes from a log",
 		Count:   dropped,
 	})
+}
+
+// maxRequestBytes is the Log API limit for one request. The docs count it before
+// compression, because they do not say which the limit applies to.
+const maxRequestBytes = 1_000_000
+
+// envelopeBytes is the fixed part of the request body, which holds no log.
+const envelopeBytes = len(`[{"logs":[]}]`)
+
+// retryable reports whether a failed request is worth another try. A status the backend
+// marks retryable, and a transport error, are retryable. Anything else is final.
+func retryable(err error) bool {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Retryable()
+	}
+	return true
+}
+
+// statusReason names a failed request for the PartialError. It never holds an event value.
+func statusReason(err error) string {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return "status_" + strconv.Itoa(statusErr.Status)
+	}
+	return "transport"
 }
 
 // endpointOf resolves the log API endpoint from the option, the region, or the default.
