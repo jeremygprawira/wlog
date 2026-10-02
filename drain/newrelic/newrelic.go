@@ -148,6 +148,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
 		key:    firstEnv("NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY"),
 		region: os.Getenv("NEW_RELIC_REGION"),
+		gzip:   true,
 	}
 	for _, opt := range opts {
 		opt(&c)

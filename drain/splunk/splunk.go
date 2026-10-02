@@ -156,6 +156,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 		source:     defaultSource,
 		sourceType: os.Getenv("SPLUNK_SOURCETYPE"),
 		maxBatch:   defaultMaxBatch,
+		gzip:       true,
 	}
 	for _, opt := range opts {
 		opt(&c)

@@ -147,6 +147,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 		dataset: os.Getenv("HONEYCOMB_DATASET"),
 		apiURL:  firstEnv("HONEYCOMB_API_URL", "HONEYCOMB_API_ENDPOINT"),
 		spans:   true,
+		gzip:    true,
 	}
 	for _, opt := range opts {
 		opt(&c)

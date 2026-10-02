@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog/drain/honeycomb"
+	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
@@ -33,7 +33,7 @@ func newFake(t *testing.T, status int, answer string) *fakeHoneycomb {
 	t.Helper()
 	f := &fakeHoneycomb{status: status, answer: answer}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		f.mu.Lock()
 		f.bodies = append(f.bodies, string(body))
 		f.headers = append(f.headers, r.Header.Clone())
@@ -181,7 +181,7 @@ func TestHoneycomb_P2_FailedDatasetLeavesTheOthersAlone(t *testing.T) {
 func TestHoneycomb_P4_SplitsALargeRequestAndDropsAnOversizeEvent(t *testing.T) {
 	var sizes []int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		var items []json.RawMessage
 		_ = json.Unmarshal(body, &items)
 		sizes = append(sizes, len(body))
@@ -271,6 +271,37 @@ func TestHoneycomb_P5_StatusTable(t *testing.T) {
 		if re.Retryable() != tc.retryable {
 			t.Errorf("status %d: retryable = %v, want %v", tc.status, re.Retryable(), tc.retryable)
 		}
+	}
+}
+
+// TestHoneycomb_P6_GzipIsOnByDefault proves the drain compresses by default, and that
+// WithGzip(false) turns it off.
+func TestHoneycomb_P6_GzipIsOnByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opts     []honeycomb.Option
+		encoding string
+	}{
+		{"default", nil, "gzip"},
+		{"off", []honeycomb.Option{honeycomb.WithGzip(false)}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newFake(t, http.StatusOK, `[{"status":202}]`)
+			opts := append([]honeycomb.Option{
+				honeycomb.WithAPIKey("key"), honeycomb.WithAPIURL(srv.URL),
+			}, tc.opts...)
+			sender, err := honeycomb.NewSender(opts...)
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+			_, headers := srv.last()
+			if got := headers.Get("Content-Encoding"); got != tc.encoding {
+				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
+			}
+		})
 	}
 }
 

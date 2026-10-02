@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/splunk"
+	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/wlogtest"
 )
@@ -33,7 +33,7 @@ func newFake(t *testing.T, status int, answer string) *fakeHEC {
 	t.Helper()
 	f := &fakeHEC{status: status, answer: answer}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		f.mu.Lock()
 		f.bodies = append(f.bodies, string(body))
 		f.headers = append(f.headers, r.Header.Clone())
@@ -110,6 +110,35 @@ func TestSplunk_GoldenBody(t *testing.T) {
 	}
 	if headers.Get("X-Splunk-Request-Channel") == "" {
 		t.Error("X-Splunk-Request-Channel is missing")
+	}
+}
+
+// TestSplunk_P6_GzipIsOnByDefault proves the drain compresses by default, and that
+// WithGzip(false) turns it off.
+func TestSplunk_P6_GzipIsOnByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opts     []splunk.Option
+		encoding string
+	}{
+		{"default", nil, "gzip"},
+		{"off", []splunk.Option{splunk.WithGzip(false)}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newFake(t, http.StatusOK, `{"code":0,"text":"Success"}`)
+			opts := append([]splunk.Option{splunk.WithURL(srv.URL), splunk.WithToken("token")}, tc.opts...)
+			sender, err := splunk.NewSender(opts...)
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+			_, headers := srv.last()
+			if got := headers.Get("Content-Encoding"); got != tc.encoding {
+				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
+			}
+		})
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -32,7 +31,7 @@ func newFake(t *testing.T) *fakeNewRelic {
 	t.Helper()
 	f := &fakeNewRelic{}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		f.mu.Lock()
 		f.bodies = append(f.bodies, string(body))
 		f.mu.Unlock()
@@ -166,6 +165,41 @@ func TestNewRelic_P5_StatusTable(t *testing.T) {
 		if re.Retryable() != tc.retryable {
 			t.Errorf("status %d: retryable = %v, want %v", tc.status, re.Retryable(), tc.retryable)
 		}
+	}
+}
+
+// TestNewRelic_P6_GzipIsOnByDefault proves the drain compresses by default, and that
+// WithGzip(false) turns it off.
+func TestNewRelic_P6_GzipIsOnByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opts     []newrelic.Option
+		encoding string
+	}{
+		{"default", nil, "gzip"},
+		{"off", []newrelic.Option{newrelic.WithGzip(false)}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httpfake.New()
+			defer srv.Close()
+			opts := append([]newrelic.Option{
+				newrelic.WithLicenseKey("key"), newrelic.WithEndpoint(srv.URL),
+			}, tc.opts...)
+			sender, err := newrelic.NewSender(opts...)
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+			req := srv.Last()
+			if req == nil {
+				t.Fatal("no request recorded")
+			}
+			if got := req.Headers.Get("Content-Encoding"); got != tc.encoding {
+				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
+			}
+		})
 	}
 }
 

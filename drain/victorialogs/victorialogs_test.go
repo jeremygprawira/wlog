@@ -3,7 +3,6 @@ package victorialogs_test
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog/drain/victorialogs"
+	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
@@ -31,7 +31,7 @@ func newFake(t *testing.T, status int) *fakeLogs {
 	t.Helper()
 	f := &fakeLogs{status: status}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		f.mu.Lock()
 		f.bodies = append(f.bodies, string(body))
 		f.paths = append(f.paths, r.URL.RequestURI())
@@ -88,6 +88,35 @@ func TestVictoriaLogs_GoldenBody(t *testing.T) {
 	}
 	if !strings.Contains(path, "_stream_fields=service.name,service.env") {
 		t.Errorf("path = %q, want the default stream fields", path)
+	}
+}
+
+// TestVictoriaLogs_P6_GzipIsOnByDefault proves the drain compresses by default, and that
+// WithGzip(false) turns it off.
+func TestVictoriaLogs_P6_GzipIsOnByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opts     []victorialogs.Option
+		encoding string
+	}{
+		{"default", nil, "gzip"},
+		{"off", []victorialogs.Option{victorialogs.WithGzip(false)}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newFake(t, http.StatusOK)
+			opts := append([]victorialogs.Option{victorialogs.WithURL(srv.URL)}, tc.opts...)
+			sender, err := victorialogs.NewSender(opts...)
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+			_, _, headers := srv.last()
+			if got := headers.Get("Content-Encoding"); got != tc.encoding {
+				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
+			}
+		})
 	}
 }
 

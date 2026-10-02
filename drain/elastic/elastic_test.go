@@ -3,7 +3,6 @@ package elastic_test
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog/drain/elastic"
+	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
@@ -31,7 +31,7 @@ func newFake(t *testing.T, status int, answer string) *fakeElastic {
 	t.Helper()
 	f := &fakeElastic{status: status, answer: answer}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		f.mu.Lock()
 		f.bodies = append(f.bodies, string(body))
 		f.headers = append(f.headers, r.Header.Clone())
@@ -170,7 +170,7 @@ func TestElastic_P3_FailedChunkLeavesTheOthersAlone(t *testing.T) {
 func TestElastic_P4_HalvesARequestOn413(t *testing.T) {
 	var bodies []int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
+		body := httpfake.Body(r)
 		bodies = append(bodies, len(body))
 		count := strings.Count(string(body), `{"create":{}}`)
 		if count > 1 {
@@ -195,6 +195,35 @@ func TestElastic_P4_HalvesARequestOn413(t *testing.T) {
 	}
 	if len(bodies) != 3 {
 		t.Errorf("requests = %d, want 3: one refusal and two halves", len(bodies))
+	}
+}
+
+// TestElastic_P6_GzipIsOnByDefault proves the drain compresses by default, and that
+// WithGzip(false) turns it off.
+func TestElastic_P6_GzipIsOnByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		opts     []elastic.Option
+		encoding string
+	}{
+		{"default", nil, "gzip"},
+		{"off", []elastic.Option{elastic.WithGzip(false)}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newFake(t, http.StatusOK, `{"errors":false,"items":[{"create":{"status":201}}]}`)
+			opts := append([]elastic.Option{elastic.WithURL(srv.URL)}, tc.opts...)
+			sender, err := elastic.NewSender(opts...)
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+			_, headers := srv.last()
+			if got := headers.Get("Content-Encoding"); got != tc.encoding {
+				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
+			}
+		})
 	}
 }
 

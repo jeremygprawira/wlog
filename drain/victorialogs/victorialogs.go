@@ -151,6 +151,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 		maxLine:      defaultMaxLineBytes,
 		accountID:    os.Getenv("VICTORIALOGS_ACCOUNT_ID"),
 		projectID:    os.Getenv("VICTORIALOGS_PROJECT_ID"),
+		gzip:         true,
 	}
 	for _, opt := range opts {
 		opt(&c)

@@ -175,6 +175,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 		password: os.Getenv("ELASTICSEARCH_PASSWORD"),
 		index:    os.Getenv("ELASTICSEARCH_INDEX"),
 		maxBatch: defaultMaxBatchBytes,
+		gzip:     true,
 	}
 	for _, opt := range opts {
 		opt(&c)

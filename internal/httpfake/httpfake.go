@@ -3,6 +3,8 @@
 package httpfake
 
 import (
+	"bytes"
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +41,7 @@ func New() *Server {
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(r.Body)
+	body := Body(r)
 
 	s.mu.Lock()
 	s.requests = append(s.requests, Request{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Headers: r.Header.Clone(), Body: body})
@@ -54,6 +56,25 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(status)
 	_, _ = w.Write(reply)
+}
+
+// Body reads a request body, and decodes it when the request says it is gzip, so a fake
+// sees what a real backend sees.
+func Body(r *http.Request) []byte {
+	body, _ := io.ReadAll(r.Body)
+	if r.Header.Get("Content-Encoding") != "gzip" {
+		return body
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return body
+	}
+	defer func() { _ = zr.Close() }()
+	decoded, err := io.ReadAll(zr)
+	if err != nil {
+		return body
+	}
+	return decoded
 }
 
 // SetStatus sets the status every subsequent request receives. Default 200.
