@@ -80,6 +80,38 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 	t.Fatalf("condition not met within %v", timeout)
 }
 
+// TestPipeline_P7_ReportsDroppedEvents proves the wrapped drain reports
+// WLOG_DRAIN_DROPPED through the Logger when a full buffer drops an event, so a drop is
+// never silent.
+func TestPipeline_P7_ReportsDroppedEvents(t *testing.T) {
+	sender := &fakeSender{hang: true, hangCh: make(chan struct{})}
+	drain := pipeline.Wrap(sender, pipeline.MaxBuffer(1), pipeline.BatchSize(1), pipeline.BatchInterval(time.Hour))
+	defer closeDrain(t, drain)
+	defer close(sender.hangCh)
+
+	problems := make(chan wlog.Problem, 4)
+	wlog.New(
+		wlog.WithSilent(),
+		wlog.OnProblem(func(p wlog.Problem) { problems <- p }),
+		wlog.WithDrains(drain),
+	)
+
+	drain.Send(context.Background(), mkEvent(0))
+	drain.Send(context.Background(), mkEvent(1))
+
+	select {
+	case p := <-problems:
+		if p.Code != "WLOG_DRAIN_DROPPED" {
+			t.Errorf("code = %q, want WLOG_DRAIN_DROPPED", p.Code)
+		}
+		if p.Message == "" {
+			t.Error("the report has no message")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no WLOG_DRAIN_DROPPED report")
+	}
+}
+
 func TestPipeline_FlushesOnBatchSize(t *testing.T) {
 	sender := &fakeSender{}
 	drain := pipeline.Wrap(sender, pipeline.BatchSize(5), pipeline.BatchInterval(time.Hour))

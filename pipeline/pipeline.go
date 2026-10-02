@@ -37,6 +37,12 @@ type wrapped struct {
 
 	closed    atomic.Bool
 	closeOnce sync.Once
+	// logger is the Logger from Setup. reportDrop uses it to report a drop.
+	logger *wlog.Logger
+	// dropMu guards dropReports, the last report time and the count per drop reason, so
+	// a hot drop path reports once per reason per minute.
+	dropMu      sync.Mutex
+	dropReports map[string]*dropReport
 	// Counters for Stats. They are atomic because the worker goroutine writes
 	// them and a caller reads them.
 	sent     atomic.Int64
@@ -48,6 +54,13 @@ type wrapped struct {
 	done     chan struct{}
 }
 
+// dropReport is the state of one drop reason: when it last reported, and how many events
+// arrived since then.
+type dropReport struct {
+	at    time.Time
+	count int
+}
+
 // Wrap returns a wlog.Drain backed by next, batching and buffering per opts. The
 // returned Drain also implements Close(ctx context.Context) error, picked up by
 // wlog.Logger.Close.
@@ -57,11 +70,12 @@ func Wrap(next Sender, opts ...Option) wlog.Drain {
 		o(&c)
 	}
 	w := &wrapped{
-		next:     next,
-		cfg:      c,
-		wake:     make(chan struct{}, 1),
-		closeSig: make(chan struct{}),
-		done:     make(chan struct{}),
+		next:        next,
+		cfg:         c,
+		dropReports: map[string]*dropReport{},
+		wake:        make(chan struct{}, 1),
+		closeSig:    make(chan struct{}),
+		done:        make(chan struct{}),
 	}
 	go w.run()
 	return w
@@ -356,17 +370,68 @@ func (w *wrapped) trySendBatch(ctx context.Context, batch []map[string]any) (err
 	return w.next.SendBatch(ctx, batch)
 }
 
-// reportDrop tells the caller that a batch is gone, under recover.
+// reportDrop tells the caller that a batch is gone, under recover, and reports the drop
+// through the Logger once per reason per minute.
 //
 // OnDropped is user code too, and a panic inside it would otherwise climb out of the
 // worker goroutine and kill the process. It runs without the buffer lock, so a
 // callback may call Send again.
 func (w *wrapped) reportDrop(batch []map[string]any, err error) {
-	if w.cfg.onDropped == nil {
+	if w.cfg.onDropped != nil {
+		func() {
+			defer func() { _ = recover() }()
+			w.cfg.onDropped(batch, err)
+		}()
+	}
+	w.reportDropProblem(len(batch), err)
+}
+
+// reportDropProblem reports a drop through the Logger, at most once per reason per
+// minute. The report carries the number of events dropped for that reason since the last
+// one, so a hot drop path cannot flood the console and a reader still learns the count.
+func (w *wrapped) reportDropProblem(n int, err error) {
+	if w.logger == nil || n == 0 {
 		return
 	}
-	defer func() { _ = recover() }()
-	w.cfg.onDropped(batch, err)
+	reason := dropReason(err)
+	now := time.Now()
+	w.dropMu.Lock()
+	entry := w.dropReports[reason]
+	if entry != nil && now.Sub(entry.at) < time.Minute {
+		entry.count += n
+		w.dropMu.Unlock()
+		return
+	}
+	if entry == nil {
+		entry = &dropReport{}
+		w.dropReports[reason] = entry
+	}
+	entry.at = now
+	count := entry.count + n
+	entry.count = 0
+	w.dropMu.Unlock()
+	w.logger.Report(wlog.Problem{
+		Code:    "WLOG_DRAIN_DROPPED",
+		Source:  "pipeline",
+		Message: fmt.Sprintf("dropped %d event(s): %s", count, reason),
+		Err:     err,
+	})
+}
+
+// dropReason names why a batch was dropped. A PartialError carries the backend's own
+// reason, which is the key this report uses.
+func dropReason(err error) string {
+	if err == nil {
+		return "buffer_full"
+	}
+	if errors.Is(err, errClosed) {
+		return "closed"
+	}
+	var pe *PartialError
+	if errors.As(err, &pe) && pe != nil && pe.Reason != "" {
+		return pe.Reason
+	}
+	return "send_failed"
 }
 
 // retryDelay is the wait before the (attempt+1)th try, per Backoff, capped at
@@ -478,6 +543,7 @@ func (w *wrapped) closeSender(ctx context.Context) error {
 // Setup gives the wrapped Sender the configured Logger when it wants one, so a Sender can
 // report its own faults through Logger.Report. A Sender without Setup is left alone.
 func (w *wrapped) Setup(l *wlog.Logger) error {
+	w.logger = l
 	if s, ok := w.next.(interface{ Setup(*wlog.Logger) error }); ok {
 		return s.Setup(l)
 	}
