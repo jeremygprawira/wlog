@@ -325,6 +325,9 @@ func statusReason(err error) string {
 	return "transport"
 }
 
+// actionLine is the create line of one bulk entry. It counts toward the request size.
+const actionLine = "{\"create\":{}}\n"
+
 // chunkEnd returns the end index of the next chunk, so the body stays under the byte cap.
 // One event is always in a chunk, even when it alone passes the cap.
 func (s *Sender) chunkEnd(events []map[string]any, start int) int {
@@ -334,10 +337,10 @@ func (s *Sender) chunkEnd(events []map[string]any, start int) int {
 		if err != nil {
 			return i + 1
 		}
-		if i > start && size+len(line) > s.maxBatch {
+		if i > start && size+len(line)+len(actionLine)+1 > s.maxBatch {
 			return i
 		}
-		size += len(line)
+		size += len(line) + len(actionLine) + 1
 	}
 	return len(events)
 }

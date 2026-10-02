@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"encoding/base64"
+	"encoding/json"
 	"github.com/jeremygprawira/wlog/drain/elastic"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
+	"github.com/jeremygprawira/wlog/preset"
 )
 
 // fakeElastic records every request body and answers with a fixed body.
@@ -325,6 +327,37 @@ func TestElastic_P15_DropReasonBelongsToTheDroppedItem(t *testing.T) {
 	}
 	if partial.Reason != "mapper" {
 		t.Errorf("Reason = %q, want mapper", partial.Reason)
+	}
+}
+
+// TestElastic_P16_CapCountsTheActionLine proves the byte cap counts the create line of each
+// entry, so a request never passes the cap it claims.
+func TestElastic_P16_CapCountsTheActionLine(t *testing.T) {
+	line, err := json.Marshal(preset.ECS().Apply(requestEvent()))
+	if err != nil {
+		t.Fatalf("marshal the line: %v", err)
+	}
+	// Two lines alone fit, but their two create lines and their newlines do not.
+	maxBatch := 2*len(line) + 20
+
+	srv := httpfake.New()
+	defer srv.Close()
+	srv.SetBody(`{"errors":false,"items":[{"create":{"status":201}}]}`)
+	sender, err := elastic.NewSender(elastic.WithURL(srv.URL), elastic.WithMaxBatchBytes(maxBatch))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent(), requestEvent()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	requests := srv.Requests()
+	if len(requests) < 2 {
+		t.Errorf("requests = %d, want more than one when the action lines pass the cap", len(requests))
+	}
+	for _, req := range requests {
+		if len(req.Body) > maxBatch {
+			t.Errorf("a request held %d bytes, above the %d byte cap", len(req.Body), maxBatch)
+		}
 	}
 }
 
