@@ -14,6 +14,7 @@ import (
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/newrelic"
+	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/wlogtest"
 )
@@ -62,6 +63,31 @@ func requestEvent() map[string]any {
 		"service":   map[string]any{"name": "checkout"},
 		"trace":     map[string]any{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "span_id": "00f067aa0ba902b7"},
 		"http":      map[string]any{"method": "GET", "route": "/orders", "status": int64(200)},
+	}
+}
+
+// TestNewRelic_P1_PostsToTheLogV1Path proves the drain posts to the Log API path. Before,
+// every region and WithEndpoint posted to the host root, so no event could arrive.
+func TestNewRelic_P1_PostsToTheLogV1Path(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+
+	sender, err := newrelic.NewSender(newrelic.WithLicenseKey("key"), newrelic.WithEndpoint(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	req := srv.Last()
+	if req == nil {
+		t.Fatal("no request recorded")
+	}
+	if req.Path != "/log/v1" {
+		t.Errorf("path = %q, want /log/v1", req.Path)
+	}
+	if got := req.Headers.Get("Api-Key"); got != "key" {
+		t.Errorf("Api-Key = %q, want key", got)
 	}
 }
 

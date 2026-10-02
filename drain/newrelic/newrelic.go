@@ -173,7 +173,9 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	if c.gzip {
 		clientOpts = append(clientOpts, httpdrain.WithGzip(true))
 	}
-	return &Sender{client: httpdrain.New(endpoint, clientOpts...)}, c.pipelineOpts, nil
+	// The Log API lives under /log/v1. The root path answers nothing, so a drain that
+	// posted there sent no event at all.
+	return &Sender{client: httpdrain.New(endpoint+"/log/v1", clientOpts...)}, c.pipelineOpts, nil
 }
 
 // Setup keeps the Logger, so the attribute cap can report through it.
