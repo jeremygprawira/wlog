@@ -11,6 +11,7 @@ package wlogopenai
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -201,7 +202,7 @@ func ObserveChat(stream *openai.ChatCompletionStream, opts ...Option) *ChatObser
 func (o *ChatObserver) Next() bool {
 	resp, err := o.stream.Recv()
 	if err != nil {
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			o.err = err
 		}
 		return false

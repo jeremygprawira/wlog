@@ -3,6 +3,7 @@ package wlogenai_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -142,7 +143,7 @@ func TestGenAI_ObserveErr(t *testing.T) {
 	if read != 1 {
 		t.Errorf("the caller read %d chunks, want 1", read)
 	}
-	if observer.Err() != wantErr {
+	if !errors.Is(observer.Err(), wantErr) {
 		t.Errorf("Err() = %v, want %v", observer.Err(), wantErr)
 	}
 }

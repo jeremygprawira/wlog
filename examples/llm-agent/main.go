@@ -21,7 +21,7 @@ import (
 // prices rates the one model this recipe calls, in micros per million tokens. A caller
 // with more models adds a row per model.
 var prices = llm.NewPrices(map[string]llm.Price{
-	string(anthropic.ModelClaudeSonnet4_6): {
+	anthropic.ModelClaudeSonnet4_6: {
 		InputPerMillion:       3_000_000,
 		OutputPerMillion:      15_000_000,
 		CachedInputPerMillion: 300_000,
