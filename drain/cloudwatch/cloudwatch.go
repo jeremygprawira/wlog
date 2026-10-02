@@ -180,12 +180,25 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].timestamp < entries[j].timestamp })
 
-	var dropped []int
+	all := chunks(entries)
+	var retry, dropped []int
 	reason := ""
-	for _, chunk := range chunks(entries) {
+	for ci, chunk := range all {
 		chunkDropped, chunkReason, err := s.putChunk(ctx, chunk)
 		if err != nil {
-			return err
+			// A permanent fault leaves the whole batch to the pipeline. A retryable one
+			// retries this chunk and the rest, and reports the drops so far, so the
+			// chunks that landed are never sent again.
+			var permanent *codeError
+			if errors.As(err, &permanent) {
+				return err
+			}
+			for _, rest := range all[ci:] {
+				for _, e := range rest {
+					retry = append(retry, e.index)
+				}
+			}
+			return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: retryReason(err)}
 		}
 		dropped = append(dropped, chunkDropped...)
 		if chunkReason != "" {
@@ -196,6 +209,15 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		return nil
 	}
 	return &pipeline.PartialError{Dropped: dropped, Reason: reason}
+}
+
+// retryReason names a failed chunk for the PartialError. It never holds a response body.
+func retryReason(err error) string {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode()
+	}
+	return "transport"
 }
 
 // chunks splits the sorted entries at the count, the byte cap, and the span.

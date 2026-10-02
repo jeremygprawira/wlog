@@ -170,6 +170,45 @@ func TestSplunk_D8_HalvesARequestOn413(t *testing.T) {
 	}
 }
 
+// TestSplunk_D10_ALaterFailureKeepsTheEarlierChunk proves a retryable fault in a later
+// chunk retries that chunk and the rest, and never sends the earlier chunk again.
+func TestSplunk_D10_ALaterFailureKeepsTheEarlierChunk(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			_, _ = w.Write([]byte(`{"text":"Success","code":0}`))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"text":"Server is busy","code":9}`))
+	}))
+	defer srv.Close()
+
+	sender, err := splunk.NewSender(
+		splunk.WithURL(srv.URL),
+		splunk.WithToken("token"),
+		splunk.WithMaxBatchBytes(200),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{event(), event(), event()})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if requests != 2 {
+		t.Errorf("requests = %d, want 2: the first chunk is sent once", requests)
+	}
+	if len(partial.Retry) != 2 || partial.Retry[0] != 1 || partial.Retry[1] != 2 {
+		t.Errorf("Retry = %v, want the second and third events", partial.Retry)
+	}
+	if len(partial.Dropped) != 0 {
+		t.Errorf("Dropped = %v, want none", partial.Dropped)
+	}
+}
+
 // TestSplunk_ChannelIsStable proves one channel id serves the life of the drain.
 func TestSplunk_ChannelIsStable(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `{"text":"Success","code":0}`)

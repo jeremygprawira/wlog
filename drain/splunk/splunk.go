@@ -215,7 +215,19 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		}
 		r, d, why, err := s.sendChunk(ctx, events[start:end], indexes, true)
 		if err != nil {
-			return err
+			// The chunks that landed must not be sent again: a retryable fault retries
+			// this chunk and the rest, and reports the drops so far.
+			var re interface{ Retryable() bool }
+			if !errors.As(err, &re) || !re.Retryable() {
+				return err
+			}
+			for i := start; i < len(events); i++ {
+				retry = append(retry, i)
+			}
+			if reason == "" {
+				reason = statusReason(err)
+			}
+			return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: reason}
 		}
 		retry = append(retry, r...)
 		dropped = append(dropped, d...)
@@ -300,6 +312,19 @@ func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes
 	default:
 		return nil, indexes, "hec_code_" + strconv.Itoa(code), nil
 	}
+}
+
+// statusReason names a failed chunk for the PartialError. It never holds a response body.
+func statusReason(err error) string {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return "status_" + strconv.Itoa(statusErr.Status)
+	}
+	var hec *hecError
+	if errors.As(err, &hec) {
+		return "hec_code_" + strconv.Itoa(hec.code)
+	}
+	return "transport"
 }
 
 // chunkEnd returns the end index of the next chunk, so the body stays under the byte cap.

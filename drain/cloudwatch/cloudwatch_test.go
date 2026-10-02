@@ -36,6 +36,8 @@ type fakeAPI struct {
 	putErr   error
 	rejected *types.RejectedLogEventsInfo
 	failNext bool
+	// failAt is the 1-based put number that fails with putErr, or 0 for none.
+	failAt int
 }
 
 func (f *fakeAPI) PutLogEvents(_ context.Context, in *cloudwatchlogs.PutLogEventsInput,
@@ -43,6 +45,14 @@ func (f *fakeAPI) PutLogEvents(_ context.Context, in *cloudwatchlogs.PutLogEvent
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.puts = append(f.puts, in)
+	if f.failAt > 0 {
+		if len(f.puts) == f.failAt {
+			err := f.putErr
+			f.putErr = nil
+			return nil, err
+		}
+		return &cloudwatchlogs.PutLogEventsOutput{RejectedLogEventsInfo: f.rejected}, nil
+	}
 	if f.failNext {
 		f.failNext = false
 		err := f.putErr
@@ -214,6 +224,34 @@ func TestCloudWatch_Permanent(t *testing.T) {
 	var re interface{ Retryable() bool }
 	if !errors.As(err, &re) || re.Retryable() {
 		t.Fatalf("SendBatch = %v, want a non-retryable error", err)
+	}
+}
+
+// TestCloudWatch_D10_ALaterFailureKeepsTheEarlierChunk proves a retryable fault in a later
+// chunk retries that chunk and the rest, and never sends the earlier chunk again.
+func TestCloudWatch_D10_ALaterFailureKeepsTheEarlierChunk(t *testing.T) {
+	api := &fakeAPI{putErr: apiError{code: "ThrottlingException"}, failAt: 2}
+	sender, err := cloudwatch.NewSender(api, "group")
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	// The two events are more than one span apart, so the drain sends two chunks.
+	err = sender.SendBatch(context.Background(), []map[string]any{
+		event("2026-09-22T10:00:00Z"),
+		event("2026-09-23T20:00:00Z"),
+	})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if got := api.putCount(); got != 2 {
+		t.Errorf("puts = %d, want 2: the first chunk is sent once", got)
+	}
+	if len(partial.Retry) != 1 || partial.Retry[0] != 1 {
+		t.Errorf("Retry = %v, want the second event", partial.Retry)
+	}
+	if partial.Reason != "ThrottlingException" {
+		t.Errorf("Reason = %q, want ThrottlingException", partial.Reason)
 	}
 }
 
