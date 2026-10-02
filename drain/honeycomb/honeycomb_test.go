@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jeremygprawira/wlog/drain/honeycomb"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
@@ -445,6 +446,51 @@ func TestHoneycomb_P15_DropReasonBelongsToTheDroppedItem(t *testing.T) {
 	}
 	if partial.Reason != "status_400" {
 		t.Errorf("Reason = %q, want status_400", partial.Reason)
+	}
+}
+
+// TestHoneycomb_P19_CutsAtARuneAndCutsAnArray proves a long value is cut at a rune boundary
+// and that a value inside an array is cut too, so the request holds valid UTF-8 and a
+// bounded field.
+func TestHoneycomb_P19_CutsAtARuneAndCutsAnArray(t *testing.T) {
+	srv := newFake(t, http.StatusOK, `[{"status":202}]`)
+	sender, err := honeycomb.NewSender(
+		honeycomb.WithAPIKey("key"),
+		honeycomb.WithAPIURL(srv.URL),
+		honeycomb.WithDataset("logs"),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	// The letter e with an acute accent is two bytes, so a cut between them leaves an
+	// invalid tail.
+	long := strings.Repeat("é", 40*1024)
+	event := map[string]any{
+		"kind":  "request",
+		"long":  long,
+		"array": []any{long},
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	body, _ := srv.last()
+	var items []struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &items); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	for _, key := range []string{"long", "array"} {
+		value, _ := items[0].Data[key].(string)
+		if value == "" {
+			t.Fatalf("%s is missing from the data", key)
+		}
+		if !utf8.ValidString(value) {
+			t.Errorf("%s is not valid UTF-8", key)
+		}
+		if len(value) > 64*1024 {
+			t.Errorf("%s is %d bytes, want it cut to 64 KB", key, len(value))
+		}
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/pipeline"
@@ -455,7 +456,9 @@ func dataValue(value any) any {
 		if err != nil {
 			return ""
 		}
-		return string(body)
+		// The array becomes one JSON string, so it takes the same cut as any other
+		// string, which also bounds a long string inside it.
+		return cutString(string(body), maxStringBytes)
 	}
 	return value
 }
@@ -465,7 +468,15 @@ func cutString(text string, max int) string {
 	if len(text) <= max {
 		return text
 	}
-	return text[:max-len("…")] + "…"
+	cut := max - len("…")
+	if cut < 0 {
+		cut = 0
+	}
+	// A cut inside a rune would send invalid UTF-8, so it moves back to the rune start.
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
 }
 
 // capFields keeps at most max fields. The keys are sorted, so the same event always keeps
