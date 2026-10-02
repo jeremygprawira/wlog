@@ -19,7 +19,7 @@ func TestOpenFeature_C9_Evaluation(t *testing.T) {
 	provider := memprovider.NewInMemoryProvider(map[string]memprovider.InMemoryFlag{
 		"known": {Key: "known", DefaultVariant: "on", Variants: map[string]any{"on": true, "off": false}},
 	})
-	if err := openfeature.SetProvider(provider); err != nil {
+	if err := openfeature.SetProviderAndWait(provider); err != nil {
 		t.Fatalf("set provider: %v", err)
 	}
 	ctx, end := wlog.Start(context.Background(), "test")
@@ -46,7 +46,7 @@ func TestOpenFeature_C9_Evaluation(t *testing.T) {
 // error_code FLAG_NOT_FOUND.
 func TestOpenFeature_C9_MissingFlag(t *testing.T) {
 	provider := memprovider.NewInMemoryProvider(map[string]memprovider.InMemoryFlag{})
-	if err := openfeature.SetProvider(provider); err != nil {
+	if err := openfeature.SetProviderAndWait(provider); err != nil {
 		t.Fatalf("set provider: %v", err)
 	}
 	ctx, end := wlog.Start(context.Background(), "test")
