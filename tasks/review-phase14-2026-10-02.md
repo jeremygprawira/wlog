@@ -963,3 +963,24 @@ Use a probe as a model for a failing test, and never copy one into the repositor
 - A run against a recorded provider stream, real `otelhttp` middleware, or MCP over stdio.
 - A run of each `ai` module on its own Go floor toolchain, apart from `tools floor`.
 - The shared decision store (GBrain) refused its token, so no earlier decision was read.
+
+## Fixed, 2026-10-02
+
+Batch A, gates: X-2, X-3, X-5, X-6, T-1, T-2, T-5. The push also closes X-1. CI run
+36994411778 is green on `6461328`.
+
+| Id | Commit | What changed |
+|---|---|---|
+| X-2 | `cd6643f` | The Elastic template test asserts the file is present and equals `elastic.Template(elastic.Elasticsearch)` |
+| X-3 | `2bee1fd` | `go mod tidy` over the six drifted modules, with no direct version raised |
+| X-5 | `c593cb8` | The unconvert and the two errorlint findings |
+| X-6 | `fe3f859` | Six floor lines, and a test that every `ai` module has one |
+| T-1 | `c473da3` | `make test` and `make race` pass `-count=1` |
+| T-2 | `f4b34d8`, `6461328` | The hertz build on linux, and the ignored schema golden |
+| T-5 | `8809a82` | `SetProviderAndWait` in the two evaluation tests |
+| X-1 | the batch A push | CI is green on the pushed tree |
+
+T-2 needed two commits. The first raised `github.com/bytedance/sonic` to v1.8.0, which
+compiled but did not link, so the hertz test job stayed red. The second raised it to
+v1.15.0, the lowest version that compiles and links on Go 1.26, and its companion
+indirect pins rose with it.
