@@ -14,6 +14,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -238,25 +239,38 @@ func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes
 	}
 	answer, err := s.client.PostFor(ctx, body, "application/json")
 	if err != nil {
-		return nil, nil, "", err
+		// Splunk sends the HEC code with a 4xx or a 503 answer, and the body holds it,
+		// so a refused request is read like an accepted one.
+		var statusErr *httpdrain.StatusError
+		if !errors.As(err, &statusErr) || len(statusErr.Body) == 0 {
+			return nil, nil, "", err
+		}
+		answer = statusErr.Body
 	}
 	code := codeOf(answer)
-	switch {
-	case code == 0:
+	if code == 0 {
+		// A failed request whose answer holds no code keeps its own error.
+		if err != nil {
+			return nil, nil, "", err
+		}
 		return nil, nil, "", nil
+	}
+	switch {
 	case code == 24 || code == 25:
 		s.reportBackpressure(code)
 		return nil, nil, "", nil
 	case code == 6:
+		// Code 6 says one event of the chunk is malformed, so the chunk is halved until
+		// one event is left. Each half is sent once, as shared rule 4 says.
 		if !split || len(events) <= 1 {
 			return nil, indexes, "hec_code_6", nil
 		}
 		half := len(events) / 2
-		r1, d1, why1, err := s.sendChunk(ctx, events[:half], indexes[:half], false)
+		r1, d1, why1, err := s.sendChunk(ctx, events[:half], indexes[:half], true)
 		if err != nil {
 			return nil, nil, "", err
 		}
-		r2, d2, why2, err := s.sendChunk(ctx, events[half:], indexes[half:], false)
+		r2, d2, why2, err := s.sendChunk(ctx, events[half:], indexes[half:], true)
 		if err != nil {
 			return nil, nil, "", err
 		}

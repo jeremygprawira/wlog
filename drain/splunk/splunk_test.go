@@ -165,21 +165,24 @@ func TestSplunk_Codes(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		code     int
+		status   int
 		retry    bool
 		dropped  bool
 		requests int
 	}{
-		{"success", 0, false, false, 1},
-		{"backpressure24", 24, false, false, 1},
-		{"backpressure25", 25, false, false, 1},
-		{"retry9", 9, true, false, 1},
-		{"retry27", 27, true, false, 1},
-		{"bad6", 6, false, true, 3},
-		{"permanent4", 4, false, true, 1},
+		{"success", 0, http.StatusOK, false, false, 1},
+		{"backpressure24", 24, http.StatusOK, false, false, 1},
+		{"backpressure25", 25, http.StatusOK, false, false, 1},
+		{"retry9", 9, http.StatusServiceUnavailable, true, false, 1},
+		{"retry27", 27, http.StatusTooManyRequests, true, false, 1},
+		{"bad6", 6, http.StatusBadRequest, false, true, 7},
+		{"permanent4", 4, http.StatusForbidden, false, true, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// The status is the one Splunk sends with the code, so the drain reads the
+			// code from the body of a refused request.
 			answer := fmt.Sprintf(`{"text":"code","code":%d}`, tc.code)
-			srv := newFake(t, http.StatusOK, answer)
+			srv := newFake(t, tc.status, answer)
 			sender, err := splunk.NewSender(splunk.WithURL(srv.URL), splunk.WithToken("token"))
 			if err != nil {
 				t.Fatalf("NewSender: %v", err)
