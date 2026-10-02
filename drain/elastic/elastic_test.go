@@ -2,6 +2,8 @@ package elastic_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"encoding/base64"
-	"encoding/json"
 	"github.com/jeremygprawira/wlog/drain/elastic"
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
