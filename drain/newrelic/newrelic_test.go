@@ -3,6 +3,7 @@ package newrelic_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -122,6 +123,48 @@ func TestNewRelic_P4_SplitsARequestOverTheLimit(t *testing.T) {
 	for _, req := range requests {
 		if len(req.Body) > 1_000_000 {
 			t.Errorf("a request held %d bytes, want at most 1,000,000", len(req.Body))
+		}
+	}
+}
+
+// TestNewRelic_P5_StatusTable proves the whole-request statuses classify as the spec says.
+func TestNewRelic_P5_StatusTable(t *testing.T) {
+	for _, tc := range []struct {
+		status    int
+		retryable bool
+		ok        bool
+	}{
+		{http.StatusAccepted, false, true},
+		{http.StatusBadRequest, false, false},
+		{http.StatusUnauthorized, false, false},
+		{http.StatusForbidden, false, false},
+		{http.StatusRequestTimeout, true, false},
+		{http.StatusRequestEntityTooLarge, false, false},
+		{http.StatusTooManyRequests, true, false},
+		{http.StatusServiceUnavailable, true, false},
+	} {
+		srv := httpfake.New()
+		srv.SetStatus(tc.status)
+		sender, err := newrelic.NewSender(newrelic.WithLicenseKey("key"), newrelic.WithEndpoint(srv.URL))
+		if err != nil {
+			srv.Close()
+			t.Fatalf("NewSender: %v", err)
+		}
+		err = sender.SendBatch(context.Background(), []map[string]any{requestEvent()})
+		srv.Close()
+		if tc.ok {
+			if err != nil {
+				t.Errorf("status %d: SendBatch = %v, want nil", tc.status, err)
+			}
+			continue
+		}
+		var re interface{ Retryable() bool }
+		if !errors.As(err, &re) {
+			t.Errorf("status %d: error %v is not a RetryError", tc.status, err)
+			continue
+		}
+		if re.Retryable() != tc.retryable {
+			t.Errorf("status %d: retryable = %v, want %v", tc.status, re.Retryable(), tc.retryable)
 		}
 	}
 }
