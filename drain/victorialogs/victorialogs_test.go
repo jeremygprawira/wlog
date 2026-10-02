@@ -2,6 +2,7 @@ package victorialogs_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -178,6 +179,38 @@ func TestVictoriaLogs_D8_StatusTable(t *testing.T) {
 		if re.Retryable() != tc.retryable {
 			t.Errorf("status %d: retryable = %v, want %v", tc.status, re.Retryable(), tc.retryable)
 		}
+	}
+}
+
+// TestVictoriaLogs_D20_URIAndTenant proves the full request URI, that the tenant headers go
+// out only with WithTenant, and that a line carries the event timestamp.
+func TestVictoriaLogs_D20_URIAndTenant(t *testing.T) {
+	srv := newFake(t, http.StatusOK)
+	sender, err := victorialogs.NewSender(victorialogs.WithURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	want := event()
+	if err := sender.SendBatch(context.Background(), []map[string]any{want}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	body, path, headers := srv.last()
+	uri := "/insert/jsonline?_msg_field=summary&_stream_fields=service.name%2Cservice.env&_time_field=timestamp"
+	if path != uri {
+		t.Errorf("path = %q, want %q", path, uri)
+	}
+	if got := headers.Get("AccountID"); got != "" {
+		t.Errorf("AccountID = %q, want no tenant header", got)
+	}
+	if got := headers.Get("ProjectID"); got != "" {
+		t.Errorf("ProjectID = %q, want no tenant header", got)
+	}
+	var line map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &line); err != nil {
+		t.Fatalf("decode the line: %v", err)
+	}
+	if line["timestamp"] != want["timestamp"] {
+		t.Errorf("timestamp = %v, want %v", line["timestamp"], want["timestamp"])
 	}
 }
 
