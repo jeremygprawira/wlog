@@ -361,6 +361,38 @@ func TestElastic_P16_CapCountsTheActionLine(t *testing.T) {
 	}
 }
 
+// TestElastic_P17_MissingTimestampGetsOne proves an event without a timestamp still carries
+// @timestamp, which a data stream requires.
+func TestElastic_P17_MissingTimestampGetsOne(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+	srv.SetBody(`{"errors":false,"items":[{"create":{"status":201}}]}`)
+	sender, err := elastic.NewSender(elastic.WithURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	event := requestEvent()
+	delete(event, "timestamp")
+	if err := sender.SendBatch(context.Background(), []map[string]any{event}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	req := srv.Last()
+	if req == nil {
+		t.Fatal("no request recorded")
+	}
+	lines := strings.Split(strings.TrimSpace(string(req.Body)), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("the body holds %d lines, want a create line and an event line", len(lines))
+	}
+	var ecs map[string]any
+	if err := json.Unmarshal([]byte(lines[1]), &ecs); err != nil {
+		t.Fatalf("decode the event line: %v", err)
+	}
+	if ecs["@timestamp"] == nil || ecs["@timestamp"] == "" {
+		t.Errorf("@timestamp = %v, want the time of the send", ecs["@timestamp"])
+	}
+}
+
 // TestElastic_StatusTable proves the whole-request statuses classify as the spec says.
 func TestElastic_StatusTable(t *testing.T) {
 	for _, tc := range []struct {

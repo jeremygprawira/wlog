@@ -360,9 +360,14 @@ func bulkBody(events []map[string]any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// eventLines returns the ECS line for one event.
+// eventLines returns the ECS line of one event. A data stream needs @timestamp, so an event
+// without one carries the time of the send.
 func eventLines(event map[string]any) ([]byte, error) {
-	return json.Marshal(preset.ECS().Apply(event))
+	out := preset.ECS().Apply(event)
+	if _, ok := out["@timestamp"]; !ok {
+		out["@timestamp"] = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	return json.Marshal(out)
 }
 
 // bulkResponse is the filtered bulk answer: the error flag and one item per event.
