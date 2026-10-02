@@ -1067,6 +1067,5 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-19 | `0fa66ab` | The CloudWatch error names the code and keeps the AWS message out |
 | D-11 | `6726de3` | CloudWatch drops an entry over the byte limit as `too_large` |
 
-D-6, D-7, D-12, D-17, D-22, and D-24 stay open, and batches F to K are not started. The
-local gates pass for this batch, and the push waits for the network, which was down at the
-time of writing.
+D-6, D-7, D-12, D-17, D-22, and D-24 stay open, and batches F to K are not started. CI run
+37023294224 is green on `fff7cf4`. The push was delayed by a short network outage.
