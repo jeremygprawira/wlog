@@ -133,6 +133,48 @@ func (f *fakeHoneycomb) count() int {
 	return len(f.bodies)
 }
 
+// TestHoneycomb_P2_FailedDatasetLeavesTheOthersAlone proves that one dataset's failure
+// does not resend the datasets that landed. The failed group goes to Retry or Dropped, and
+// the loop continues, so the accepted datasets are sent once.
+func TestHoneycomb_P2_FailedDatasetLeavesTheOthersAlone(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		if requests == 1 {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`[{"status":202}]`))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	sender, err := honeycomb.NewSender(honeycomb.WithAPIKey("key"), honeycomb.WithAPIURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{
+		{"service": map[string]any{"name": "checkout"}, "kind": "request"},
+		{"service": map[string]any{"name": "billing"}, "kind": "request"},
+	})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if requests != 2 {
+		t.Errorf("requests = %d, want 2: one per dataset", requests)
+	}
+	if len(partial.Retry) != 1 || partial.Retry[0] != 1 {
+		t.Errorf("Retry = %v, want the billing event at index 1", partial.Retry)
+	}
+	if len(partial.Dropped) != 0 {
+		t.Errorf("Dropped = %v, want none for a 503", partial.Dropped)
+	}
+	if partial.Reason != "status_503" {
+		t.Errorf("Reason = %q, want status_503", partial.Reason)
+	}
+}
+
 // TestHoneycomb_Options proves every option reaches the sender and New wraps it.
 func TestHoneycomb_Options(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `[{"status":202}]`)

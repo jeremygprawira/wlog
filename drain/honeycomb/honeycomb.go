@@ -10,6 +10,7 @@ package honeycomb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -203,7 +204,17 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		// batches that large.
 		answer, err := s.clientFor(dataset).PostFor(ctx, body, "application/json")
 		if err != nil {
-			return err
+			// One dataset's failure must not resend the datasets that landed. Its
+			// events are retried or dropped, and the loop moves on.
+			if retryable(err) {
+				retry = append(retry, indexes...)
+			} else {
+				dropped = append(dropped, indexes...)
+			}
+			if reason == "" {
+				reason = statusReason(err)
+			}
+			continue
 		}
 		var results []struct {
 			Status int `json:"status"`
@@ -230,6 +241,25 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		return nil
 	}
 	return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: reason}
+}
+
+// retryable reports whether a failed request is worth another try. A status the backend
+// marks retryable, and a transport error, are retryable. Anything else is final.
+func retryable(err error) bool {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Retryable()
+	}
+	return true
+}
+
+// statusReason names a failed request for the PartialError. It never holds an event value.
+func statusReason(err error) string {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return "status_" + strconv.Itoa(statusErr.Status)
+	}
+	return "transport"
 }
 
 // group collects the batch indexes of each dataset, in first-seen order.
