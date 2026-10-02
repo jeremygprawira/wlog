@@ -121,6 +121,66 @@ func TestVictoriaLogs_P6_GzipIsOnByDefault(t *testing.T) {
 	}
 }
 
+// TestVictoriaLogs_D8_HalvesARequestOn413 proves a 413 splits the buffer in half and sends
+// each half once, so one large request does not lose the batch.
+func TestVictoriaLogs_D8_HalvesARequestOn413(t *testing.T) {
+	var bodies []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := httpfake.Body(r)
+		bodies = append(bodies, len(body))
+		if strings.Count(string(body), "\n") > 1 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	sender, err := victorialogs.NewSender(victorialogs.WithURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event(), event()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	if len(bodies) != 3 {
+		t.Errorf("requests = %d, want 3: one refusal and two halves", len(bodies))
+	}
+}
+
+// TestVictoriaLogs_D8_StatusTable proves the whole-request statuses classify as the spec
+// says.
+func TestVictoriaLogs_D8_StatusTable(t *testing.T) {
+	for _, tc := range []struct {
+		status    int
+		retryable bool
+	}{
+		{http.StatusBadRequest, false},
+		{http.StatusUnauthorized, false},
+		{http.StatusForbidden, false},
+		{http.StatusRequestTimeout, true},
+		{http.StatusTooManyRequests, true},
+		{http.StatusBadGateway, true},
+		{http.StatusServiceUnavailable, true},
+		{http.StatusGatewayTimeout, true},
+	} {
+		srv := newFake(t, tc.status)
+		sender, err := victorialogs.NewSender(victorialogs.WithURL(srv.URL))
+		if err != nil {
+			t.Fatalf("NewSender: %v", err)
+		}
+		err = sender.SendBatch(context.Background(), []map[string]any{event()})
+		var re interface{ Retryable() bool }
+		if !errors.As(err, &re) {
+			t.Errorf("status %d: error %v is not a RetryError", tc.status, err)
+			continue
+		}
+		if re.Retryable() != tc.retryable {
+			t.Errorf("status %d: retryable = %v, want %v", tc.status, re.Retryable(), tc.retryable)
+		}
+	}
+}
+
 // TestVictoriaLogs_StreamFields proves a high-cardinality field is refused.
 func TestVictoriaLogs_StreamFields(t *testing.T) {
 	for _, field := range []string{"trace.trace_id", "event_id", "user.id", "http.path", "http.client_ip"} {

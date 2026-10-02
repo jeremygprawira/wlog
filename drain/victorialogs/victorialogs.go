@@ -11,6 +11,7 @@ package victorialogs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -205,32 +206,76 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	}, c.pipelineOpts, nil
 }
 
-// SendBatch posts one line per event, and drops a line over the cap with reason too_large.
+// SendBatch posts one line per event, drops a line over the cap with reason too_large, and
+// halves a request the backend refuses with a 413.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	var dropped []int
+	kept := make([]map[string]any, 0, len(events))
+	indexes := make([]int, 0, len(events))
+	for i, event := range events {
+		line, err := json.Marshal(event)
+		if err != nil || len(line) > s.maxLine {
+			dropped = append(dropped, i)
+			continue
+		}
+		kept = append(kept, event)
+		indexes = append(indexes, i)
+	}
+	reason := ""
+	if len(kept) > 0 {
+		d, why, err := s.post(ctx, kept, indexes)
+		if err != nil {
+			return err
+		}
+		dropped = append(dropped, d...)
+		reason = why
+	}
+	if len(dropped) == 0 {
+		return nil
+	}
+	if reason == "" {
+		reason = "too_large"
+	}
+	return &pipeline.PartialError{Dropped: dropped, Reason: reason}
+}
+
+// post sends one run of events, and halves it while the backend refuses it as too large. A
+// run of one event that still gets a 413 is dropped with reason too_large.
+func (s *Sender) post(ctx context.Context, events []map[string]any, indexes []int) (dropped []int, reason string, err error) {
 	var buf strings.Builder
 	for i, event := range events {
 		line, err := json.Marshal(event)
 		if err != nil {
-			dropped = append(dropped, i)
-			continue
-		}
-		if len(line) > s.maxLine {
-			dropped = append(dropped, i)
+			dropped = append(dropped, indexes[i])
 			continue
 		}
 		buf.Write(line)
 		buf.WriteByte('\n')
 	}
-	if buf.Len() > 0 {
-		if err := s.client.Post(ctx, []byte(buf.String()), "application/x-ndjson"); err != nil {
-			return err
-		}
+	err = s.client.Post(ctx, []byte(buf.String()), "application/x-ndjson")
+	if err == nil {
+		return dropped, "", nil
 	}
-	if len(dropped) == 0 {
-		return nil
+	var statusErr *httpdrain.StatusError
+	if !errors.As(err, &statusErr) || statusErr.Status != http.StatusRequestEntityTooLarge {
+		return nil, "", err
 	}
-	return &pipeline.PartialError{Dropped: dropped, Reason: "too_large"}
+	if len(events) == 1 {
+		return []int{indexes[0]}, "too_large", nil
+	}
+	half := len(events) / 2
+	d1, why1, err := s.post(ctx, events[:half], indexes[:half])
+	if err != nil {
+		return nil, "", err
+	}
+	d2, why2, err := s.post(ctx, events[half:], indexes[half:])
+	if err != nil {
+		return nil, "", err
+	}
+	if why1 == "" {
+		why1 = why2
+	}
+	return append(d1, d2...), why1, nil
 }
 
 // insertURL builds the jsonline endpoint with the field and stream parameters. The query

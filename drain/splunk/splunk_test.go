@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -139,6 +140,33 @@ func TestSplunk_P6_GzipIsOnByDefault(t *testing.T) {
 				t.Errorf("Content-Encoding = %q, want %q", got, tc.encoding)
 			}
 		})
+	}
+}
+
+// TestSplunk_D8_HalvesARequestOn413 proves a 413 splits the chunk in half and sends each
+// half once, so one large request does not lose the batch.
+func TestSplunk_D8_HalvesARequestOn413(t *testing.T) {
+	var bodies []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := httpfake.Body(r)
+		bodies = append(bodies, len(body))
+		if strings.Count(string(body), `"event"`) > 1 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		_, _ = w.Write([]byte(`{"text":"Success","code":0}`))
+	}))
+	defer srv.Close()
+
+	sender, err := splunk.NewSender(splunk.WithURL(srv.URL), splunk.WithToken("token"))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event(), event()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	if len(bodies) != 3 {
+		t.Errorf("requests = %d, want 3: one refusal and two halves", len(bodies))
 	}
 }
 

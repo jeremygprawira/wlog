@@ -242,7 +242,27 @@ func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes
 		// Splunk sends the HEC code with a 4xx or a 503 answer, and the body holds it,
 		// so a refused request is read like an accepted one.
 		var statusErr *httpdrain.StatusError
-		if !errors.As(err, &statusErr) || len(statusErr.Body) == 0 {
+		if !errors.As(err, &statusErr) {
+			return nil, nil, "", err
+		}
+		// A 413 says the request is too large: the chunk is halved, and each half is sent
+		// once. A single event that still gets a 413 is dropped.
+		if statusErr.Status == http.StatusRequestEntityTooLarge {
+			if len(events) <= 1 {
+				return nil, indexes, "too_large", nil
+			}
+			half := len(events) / 2
+			r1, d1, why1, err := s.sendChunk(ctx, events[:half], indexes[:half], split)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			r2, d2, why2, err := s.sendChunk(ctx, events[half:], indexes[half:], split)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			return append(r1, r2...), append(d1, d2...), firstReason(why1, why2), nil
+		}
+		if len(statusErr.Body) == 0 {
 			return nil, nil, "", err
 		}
 		answer = statusErr.Body
