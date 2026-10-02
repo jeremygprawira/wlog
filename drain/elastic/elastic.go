@@ -7,13 +7,43 @@
 // pipeline.PartialError and the pipeline retries only the events the backend asked for
 // again.
 //
-// Amazon OpenSearch Service needs SigV4. Pass a signing client through WithHTTPClient.
-// The aws-sdk-go-v2 v4 signer builds one, so the root module gains no dependency:
+// Amazon OpenSearch Service needs SigV4. Pass a signing client through WithHTTPClient. The
+// aws-sdk-go-v2 signer builds one, so the root module gains no dependency:
 //
-//	cfg, _ := config.LoadDefaultConfig(ctx)
-//	client := &http.Client{Transport: awshttp.NewBuildableClient().WithTransportOptions(
-//		func(t *http.Transport) { t.RoundTripper = v4.NewSigner().SignHTTP }...)}
-//	// or wrap the transport with the signer, and pass the client to WithHTTPClient.
+//	type sigv4 struct {
+//		next   http.RoundTripper
+//		signer *v4.Signer
+//		creds  aws.Credentials
+//		region string
+//	}
+//
+//	func (s *sigv4) RoundTrip(req *http.Request) (*http.Response, error) {
+//		body, err := io.ReadAll(req.Body)
+//		if err != nil {
+//			return nil, err
+//		}
+//		req.Body = io.NopCloser(bytes.NewReader(body))
+//		sum := sha256.Sum256(body)
+//		err = s.signer.SignHTTP(req.Context(), s.creds, req, hex.EncodeToString(sum[:]), "es", s.region, time.Now())
+//		if err != nil {
+//			return nil, err
+//		}
+//		return s.next.RoundTrip(req)
+//	}
+//
+//	cfg, err := config.LoadDefaultConfig(ctx)
+//	if err != nil {
+//		return err
+//	}
+//	creds, err := cfg.Credentials.Retrieve(ctx)
+//	if err != nil {
+//		return err
+//	}
+//	client := &http.Client{Transport: &sigv4{
+//		next: http.DefaultTransport, signer: v4.NewSigner(), creds: creds, region: cfg.Region,
+//	}}
+//
+// Pass client to WithHTTPClient.
 //
 // The drain never installs the index template. Run the PUT by hand:
 //
