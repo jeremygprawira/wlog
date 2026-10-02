@@ -124,6 +124,10 @@ type Sender struct {
 	mu          sync.Mutex
 	conn        net.Conn
 	truncations atomic.Int64
+
+	// truncMu guards truncAt, the time of the last truncation report.
+	truncMu sync.Mutex
+	truncAt time.Time
 }
 
 // New returns the drain with the pipeline defaults, or with the options WithPipeline set.
@@ -185,13 +189,23 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	if c.sdID != "" && !validSDID(c.sdID) {
 		return nil, nil, fmt.Errorf("syslog: structured data id %q is not name@digits", c.sdID)
 	}
+	if c.facility < 0 || c.facility > 23 {
+		return nil, nil, fmt.Errorf("syslog: facility %d is outside 0 to 23", c.facility)
+	}
 	if c.network == "tls" {
 		if c.tlsConfig == nil {
 			c.tlsConfig = &tls.Config{}
+		} else {
+			// The caller's config is theirs, so it is cloned before the floor is set.
+			c.tlsConfig = c.tlsConfig.Clone()
 		}
 		// A floor of TLS 1.2 keeps an old protocol out.
 		if c.tlsConfig.MinVersion < tls.VersionTLS12 {
 			c.tlsConfig.MinVersion = tls.VersionTLS12
+		}
+		if _, _, err := net.SplitHostPort(c.addr); err != nil {
+			// syslog over TLS uses 6514 when the address names no port.
+			c.addr = net.JoinHostPort(c.addr, "6514")
 		}
 	}
 	return &Sender{
@@ -309,10 +323,32 @@ func (s *Sender) frame(event map[string]any) []byte {
 	// A UDP frame over the cap becomes the summary plus the event id, so a reader still
 	// learns what happened.
 	s.truncations.Add(1)
+	s.reportTruncation()
 	short := fmt.Sprintf("<%d>1 %s %s %s %d %s %s %s event_id=%s",
 		pri, utcTimestamp(event), hostname, appName, os.Getpid(), msgID, s.structuredData(event),
 		s.bomText()+summaryOf(event), stringOf(event["event_id"]))
 	return []byte(short)
+}
+
+// reportTruncation tells the caller that a UDP frame was cut to its summary form, at most
+// once a minute, so a busy drain cannot flood the console.
+func (s *Sender) reportTruncation() {
+	if s.logger == nil {
+		return
+	}
+	s.truncMu.Lock()
+	now := time.Now()
+	if !s.truncAt.IsZero() && now.Sub(s.truncAt) < time.Minute {
+		s.truncMu.Unlock()
+		return
+	}
+	s.truncAt = now
+	s.truncMu.Unlock()
+	s.logger.Report(wlog.Problem{
+		Code:    "WLOG_CAP_REACHED",
+		Source:  "syslog",
+		Message: "a UDP frame passed the cap and became the summary form",
+	})
 }
 
 // message returns the MSG part: the BOM, then the canonical event as JSON.

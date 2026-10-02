@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/syslog"
 	"github.com/jeremygprawira/wlog/pipeline"
 )
@@ -224,6 +225,39 @@ func TestSyslog_UDPTruncation(t *testing.T) {
 	}
 	if strings.Contains(frame, "event_id=018f4b3c-7c00-7a00-8000-000000000000}") {
 		t.Error("the truncated frame still holds the full message")
+	}
+}
+
+// TestSyslog_D13_ReportsATruncation proves a UDP frame over the cap reports WLOG_CAP_REACHED
+// through the Logger, so a silent cut is visible.
+func TestSyslog_D13_ReportsATruncation(t *testing.T) {
+	srv := listenUDP(t)
+	sender, err := syslog.NewSender(
+		syslog.WithAddr(srv.addr),
+		syslog.WithNetwork("udp"),
+		syslog.WithMaxUDPBytes(64),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	problems := make(chan wlog.Problem, 4)
+	log := wlog.New(wlog.WithSilent(), wlog.OnProblem(func(p wlog.Problem) { problems <- p }))
+	if err := sender.Setup(log); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	_ = srv.recv(t)
+
+	reports := 0
+	for len(problems) > 0 {
+		if p := <-problems; p.Code == "WLOG_CAP_REACHED" {
+			reports++
+		}
+	}
+	if reports != 1 {
+		t.Errorf("WLOG_CAP_REACHED reports = %d, want one", reports)
 	}
 }
 
