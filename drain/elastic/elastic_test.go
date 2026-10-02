@@ -126,6 +126,45 @@ func TestElastic_ItemResults(t *testing.T) {
 	}
 }
 
+// TestElastic_P3_FailedChunkLeavesTheOthersAlone proves that a failed chunk does not
+// resend the chunks that landed. A data stream create carries no _id, so a resend is a
+// duplicate document.
+func TestElastic_P3_FailedChunkLeavesTheOthersAlone(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		if requests == 1 {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"errors":false,"items":[{"create":{"status":201}}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	sender, err := elastic.NewSender(elastic.WithURL(srv.URL), elastic.WithMaxBatchBytes(120))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{requestEvent(), requestEvent()})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if requests != 2 {
+		t.Errorf("requests = %d, want 2: one per chunk", requests)
+	}
+	if len(partial.Retry) != 1 || partial.Retry[0] != 1 {
+		t.Errorf("Retry = %v, want the second chunk at index 1", partial.Retry)
+	}
+	if len(partial.Dropped) != 0 {
+		t.Errorf("Dropped = %v, want none for a 503", partial.Dropped)
+	}
+	if partial.Reason != "status_503" {
+		t.Errorf("Reason = %q, want status_503", partial.Reason)
+	}
+}
+
 // TestElastic_StatusTable proves the whole-request statuses classify as the spec says.
 func TestElastic_StatusTable(t *testing.T) {
 	for _, tc := range []struct {

@@ -25,9 +25,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -221,7 +223,22 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		}
 		answer, err := s.client.PostFor(ctx, body, "application/x-ndjson")
 		if err != nil {
-			return err
+			// One chunk's failure must not resend the chunks that landed. A data
+			// stream create carries no _id, so a resend is a duplicate document. The
+			// events of this chunk are retried or dropped, and the loop moves on.
+			again := retryable(err)
+			for i := start; i < end; i++ {
+				if again {
+					retry = append(retry, i)
+				} else {
+					dropped = append(dropped, i)
+				}
+			}
+			if reason == "" {
+				reason = statusReason(err)
+			}
+			start = end
+			continue
 		}
 		chunkRetry, chunkDropped, chunkReason, err := itemResults(answer, start, end-start)
 		if err != nil {
@@ -238,6 +255,25 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		return nil
 	}
 	return &pipeline.PartialError{Retry: retry, Dropped: dropped, Reason: reason}
+}
+
+// retryable reports whether a failed request is worth another try. A status the backend
+// marks retryable, and a transport error, are retryable. Anything else is final.
+func retryable(err error) bool {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Retryable()
+	}
+	return true
+}
+
+// statusReason names a failed request for the PartialError. It never holds an event value.
+func statusReason(err error) string {
+	var statusErr *httpdrain.StatusError
+	if errors.As(err, &statusErr) {
+		return "status_" + strconv.Itoa(statusErr.Status)
+	}
+	return "transport"
 }
 
 // chunkEnd returns the end index of the next chunk, so the body stays under the byte cap.
