@@ -231,3 +231,19 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [ ] 15-2 Parity and comparison pages
 - [ ] 15-3 Audit close-out
 - [ ] Review point 15, v1.0.0: human review, then ask before tagging
+
+## Phase 14 review fixes ([review-phase14-2026-10-02.md](review-phase14-2026-10-02.md))
+
+Each batch ends with its gates, a push, and a CI result. Tick a batch after CI is green.
+
+- [ ] A, gates: X-2, X-3, X-5, X-6, T-1, T-2, T-5. The push closes X-1
+- [ ] B, pipeline and httpdrain: P-11, P-10, P-7, P-12, P-4, D-1
+- [ ] C, HTTP drains: P-1, P-2, P-3, P-4, P-5, P-6, P-8, P-9, P-13 to P-21
+- [ ] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
+- [ ] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24
+- [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
+- [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23
+- [ ] H, agent frameworks and MCP: A-1 to A-9, A-11, then A-12 to A-24
+- [ ] I, `wlog init`: I-1 to I-6, then I-7 to I-20
+- [ ] J, documents and tools: X-7, X-8, T-4, T-6. Run `make docs` and commit the result
+- [ ] K, integration: X-4, D-5, D-23, P-21, T-3. This batch needs Docker
