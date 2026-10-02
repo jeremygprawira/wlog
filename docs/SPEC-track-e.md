@@ -196,7 +196,8 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 ## drain-honeycomb (package `honeycomb`, root)
 
 - `POST {api}/1/batch/{dataset}` with `X-Honeycomb-Team: <key>` and `Content-Type:
-  application/json`. The API URL defaults to `https://api.honeycomb.io`. EU teams set
+  application/json`. `WithAPIURL`, `HONEYCOMB_API_URL`, or `HONEYCOMB_API_ENDPOINT` sets the
+  API URL, which defaults to `https://api.honeycomb.io`. EU teams set
   `https://api.eu1.honeycomb.io`.
 - `WithDataset` or `HONEYCOMB_DATASET` names the dataset. Without one, each event goes to the
   dataset named by its `service.name`, and the batch splits per dataset. The path segment uses
