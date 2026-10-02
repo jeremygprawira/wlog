@@ -66,6 +66,27 @@ func TestHTTPDrain_PostFor_ReturnsBody(t *testing.T) {
 	}
 }
 
+// TestHTTPDrain_P10_PostIgnoresABroken2xxBody proves that Post returns nil for a 2xx
+// answer even when the response body cannot be read. Post never wants the body, so a
+// broken one must not turn an accepted batch into a failure the pipeline retries.
+func TestHTTPDrain_P10_PostIgnoresABroken2xxBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("short"))
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}))
+	defer srv.Close()
+
+	client := httpdrain.New(srv.URL)
+	if err := client.Post(context.Background(), []byte(`{}`), "application/json"); err != nil {
+		t.Errorf("Post = %v, want nil for a 2xx answer", err)
+	}
+}
+
 func TestHTTPDrain_CustomHeaders(t *testing.T) {
 	srv := httpfake.New()
 	defer srv.Close()

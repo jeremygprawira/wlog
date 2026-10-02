@@ -63,7 +63,7 @@ const maxResponseBytes = 4 << 20
 // nil; anything else returns a *StatusError classifying whether it is worth retrying and,
 // for a 429/503 with a Retry-After header, how long to wait.
 func (c *Client) Post(ctx context.Context, body []byte, contentType string) error {
-	_, err := c.PostFor(ctx, body, contentType)
+	_, err := c.post(ctx, body, contentType, false)
 	return err
 }
 
@@ -72,6 +72,13 @@ func (c *Client) Post(ctx context.Context, body []byte, contentType string) erro
 // anything else returns a *StatusError, and the body stays unread, because an error must
 // never carry a response body. The body is capped at maxResponseBytes.
 func (c *Client) PostFor(ctx context.Context, body []byte, contentType string) ([]byte, error) {
+	return c.post(ctx, body, contentType, true)
+}
+
+// post sends body as one request. wantBody says whether the caller reads the response
+// body. A caller that does not want it never reads it, so a broken body cannot fail an
+// answer the backend already accepted.
+func (c *Client) post(ctx context.Context, body []byte, contentType string, wantBody bool) ([]byte, error) {
 	payload := body
 	encoding := ""
 	if c.gzip {
@@ -125,6 +132,11 @@ func (c *Client) PostFor(ctx context.Context, body []byte, contentType string) (
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if !wantBody {
+			// The caller does not want the body, so it is never read. A 2xx answer is
+			// an accepted batch, and a body that fails to read must not change that.
+			return nil, nil
+		}
 		answer, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 		if err != nil {
 			return nil, fmt.Errorf("httpdrain: read response: %w", err)
