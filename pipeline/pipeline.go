@@ -266,11 +266,16 @@ func (w *wrapped) sendBatch(ctx context.Context, batch []map[string]any) {
 		var re RetryError
 		var pe *PartialError
 		if errors.As(err, &pe) {
-			// A partial batch names its own outcomes: the worker reports the refused
-			// events and tries again with the rest. An empty rest ends the batch.
-			batch = w.dropPartial(batch, pe)
-			if len(batch) == 0 {
-				return
+			// A Sender may return a typed-nil *PartialError: the error interface is not
+			// nil while the pointer inside it is. It names nothing, so it takes the
+			// plain-error path below, and no method runs on the nil pointer.
+			if pe != nil {
+				// A partial batch names its own outcomes: the worker reports the refused
+				// events and tries again with the rest. An empty rest ends the batch.
+				batch = w.dropPartial(batch, pe)
+				if len(batch) == 0 {
+					return
+				}
 			}
 		} else if errors.As(err, &re) && !re.Retryable() {
 			break

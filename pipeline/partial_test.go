@@ -179,3 +179,54 @@ func TestPipeline_PartialError_CountsDroppedInStats(t *testing.T) {
 		t.Errorf("Stats.Sent = %d, want 2 for the events in neither list", stats.Sent)
 	}
 }
+
+// typedNilSender returns a typed-nil *PartialError as its error. The error interface is
+// not nil, and the pointer inside it is, which is what a Sender bug looks like.
+type typedNilSender struct {
+	mu    sync.Mutex
+	calls int
+}
+
+// SendBatch returns a typed-nil *PartialError on every call.
+func (s *typedNilSender) SendBatch(_ context.Context, _ []map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	var pe *pipeline.PartialError
+	return pe
+}
+
+// callsMade returns how many times SendBatch ran.
+func (s *typedNilSender) callsMade() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+// TestPipeline_P11_TypedNilPartialErrorDoesNotPanic proves that a Sender which returns a
+// typed-nil *PartialError does not kill the worker goroutine. The error names nothing, so
+// the batch follows the normal retry policy and is reported when it runs out of attempts.
+func TestPipeline_P11_TypedNilPartialErrorDoesNotPanic(t *testing.T) {
+	sender := &typedNilSender{}
+	drop := &dropCapture{}
+	drain := pipeline.Wrap(sender,
+		pipeline.BatchSize(1), pipeline.BatchInterval(time.Hour),
+		pipeline.MaxAttempts(3), pipeline.InitialDelay(time.Millisecond),
+		pipeline.OnDropped(drop.record),
+	)
+	defer closeDrain(t, drain)
+
+	drain.Send(context.Background(), mkEvent(0))
+
+	waitFor(t, time.Second, func() bool { return drop.count() > 0 })
+	if got := sender.callsMade(); got != 3 {
+		t.Errorf("SendBatch ran %d times, want 3: the typed nil is a plain failure", got)
+	}
+	events, err := drop.first()
+	if len(events) != 1 {
+		t.Errorf("OnDropped got %v, want the one event", events)
+	}
+	if err == nil {
+		t.Error("OnDropped got a nil error, want the typed nil the Sender returned")
+	}
+}

@@ -22,8 +22,13 @@ type PartialError struct {
 	Reason  string // the backend's error type or code, never an event value
 }
 
-// Error describes the two index sets and the reason.
+// Error describes the two index sets and the reason. A nil receiver, which a typed-nil
+// *PartialError gives, reports the plain form, so a caller that prints the error never
+// dereferences a nil pointer.
 func (e *PartialError) Error() string {
+	if e == nil {
+		return "pipeline: partial batch"
+	}
 	var b strings.Builder
 	b.WriteString("pipeline: partial batch")
 	fmt.Fprintf(&b, " (retry %d, dropped %d)", len(e.Retry), len(e.Dropped))
