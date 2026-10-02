@@ -132,6 +132,38 @@ func TestFloor_Pins(t *testing.T) {
 	}
 }
 
+// TestFloor_X6_EveryAIModuleHasAPin proves every own module under ai/ has a line in the floor
+// list. Without that line the floor command skips the module, so a raised floor fails no gate.
+func TestFloor_X6_EveryAIModuleHasAPin(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pins, err := readPins(filepath.Join(root, pinsPath))
+	if err != nil {
+		t.Fatalf("readPins: %v", err)
+	}
+	pinned := map[string]bool{}
+	for _, p := range pins {
+		pinned[p.dir] = true
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "ai"))
+	if err != nil {
+		t.Fatalf("read ai: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, "ai", entry.Name(), "go.mod")); err != nil {
+			continue
+		}
+		if dir := "./ai/" + entry.Name(); !pinned[dir] {
+			t.Errorf("%s has no line in %s", dir, pinsPath)
+		}
+	}
+}
+
 // writeFile writes one file, and makes its directory.
 func writeFile(t *testing.T, path, body string) {
 	t.Helper()
