@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/syslog"
@@ -208,10 +209,11 @@ func TestSyslog_TLS(t *testing.T) {
 // TestSyslog_UDPTruncation proves a frame over the cap becomes the summary form.
 func TestSyslog_UDPTruncation(t *testing.T) {
 	srv := listenUDP(t)
+	// The cap holds the header, the summary, and the event id, and not the JSON message.
 	sender, err := syslog.NewSender(
 		syslog.WithAddr(srv.addr),
 		syslog.WithNetwork("udp"),
-		syslog.WithMaxUDPBytes(64),
+		syslog.WithMaxUDPBytes(200),
 	)
 	if err != nil {
 		t.Fatalf("NewSender: %v", err)
@@ -305,6 +307,52 @@ func TestSyslog_D4_WriteDeadlineFromContext(t *testing.T) {
 	}
 	if err := sender.Close(context.Background()); err != nil {
 		t.Errorf("Close: %v", err)
+	}
+}
+
+// TestSyslog_D17_TheSummaryFormFitsTheCap proves the UDP summary form is cut to the cap at
+// a rune boundary, so the datagram fits and stays valid UTF-8.
+func TestSyslog_D17_TheSummaryFormFitsTheCap(t *testing.T) {
+	srv := listenUDP(t)
+	sender, err := syslog.NewSender(
+		syslog.WithAddr(srv.addr),
+		syslog.WithNetwork("udp"),
+		syslog.WithMaxUDPBytes(64),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	big := event()
+	big["summary"] = strings.Repeat("é", 200)
+	if err := sender.SendBatch(context.Background(), []map[string]any{big}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	frame := srv.recv(t)
+	if len(frame) > 64 {
+		t.Errorf("frame is %d bytes, want at most 64", len(frame))
+	}
+	if !utf8.ValidString(frame) {
+		t.Error("the frame is not valid UTF-8")
+	}
+}
+
+// TestSyslog_D17_SkipsADatagramTooLargeForThePath proves a frame the path refuses with
+// EMSGSIZE is skipped, so one large event does not fail the batch.
+func TestSyslog_D17_SkipsADatagramTooLargeForThePath(t *testing.T) {
+	srv := listenUDP(t)
+	sender, err := syslog.NewSender(
+		syslog.WithAddr(srv.addr),
+		syslog.WithNetwork("udp"),
+		// The cap is above the datagram limit, so no summary form replaces the frame.
+		syslog.WithMaxUDPBytes(1<<20),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	big := event()
+	big["blob"] = strings.Repeat("x", 100<<10)
+	if err := sender.SendBatch(context.Background(), []map[string]any{big}); err != nil {
+		t.Errorf("SendBatch = %v, want the datagram skipped", err)
 	}
 }
 

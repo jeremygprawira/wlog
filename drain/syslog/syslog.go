@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -22,7 +23,9 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/pipeline"
@@ -131,6 +134,10 @@ type Sender struct {
 	// truncMu guards truncAt, the time of the last truncation report.
 	truncMu sync.Mutex
 	truncAt time.Time
+
+	// dropMu guards dropAt, the time of the last too-large datagram report.
+	dropMu sync.Mutex
+	dropAt time.Time
 }
 
 // New returns the drain with the pipeline defaults, or with the options WithPipeline set.
@@ -236,6 +243,12 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	for _, event := range events {
 		frame := s.frame(event)
 		if err := s.write(ctx, frame); err != nil {
+			if s.network == "udp" && isMessageTooLong(err) {
+				// The path refuses a datagram this large, so the frame is dropped rather
+				// than failing the batch.
+				s.reportDropped()
+				continue
+			}
 			// The connection is in an unknown state, so close it. The next attempt
 			// dials again. A retry can repeat a frame, so delivery is at least once.
 			s.closeLocked()
@@ -243,6 +256,46 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// isMessageTooLong reports whether a UDP write failed because the datagram is larger than
+// the path allows.
+func isMessageTooLong(err error) bool {
+	return errors.Is(err, syscall.EMSGSIZE)
+}
+
+// reportDropped tells the caller that a datagram was too large for the path, at most once a
+// minute.
+func (s *Sender) reportDropped() {
+	if s.logger == nil {
+		return
+	}
+	s.dropMu.Lock()
+	now := time.Now()
+	if !s.dropAt.IsZero() && now.Sub(s.dropAt) < time.Minute {
+		s.dropMu.Unlock()
+		return
+	}
+	s.dropAt = now
+	s.dropMu.Unlock()
+	s.logger.Report(wlog.Problem{
+		Code:    "WLOG_DRAIN_DROPPED",
+		Source:  "syslog",
+		Message: "a UDP datagram was too large for the path",
+	})
+}
+
+// cutString cuts a string at a rune boundary, so the result is valid UTF-8 and at most max
+// bytes long.
+func cutString(text string, max int) string {
+	if len(text) <= max {
+		return text
+	}
+	cut := max
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
 }
 
 // Close closes the connection, so TLS sends close_notify.
@@ -339,6 +392,10 @@ func (s *Sender) frame(event map[string]any) []byte {
 	short := fmt.Sprintf("<%d>1 %s %s %s %d %s %s %s event_id=%s",
 		pri, utcTimestamp(event), hostname, appName, os.Getpid(), msgID, s.structuredData(event),
 		s.bomText()+summaryOf(event), stringOf(event["event_id"]))
+	if len(short) > s.maxUDP {
+		// The summary form is cut at a rune boundary, so the datagram fits the cap.
+		short = cutString(short, s.maxUDP)
+	}
 	return []byte(short)
 }
 
