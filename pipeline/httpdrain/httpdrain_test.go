@@ -3,6 +3,7 @@ package httpdrain_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/internal/version"
+	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
 
@@ -203,6 +205,67 @@ func TestHTTPDrain_P13_ResponseCap(t *testing.T) {
 	}
 	if len(body) != cap {
 		t.Errorf("body = %d bytes, want the %d byte cap", len(body), cap)
+	}
+}
+
+// TestHTTPDrain_P4_ChunkHelpers proves the empty chunk, the per-item shift through a half,
+// and the text of a status error.
+func TestHTTPDrain_P4_ChunkHelpers(t *testing.T) {
+	calls := 0
+	pe, err := httpdrain.SendChunk(context.Background(), nil, httpdrain.Chunk{}, func(context.Context, []map[string]any) error {
+		calls++
+		return nil
+	})
+	if pe != nil || err != nil || calls != 0 {
+		t.Errorf("SendChunk on an empty chunk = %v, %v, calls %d; want nil, nil, 0", pe, err, calls)
+	}
+
+	// A per-item result from the second half names the batch position, not the position
+	// inside the half.
+	events := []map[string]any{{"i": 0}, {"i": 1}, {"i": 2}, {"i": 3}}
+	post := func(_ context.Context, chunk []map[string]any) error {
+		if len(chunk) == 4 {
+			return &httpdrain.StatusError{Status: http.StatusRequestEntityTooLarge}
+		}
+		if len(chunk) == 2 && chunk[0]["i"] == 2 {
+			return &pipeline.PartialError{Dropped: []int{1}, Reason: "mapper"}
+		}
+		return nil
+	}
+	_, err = httpdrain.SendChunk(context.Background(), events, httpdrain.Chunk{Start: 0, End: 4}, post)
+	var itemErr *pipeline.PartialError
+	if !errors.As(err, &itemErr) {
+		t.Fatalf("SendChunk = %v, want a PartialError", err)
+	}
+	if len(itemErr.Dropped) != 1 || itemErr.Dropped[0] != 3 {
+		t.Errorf("Dropped = %v, want the batch index 3", itemErr.Dropped)
+	}
+	if itemErr.Reason != "mapper" {
+		t.Errorf("Reason = %q, want mapper", itemErr.Reason)
+	}
+
+	se := &httpdrain.StatusError{Status: http.StatusTeapot}
+	if got := se.Error(); got != "httpdrain: unexpected status 418" {
+		t.Errorf("Error() = %q", got)
+	}
+}
+
+// TestHTTPDrain_P4_BasicAuth proves WithBasicAuth sets the Authorization header.
+func TestHTTPDrain_P4_BasicAuth(t *testing.T) {
+	srv := httpfake.New()
+	defer srv.Close()
+
+	client := httpdrain.New(srv.URL, httpdrain.WithBasicAuth("user", "pass"))
+	if err := client.Post(context.Background(), []byte("{}"), "application/json"); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	req := srv.Last()
+	if req == nil {
+		t.Fatal("no request recorded")
+	}
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))
+	if got := req.Headers.Get("Authorization"); got != want {
+		t.Errorf("Authorization = %q, want %q", got, want)
 	}
 }
 
