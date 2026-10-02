@@ -244,8 +244,8 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Open: P-18, and the integration half of P-21, which waits for batch K.
 - [x] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
 - [ ] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24
-  - Done and pushed: D-3, D-4, D-13, D-14, D-15, D-16. CI run 37014150796 is green on `cc59a9e`.
-  - Open: D-6, D-7, D-11, D-12, D-17, D-19, D-22, D-24.
+  - Done: D-3, D-4, D-11, D-13, D-14, D-15, D-16, D-19. CI run 37014150796 is green on `cc59a9e`, and the local gates pass for the later commits, which wait for the network to push.
+  - Open: D-6, D-7, D-12, D-17, D-22, D-24.
 - [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
 - [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23
 - [ ] H, agent frameworks and MCP: A-1 to A-9, A-11, then A-12 to A-24

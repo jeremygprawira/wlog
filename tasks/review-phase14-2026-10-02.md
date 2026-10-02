@@ -1064,6 +1064,9 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-14 | `5baf25e` | A facility outside 0 to 23 is refused |
 | D-15 | `5baf25e` | A TLS address with no port uses 6514 |
 | D-16 | `5baf25e` | The TLS config is cloned before the floor is set |
+| D-19 | `0fa66ab` | The CloudWatch error names the code and keeps the AWS message out |
+| D-11 | `6726de3` | CloudWatch drops an entry over the byte limit as `too_large` |
 
-D-6, D-7, D-11, D-12, D-17, D-19, D-22, and D-24 stay open, and batches F to K are not
-started.
+D-6, D-7, D-12, D-17, D-22, and D-24 stay open, and batches F to K are not started. The
+local gates pass for this batch, and the push waits for the network, which was down at the
+time of writing.
