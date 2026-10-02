@@ -87,6 +87,82 @@ func TestHTTPDrain_P10_PostIgnoresABroken2xxBody(t *testing.T) {
 	}
 }
 
+// TestHTTPDrain_P4_ChunksSplitsByCountAndBytes proves the shared split cuts a batch at
+// the backend's item and byte limits, and that an event which alone passes the byte limit
+// is named as oversize instead of being sent.
+func TestHTTPDrain_P4_ChunksSplitsByCountAndBytes(t *testing.T) {
+	events := []map[string]any{{"i": 0}, {"i": 1}, {"i": 2}, {"i": 3}, {"i": 4}}
+	size := func(map[string]any) int { return 10 }
+
+	chunks, oversize := httpdrain.Chunks(events, 2, 1000, size)
+	if len(chunks) != 3 {
+		t.Errorf("chunks = %d, want 3 at two items each", len(chunks))
+	}
+	if len(oversize) != 0 {
+		t.Errorf("oversize = %v, want none", oversize)
+	}
+	if len(chunks[0]) != 2 || len(chunks[2]) != 1 {
+		t.Errorf("chunk sizes = %d and %d, want 2 and 1", len(chunks[0]), len(chunks[2]))
+	}
+
+	chunks, oversize = httpdrain.Chunks(events, 0, 25, size)
+	if len(chunks) != 3 {
+		t.Errorf("chunks = %d, want 3 at two events per byte limit", len(chunks))
+	}
+	if len(oversize) != 0 {
+		t.Errorf("oversize = %v, want none", oversize)
+	}
+
+	chunks, oversize = httpdrain.Chunks([]map[string]any{{"big": true}}, 0, 5, func(map[string]any) int { return 10 })
+	if len(chunks) != 0 {
+		t.Errorf("chunks = %d, want none for one oversize event", len(chunks))
+	}
+	if len(oversize) != 1 || oversize[0] != 0 {
+		t.Errorf("oversize = %v, want the event at index 0", oversize)
+	}
+}
+
+// TestHTTPDrain_P4_SendChunkHalvesOn413 proves a 413 halves the chunk until each request
+// fits, and that one event no request can carry is dropped with reason too_large.
+func TestHTTPDrain_P4_SendChunkHalvesOn413(t *testing.T) {
+	events := []map[string]any{{"i": 0}, {"i": 1}, {"i": 2}, {"i": 3}}
+	posts := 0
+	post := func(_ context.Context, chunk []map[string]any) error {
+		posts++
+		if len(chunk) > 2 {
+			return &httpdrain.StatusError{Status: http.StatusRequestEntityTooLarge}
+		}
+		return nil
+	}
+	pe, err := httpdrain.SendChunk(context.Background(), events, post)
+	if err != nil {
+		t.Fatalf("SendChunk: %v", err)
+	}
+	if pe != nil {
+		t.Errorf("SendChunk = %v, want nil when every half lands", pe)
+	}
+	if posts != 3 {
+		t.Errorf("posts = %d, want 3: one refusal and two halves", posts)
+	}
+
+	always := func(context.Context, []map[string]any) error {
+		return &httpdrain.StatusError{Status: http.StatusRequestEntityTooLarge}
+	}
+	pe, err = httpdrain.SendChunk(context.Background(), events[:1], always)
+	if err != nil {
+		t.Fatalf("SendChunk: %v", err)
+	}
+	if pe == nil {
+		t.Fatal("SendChunk = nil, want the event dropped as too large")
+	}
+	if len(pe.Dropped) != 1 || pe.Dropped[0] != 0 {
+		t.Errorf("Dropped = %v, want the event at index 0", pe.Dropped)
+	}
+	if pe.Reason != "too_large" {
+		t.Errorf("Reason = %q, want too_large", pe.Reason)
+	}
+}
+
 func TestHTTPDrain_CustomHeaders(t *testing.T) {
 	srv := httpfake.New()
 	defer srv.Close()
