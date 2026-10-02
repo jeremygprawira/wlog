@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -86,8 +87,8 @@ func TestVictoriaLogs_GoldenBody(t *testing.T) {
 	if body != string(golden) {
 		t.Errorf("body =\n%s\nwant\n%s", body, golden)
 	}
-	if !strings.Contains(path, "_stream_fields=service.name,service.env") {
-		t.Errorf("path = %q, want the default stream fields", path)
+	if got := queryOf(t, path).Get("_stream_fields"); got != "service.name,service.env" {
+		t.Errorf("_stream_fields = %q, want the default stream fields", got)
 	}
 }
 
@@ -136,6 +137,42 @@ func TestVictoriaLogs_StreamFields(t *testing.T) {
 	); err != nil {
 		t.Errorf("NewSender refused a low-cardinality field: %v", err)
 	}
+}
+
+// TestVictoriaLogs_D2_TrimsStreamFields proves a field list with spaces still builds a
+// query the backend accepts, and that a leading space does not hide a high-cardinality
+// field.
+func TestVictoriaLogs_D2_TrimsStreamFields(t *testing.T) {
+	srv := newFake(t, http.StatusOK)
+	sender, err := victorialogs.NewSender(
+		victorialogs.WithURL(srv.URL),
+		victorialogs.WithStreamFields(" service.name", "service.env "),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	_, path, _ := srv.last()
+	if got := queryOf(t, path).Get("_stream_fields"); got != "service.name,service.env" {
+		t.Errorf("_stream_fields = %q, want the trimmed fields", got)
+	}
+
+	// A space before a high-cardinality field must not hide it.
+	if _, err := victorialogs.NewSender(victorialogs.WithURL(srv.URL), victorialogs.WithStreamFields(" trace.trace_id")); err == nil {
+		t.Error("NewSender accepted a high-cardinality field behind a space")
+	}
+}
+
+// queryOf returns the query of a recorded request URI.
+func queryOf(t *testing.T, path string) url.Values {
+	t.Helper()
+	parsed, err := url.Parse(path)
+	if err != nil {
+		t.Fatalf("parse %q: %v", path, err)
+	}
+	return parsed.Query()
 }
 
 // TestVictoriaLogs_MaxLine proves a line over the cap is dropped with reason too_large.

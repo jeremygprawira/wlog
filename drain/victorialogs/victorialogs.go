@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -162,6 +163,18 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	if len(c.streamFields) == 0 {
 		c.streamFields = defaultStreamFields
 	}
+	// A field from the environment can hold a space, and a space in the query makes every
+	// request fail, so the names are trimmed and empty ones dropped before the check.
+	fields := make([]string, 0, len(c.streamFields))
+	for _, field := range c.streamFields {
+		if field = strings.TrimSpace(field); field != "" {
+			fields = append(fields, field)
+		}
+	}
+	if len(fields) == 0 {
+		fields = defaultStreamFields
+	}
+	c.streamFields = fields
 	for _, field := range c.streamFields {
 		if highCardinality(field) {
 			return nil, nil, fmt.Errorf("victorialogs: stream field %q has high cardinality", field)
@@ -220,10 +233,15 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	return &pipeline.PartialError{Dropped: dropped, Reason: "too_large"}
 }
 
-// insertURL builds the jsonline endpoint with the field and stream parameters.
+// insertURL builds the jsonline endpoint with the field and stream parameters. The query
+// goes through url.Values, so a field name is escaped instead of breaking the URL.
 func insertURL(base string, streamFields []string) string {
-	return strings.TrimRight(base, "/") + "/insert/jsonline" +
-		"?_msg_field=summary&_time_field=timestamp&_stream_fields=" + strings.Join(streamFields, ",")
+	query := url.Values{
+		"_msg_field":     {"summary"},
+		"_time_field":    {"timestamp"},
+		"_stream_fields": {strings.Join(streamFields, ",")},
+	}
+	return strings.TrimRight(base, "/") + "/insert/jsonline?" + query.Encode()
 }
 
 // splitFields splits a comma-separated field list, trimming spaces.
