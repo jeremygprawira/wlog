@@ -143,13 +143,22 @@ func (c *Client) post(ctx context.Context, body []byte, contentType string, want
 		}
 		return answer, nil
 	}
+	statusErr := newStatusError(resp)
+	if wantBody {
+		// A backend may explain the refusal in the body: Splunk sends its HEC code
+		// there on a 400. The cap keeps a streaming answer bounded.
+		answer, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		statusErr.Body = answer
+		return answer, statusErr
+	}
 	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil, newStatusError(resp)
+	return nil, statusErr
 }
 
 // StatusError is returned by Post for any non-2xx response.
 type StatusError struct {
 	Status     int
+	Body       []byte // the capped response body, which may explain the refusal
 	retryable  bool
 	retryAfter time.Duration
 }

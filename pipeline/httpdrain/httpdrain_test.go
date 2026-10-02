@@ -163,10 +163,34 @@ func TestHTTPDrain_P4_SendChunkHalvesOn413(t *testing.T) {
 	}
 }
 
+// TestHTTPDrain_D1_Non2xxReturnsTheBody proves PostFor returns the capped response body
+// next to the StatusError, so a backend that explains a refusal in the body, such as
+// Splunk with its HEC code, is readable.
+func TestHTTPDrain_D1_Non2xxReturnsTheBody(t *testing.T) {
+	answer := `{"code":6,"text":"Invalid data format"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(answer))
+	}))
+	defer srv.Close()
+
+	client := httpdrain.New(srv.URL)
+	body, err := client.PostFor(context.Background(), []byte(`{}`), "application/json")
+	var se *httpdrain.StatusError
+	if !asStatusError(err, &se) {
+		t.Fatalf("err = %v, want a *StatusError", err)
+	}
+	if string(se.Body) != answer {
+		t.Errorf("StatusError.Body = %q, want the answer", se.Body)
+	}
+	if string(body) != answer {
+		t.Errorf("body = %q, want the same answer", body)
+	}
+}
+
 func TestHTTPDrain_CustomHeaders(t *testing.T) {
 	srv := httpfake.New()
 	defer srv.Close()
-
 	c := httpdrain.New(srv.URL, httpdrain.WithHeader("Authorization", "Bearer tok"))
 	_ = c.Post(context.Background(), []byte("x"), "text/plain")
 
