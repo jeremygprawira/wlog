@@ -1004,3 +1004,39 @@ where each backend's limits live, and batch D reads the Splunk HEC code from the
 The store/mongo commit is not a review id. That test built its command with a map literal,
 which the driver marshals in random order, so it failed about one run in twenty and CI hit
 it.
+
+Batch C, HTTP drains: P-1 to P-17, P-19, and the spec half of P-21. CI run 37005501695 is
+green on `1a1a07f`. P-18 and the integration half of P-21 stay open.
+
+| Id | Commit | What changed |
+|---|---|---|
+| P-1 | `51b7185` | New Relic posts to `{endpoint}/log/v1`, which the spec already asked for |
+| P-2 | `0f3f14a` | A failed Honeycomb dataset stays inside its own group |
+| P-3 | `eee5fcb` | A failed Elastic chunk stays inside its own group |
+| P-4 | `df38dc8` | The byte split and the 413 halving, wired into the three drains |
+| P-5 | `468ef1f` | The status table for Honeycomb and New Relic |
+| P-6 | `2997071`, `f3fa6a4` | Gzip on by default in five drains, and the fake decodes it |
+| P-8 | `18cdc2f` | An event with no per-item result is retried |
+| P-9 | `0b18ec4` | The field cap keeps the reserved keys |
+| P-13 | `50422db`, `8406cd1` | The index map, the Elastic request shape, the region hosts, the response cap |
+| P-14 | `535d63a` | The SigV4 example compiles |
+| P-15 | `9069c7b` | The reason names the dropped event |
+| P-16 | `dfcbbde` | The byte cap counts the action line |
+| P-17 | `23d6f6b` | A missing timestamp gets an `@timestamp` |
+| P-19 | `01249aa` | The 64 KB cut lands on a rune, and an array is cut too |
+| P-21 | `51598d4` | SPEC-track-e names `HONEYCOMB_API_URL` and `HONEYCOMB_API_ENDPOINT` |
+| P-20 | not reproduced | See below |
+| P-18 | open | The duplicate `flatten`, `firstEnv`, `chunkEnd`, and the client cache |
+
+The coverage gate failed first at 84.7% for `pipeline` and 83.5% for `pipeline/httpdrain`,
+because the batch B and C code added no tests of its own. `1a1a07f` raised them to 89.6%
+and 90.6%.
+
+P-20 is not reproduced. The report says a `json` error wrapped with `%w` puts a response
+number into an error string. In this tree the wrapped error never reaches the caller: the
+dataset and chunk loops turn a failed request into a `PartialError` with reason `transport`,
+so `SendBatch` returns that error, and a test that looks for a `*json.SyntaxError` in the
+chain passes with the wrap and without it. The wrap is unchanged.
+
+P-21's integration half, a golden event in the Elastic integration test, needs the Compose
+stack, which is batch K.
