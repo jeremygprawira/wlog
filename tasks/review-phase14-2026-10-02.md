@@ -1052,3 +1052,18 @@ green on `72c7b9e`.
 | D-10 | `700cb98` | A failed chunk retries that chunk and the rest, in Splunk and CloudWatch |
 | D-18 | `e0cb93f` | Splunk reports backpressure once a minute |
 | D-20 | `72c7b9e` | The VictoriaLogs test asserts the URI, the absent tenant headers, and the timestamp |
+
+Batch E, syslog, CloudWatch, and conformance, is part done: D-3, D-4, D-13, D-14, D-15,
+and D-16. CI run 37014150796 is green on `cc59a9e`.
+
+| Id | Commit | What changed |
+|---|---|---|
+| D-3 | `90f7e27` | CloudWatch creates the stream on every missing-stream error |
+| D-4 | `cc59a9e` | Every syslog write carries a deadline |
+| D-13 | `5baf25e` | A UDP truncation reports `WLOG_CAP_REACHED` |
+| D-14 | `5baf25e` | A facility outside 0 to 23 is refused |
+| D-15 | `5baf25e` | A TLS address with no port uses 6514 |
+| D-16 | `5baf25e` | The TLS config is cloned before the floor is set |
+
+D-6, D-7, D-11, D-12, D-17, D-19, D-22, and D-24 stay open, and batches F to K are not
+started.
