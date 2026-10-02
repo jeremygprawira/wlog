@@ -421,6 +421,33 @@ func TestHoneycomb_P13_IndexMapAcrossDatasetsAndHalves(t *testing.T) {
 	}
 }
 
+// TestHoneycomb_P15_DropReasonBelongsToTheDroppedItem proves the reason names the dropped
+// event, not a later one that is only retried.
+func TestHoneycomb_P15_DropReasonBelongsToTheDroppedItem(t *testing.T) {
+	srv := newFake(t, http.StatusOK, `[{"status":400},{"status":503}]`)
+	sender, err := honeycomb.NewSender(
+		honeycomb.WithAPIKey("key"),
+		honeycomb.WithAPIURL(srv.URL),
+		honeycomb.WithDataset("logs"),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{
+		{"kind": "request"}, {"kind": "request"},
+	})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if len(partial.Dropped) != 1 || partial.Dropped[0] != 0 {
+		t.Errorf("Dropped = %v, want [0]", partial.Dropped)
+	}
+	if partial.Reason != "status_400" {
+		t.Errorf("Reason = %q, want status_400", partial.Reason)
+	}
+}
+
 // TestHoneycomb_Options proves every option reaches the sender and New wraps it.
 func TestHoneycomb_Options(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `[{"status":202}]`)

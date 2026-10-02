@@ -299,8 +299,9 @@ func (s *Sender) postChunk(ctx context.Context, client *httpdrain.Client, events
 		case result.Status == http.StatusAccepted:
 		case result.Status >= 500:
 			retry = append(retry, j)
-			reason = "status_" + strconv.Itoa(result.Status)
 		default:
+			// The reason names the dropped event, so a later retried event never
+			// overwrites it.
 			dropped = append(dropped, j)
 			reason = "status_" + strconv.Itoa(result.Status)
 		}

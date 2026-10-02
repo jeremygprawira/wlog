@@ -392,8 +392,9 @@ func itemResults(answer []byte, offset, count int) (retry, dropped []int, reason
 		case result.Status >= 200 && result.Status < 300:
 		case result.Status == http.StatusTooManyRequests || result.Status >= 500:
 			retry = append(retry, offset+i)
-			reason = result.Error.Type
 		default:
+			// The reason names the dropped event, so a later retried event never
+			// overwrites it.
 			dropped = append(dropped, offset+i)
 			reason = result.Error.Type
 		}

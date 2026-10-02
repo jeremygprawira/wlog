@@ -302,6 +302,32 @@ func TestElastic_P13_RequestShape(t *testing.T) {
 	}
 }
 
+// TestElastic_P15_DropReasonBelongsToTheDroppedItem proves the reason names the dropped
+// event, not a later one that is only retried.
+func TestElastic_P15_DropReasonBelongsToTheDroppedItem(t *testing.T) {
+	answer := `{"errors":true,"items":[` +
+		`{"create":{"status":400,"error":{"type":"mapper"}}},` +
+		`{"create":{"status":503}}]}`
+	srv := newFake(t, http.StatusOK, answer)
+	sender, err := elastic.NewSender(elastic.WithURL(srv.URL))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	err = sender.SendBatch(context.Background(), []map[string]any{
+		{"kind": "request"}, {"kind": "request"},
+	})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if len(partial.Dropped) != 1 || partial.Dropped[0] != 0 {
+		t.Errorf("Dropped = %v, want [0]", partial.Dropped)
+	}
+	if partial.Reason != "mapper" {
+		t.Errorf("Reason = %q, want mapper", partial.Reason)
+	}
+}
+
 // TestElastic_StatusTable proves the whole-request statuses classify as the spec says.
 func TestElastic_StatusTable(t *testing.T) {
 	for _, tc := range []struct {
