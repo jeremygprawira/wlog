@@ -300,7 +300,7 @@ usage: wlog <command> [flags] [arguments]
 
 commands:
   map     score every HTTP handler against the wlog rules, and write wlog.map.json
-  init    scaffold wlog into a project
+  init    detect a project's adapters and scaffold wlog into it
   doctor  report on the wlog setup of a project
   agents  write agent instructions and skills
   help    print this text

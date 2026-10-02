@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -40,7 +41,11 @@ func rewrite(filename string, source []byte, framework string) ([]byte, bool, er
 	if err := config.Fprint(&out, fset, file); err != nil {
 		return nil, false, fmt.Errorf("print %s: %w", filename, err)
 	}
-	return out.Bytes(), true, nil
+	formatted, err := format.Source(out.Bytes())
+	if err != nil {
+		return nil, false, fmt.Errorf("format %s: %w", filename, err)
+	}
+	return formatted, true, nil
 }
 
 // wrapHandlers wraps every server handler in the file with WrapHandler.
@@ -203,6 +208,10 @@ func isRouterConstructor(call *ast.CallExpr, framework string) bool {
 		return pkg.Name == "echo" && sel.Sel.Name == "New"
 	case "gin":
 		return pkg.Name == "gin" && (sel.Sel.Name == "New" || sel.Sel.Name == "Default")
+	case "chi":
+		return pkg.Name == "chi" && sel.Sel.Name == "NewRouter"
+	case "fiber", "fiber3":
+		return pkg.Name == "fiber" && (sel.Sel.Name == "New" || sel.Sel.Name == "Default")
 	default:
 		return false
 	}

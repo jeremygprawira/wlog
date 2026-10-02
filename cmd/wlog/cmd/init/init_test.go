@@ -101,10 +101,10 @@ func TestInit_BuildsEveryFramework(t *testing.T) {
 	for _, tc := range cases() {
 		t.Run(tc.framework, func(t *testing.T) {
 			dir := treeFor(t, tc, root)
-			if code := wloginit.Run([]string{"--dir", dir, "--framework", tc.framework}, io.Discard, io.Discard); code != 0 {
+			if code := wloginit.Run([]string{"--dir", dir, "--framework", tc.framework, "--yes"}, io.Discard, io.Discard); code != 0 {
 				t.Fatalf("init exit %d", code)
 			}
-			for _, name := range []string{"wlog.go", ".env.example"} {
+			for _, name := range []string{"wlog_setup.go", ".env.example"} {
 				if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 					t.Fatalf("%s missing: %v", name, err)
 				}
@@ -128,23 +128,23 @@ func TestInit_DryRunWritesNothing(t *testing.T) {
 	if code := wloginit.Run([]string{"--dir", dir, "--dry-run"}, &stdout, io.Discard); code != 0 {
 		t.Fatalf("dry run exit %d", code)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "wlog.go")); !os.IsNotExist(err) {
-		t.Error("dry run wrote wlog.go")
+	if _, err := os.Stat(filepath.Join(dir, "wlog_setup.go")); !os.IsNotExist(err) {
+		t.Error("dry run wrote wlog_setup.go")
 	}
-	if !bytes.Contains(stdout.Bytes(), []byte("wlog.go")) {
+	if !bytes.Contains(stdout.Bytes(), []byte("wlog_setup.go")) {
 		t.Errorf("dry run printed no plan:\n%s", stdout.String())
 	}
 }
 
-// TestInit_ExistingSetupFails proves an existing wlog.go is never overwritten.
+// TestInit_ExistingSetupFails proves an existing wlog_setup.go is never overwritten.
 func TestInit_ExistingSetupFails(t *testing.T) {
 	root := repoRoot(t)
 	dir := treeFor(t, caseDef{framework: "nethttp"}, root)
-	if err := os.WriteFile(filepath.Join(dir, "wlog.go"), []byte("package main\n"), 0o644); err != nil {
-		t.Fatalf("seed wlog.go: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "wlog_setup.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("seed wlog_setup.go: %v", err)
 	}
-	if code := wloginit.Run([]string{"--dir", dir}, io.Discard, io.Discard); code != 1 {
-		t.Errorf("exit %d, want 1 when wlog.go already exists", code)
+	if code := wloginit.Run([]string{"--dir", dir, "--yes"}, io.Discard, io.Discard); code != 1 {
+		t.Errorf("exit %d, want 1 when wlog_setup.go already exists", code)
 	}
 }
 
@@ -154,7 +154,7 @@ func TestInit_CLI4_NilMux(t *testing.T) {
 	root := repoRoot(t)
 	dir := treeFor(t, caseDef{framework: "nethttp_nil"}, root)
 
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp"}, io.Discard, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--yes"}, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
 	source := readFile(t, filepath.Join(dir, "main.go"))
@@ -169,7 +169,7 @@ func TestInit_CLI4_ServerLiteral(t *testing.T) {
 	root := repoRoot(t)
 	dir := treeFor(t, caseDef{framework: "nethttp_server"}, root)
 
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp"}, io.Discard, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--yes"}, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
 	source := readFile(t, filepath.Join(dir, "main.go"))
@@ -205,11 +205,11 @@ func TestInit_CLI15_AtomicWrites(t *testing.T) {
 	if got := readFile(t, filepath.Join(dir, "main.go")); got != mainBefore {
 		t.Error("the dry run changed main.go")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "wlog.go")); !os.IsNotExist(err) {
-		t.Error("the dry run wrote wlog.go")
+	if _, err := os.Stat(filepath.Join(dir, "wlog_setup.go")); !os.IsNotExist(err) {
+		t.Error("the dry run wrote wlog_setup.go")
 	}
 
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--drain", "file"}, io.Discard, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--drain", "file", "--yes"}, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
 
@@ -225,11 +225,11 @@ func TestInit_CLI15_AtomicWrites(t *testing.T) {
 	// No leftover temp file, and a second run that fails at the plan stage changes nothing.
 	assertNoTempFiles(t, dir)
 	before := map[string]string{}
-	for _, name := range []string{"main.go", ".env.example", "wlog.go"} {
+	for _, name := range []string{"main.go", ".env.example", "wlog_setup.go"} {
 		before[name] = readFile(t, filepath.Join(dir, name))
 	}
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp"}, io.Discard, io.Discard); code != 1 {
-		t.Errorf("a second run exited %d, want 1: wlog.go already exists", code)
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--yes"}, io.Discard, io.Discard); code != 1 {
+		t.Errorf("a second run exited %d, want 1: wlog_setup.go already exists", code)
 	}
 	for name, want := range before {
 		if got := readFile(t, filepath.Join(dir, name)); got != want {
@@ -248,7 +248,7 @@ func TestInit_CLI15_AtomicWrites(t *testing.T) {
 func TestInit_CLI4_GeneratedAppServes(t *testing.T) {
 	root := repoRoot(t)
 	dir := treeFor(t, caseDef{framework: "nethttp"}, root)
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp"}, io.Discard, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--yes"}, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("init exit %d", code)
 	}
 	buildTree(t, dir)

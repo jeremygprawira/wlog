@@ -4,31 +4,42 @@
 package init
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	wlogdoctor "github.com/jeremygprawira/wlog/cmd/wlog/cmd/doctor"
+	"github.com/jeremygprawira/wlog/cmd/wlog/internal/adapters"
 )
 
 // Options holds one init run's settings.
 type Options struct {
 	Dir       string
-	Framework string // auto, nethttp, mux, echo, echo5, gin
+	Framework string // auto, nethttp, mux, echo, echo5, gin, chi, fiber, fiber3
 	Drain     string // stdout, axiom, loki, file
 	DryRun    bool
+	Yes       bool // accept the whole plan and write it
+	JSON      bool // print the plan as JSON
 }
 
 // Run parses args and runs init, returning the process exit code. Exit 0 on success,
-// 1 when wlog.go already exists, and 2 on a usage or detection error.
+// 1 when the setup file already exists or a step fails, and 2 on a usage or detection error.
 func Run(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("init", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	opts := Options{}
-	flags.StringVar(&opts.Framework, "framework", "auto", "auto, nethttp, mux, echo, echo5, or gin")
+	flags.StringVar(&opts.Framework, "framework", "auto", "auto, nethttp, mux, echo, echo5, gin, chi, fiber, or fiber3")
 	flags.StringVar(&opts.Drain, "drain", "stdout", "stdout, axiom, loki, or file")
 	flags.BoolVar(&opts.DryRun, "dry-run", false, "print the plan and write nothing")
+	flags.BoolVar(&opts.Yes, "yes", false, "accept the whole plan and write it")
+	flags.BoolVar(&opts.JSON, "json", false, "print the plan as JSON")
 	flags.StringVar(&opts.Dir, "dir", ".", "the module directory")
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -46,25 +57,87 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 // run does the work, so a test can call it directly.
 func run(opts Options, stdout, stderr io.Writer) int {
-	plan, err := buildPlan(opts)
+	document, files, err := buildPlan(opts)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
-	if opts.DryRun {
-		for _, write := range plan {
-			_, _ = fmt.Fprint(stdout, unifiedDiff(write.path, write.content))
+	if opts.JSON {
+		data, err := json.MarshalIndent(document, "", "  ")
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, "wlog init:", err)
+			return 1
+		}
+		_, _ = fmt.Fprintln(stdout, string(data))
+	}
+	if opts.DryRun || !opts.Yes {
+		if !opts.JSON {
+			for _, write := range files {
+				_, _ = fmt.Fprint(stdout, unifiedDiff(write.path, write.content))
+			}
+		}
+		if !opts.Yes {
+			_, _ = fmt.Fprintln(stderr, "wlog init: pass --yes to write these files")
 		}
 		return 0
 	}
-	if err := apply(plan); err != nil {
+	if err := apply(files); err != nil {
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
-	for _, write := range plan {
+	for _, write := range files {
 		_, _ = fmt.Fprintln(stdout, "wrote", write.path)
 	}
+	return verify(opts.Dir, stdout, stderr)
+}
+
+// verify builds the module and runs doctor over it, and prints both results. A build failure
+// or a failed check returns 1, because the tool wrote code that does not work.
+func verify(dir string, stdout, stderr io.Writer) int {
+	// The deadline bounds a build that hangs on a lock or a network fetch, so the tool never
+	// waits forever.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	build := exec.CommandContext(ctx, "go", "build", "./...")
+	build.Dir = dir
+	build.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	if output, err := build.CombinedOutput(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "wlog init: go build failed: %v\n%s", err, output)
+		return 1
+	}
+	_, _ = fmt.Fprintln(stdout, "go build ./... ok")
+	code := wlogdoctor.Run([]string{"--dir", dir}, stdout, stderr)
+	if code != 0 {
+		_, _ = fmt.Fprintln(stderr, "wlog init: wlog doctor reported a failure")
+		return 1
+	}
 	return 0
+}
+
+// plan is the whole run as data: the module, the framework, every adapter it found, and the
+// files it would write. `--json` prints it, so a script reads the same plan a reader sees.
+type plan struct {
+	Version   int           `json:"version"`
+	Dir       string        `json:"dir"`
+	Module    string        `json:"module"`
+	Framework string        `json:"framework"`
+	Adapters  []planAdapter `json:"adapters"`
+	Files     []planFile    `json:"files"`
+}
+
+// planAdapter is one adapter the module uses.
+type planAdapter struct {
+	Name      string `json:"name"`
+	Wlog      string `json:"wlog"`
+	Kind      string `json:"kind"`
+	Setup     string `json:"setup"`
+	Installed bool   `json:"installed"`
+}
+
+// planFile is one file the run writes.
+type planFile struct {
+	Path   string `json:"path"`
+	Action string `json:"action"`
 }
 
 // write is one planned file change.
@@ -138,32 +211,34 @@ func moduleName(dir string) (string, error) {
 	return "", fmt.Errorf("go.mod has no module line")
 }
 
-// detectFramework reads the module's Go files and returns the framework it uses.
-func detectFramework(dir string) (string, error) {
-	files, err := goFiles(dir)
-	if err != nil {
-		return "", err
-	}
+// detectFramework returns the HTTP framework the module imports, or "" when it finds none. The
+// order matters: echo v5 comes before echo v4, because the v5 import path holds the v4 prefix.
+func detectFramework(sources [][]byte) string {
 	found := ""
-	for _, file := range files {
+	for _, file := range sources {
 		source := string(file)
 		switch {
 		case strings.Contains(source, "github.com/labstack/echo/v5"):
-			return "echo5", nil
+			return "echo5"
 		case strings.Contains(source, "github.com/labstack/echo/v4"):
-			return "echo", nil
+			return "echo"
 		case strings.Contains(source, "github.com/gin-gonic/gin"):
-			return "gin", nil
+			return "gin"
+		case strings.Contains(source, "github.com/go-chi/chi/v5"):
+			return "chi"
+		case strings.Contains(source, "github.com/gofiber/fiber/v3"):
+			return "fiber3"
+		case strings.Contains(source, "github.com/gofiber/fiber/v2"):
+			return "fiber"
 		case strings.Contains(source, "github.com/gorilla/mux"):
-			found = "mux"
+			if found == "" {
+				found = "mux"
+			}
 		case strings.Contains(source, `"net/http"`) && found == "":
 			found = "nethttp"
 		}
 	}
-	if found == "" {
-		return "", fmt.Errorf("no HTTP framework found")
-	}
-	return found, nil
+	return found
 }
 
 // packageName reads the package clause from the module's first Go file.
@@ -212,48 +287,128 @@ func goFiles(dir string) ([][]byte, error) {
 	return sources, nil
 }
 
-// buildPlan returns every file change, or an error before anything is written.
-func buildPlan(opts Options) ([]write, error) {
+// buildPlan returns the plan document and every file change, or an error before anything is
+// written. It reads go.mod and the module's imports, so the plan names every adapter the module
+// uses before the tool touches a file.
+func buildPlan(opts Options) (plan, []write, error) {
 	dir := opts.Dir
 	if dir == "" {
 		dir = "."
 	}
-	wlogPath := filepath.Join(dir, "wlog.go")
-	if _, err := os.Stat(wlogPath); err == nil {
-		return nil, fmt.Errorf("%s already exists", wlogPath)
+	document := plan{Version: 1, Dir: dir}
+	setupPath := filepath.Join(dir, "wlog_setup.go")
+	if _, err := os.Stat(setupPath); err == nil {
+		return document, nil, fmt.Errorf("%s already exists", setupPath)
 	}
 	module, err := moduleName(dir)
 	if err != nil {
-		return nil, err
+		return document, nil, err
 	}
+	document.Module = module
+	goMod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return document, nil, fmt.Errorf("read go.mod: %w", err)
+	}
+	sources, err := goFiles(dir)
+	if err != nil {
+		return document, nil, err
+	}
+	document.Adapters = detectAdapters(string(goMod), sources)
 	framework := opts.Framework
 	if framework == "" || framework == "auto" {
-		framework, err = detectFramework(dir)
-		if err != nil {
-			return nil, err
-		}
+		framework = detectFramework(sources)
 	}
+	document.Framework = framework
 	pkg, err := packageName(dir)
 	if err != nil {
-		return nil, err
+		return document, nil, err
 	}
 	setup, err := setupFor(framework, opts.Drain, module, pkg)
 	if err != nil {
-		return nil, err
+		return document, nil, err
 	}
 
-	plan := []write{
-		{path: wlogPath, content: setup.wlogGo},
+	files := []write{
+		{path: setupPath, content: setup.wlogGo},
 		{path: filepath.Join(dir, ".env.example"), content: mergeEnvExample(filepath.Join(dir, ".env.example"), setup.envExample)},
 	}
-	routerPath, patched, err := patchRouter(dir, framework)
-	if err != nil {
-		return nil, err
+	document.Files = []planFile{
+		{Path: setupPath, Action: "create"},
+		{Path: filepath.Join(dir, ".env.example"), Action: "update"},
 	}
-	if routerPath != "" {
-		plan = append(plan, write{path: routerPath, content: patched})
+	routerPath := ""
+	if framework != "" {
+		var patched string
+		routerPath, patched, err = patchRouter(dir, framework)
+		if err != nil {
+			return document, nil, err
+		}
+		if routerPath != "" {
+			files = append(files, write{path: routerPath, content: patched})
+			document.Files = append(document.Files, planFile{Path: routerPath, Action: "update"})
+		}
 	}
-	return plan, nil
+	return document, files, nil
+}
+
+// detectAdapters returns every adapter the module uses, sorted by name. A third-party module in
+// go.mod implies its adapter, and an import of an adapter package implies it too. The table is
+// sorted by name, so the result is too.
+func detectAdapters(goMod string, sources [][]byte) []planAdapter {
+	required := requiredModules(goMod)
+	imported := map[string]bool{}
+	for _, adapter := range adapters.Table {
+		for _, source := range sources {
+			if strings.Contains(string(source), `"`+adapter.Wlog+`"`) {
+				imported[adapter.Wlog] = true
+			}
+		}
+	}
+	found := []planAdapter{}
+	for _, adapter := range adapters.Table {
+		installed := imported[adapter.Wlog]
+		for _, lib := range adapter.Libs {
+			if required[lib] {
+				installed = true
+			}
+		}
+		if !installed {
+			continue
+		}
+		found = append(found, planAdapter{
+			Name: adapter.Name, Wlog: adapter.Wlog, Kind: adapter.Kind,
+			Setup: adapter.Setup, Installed: true,
+		})
+	}
+	return found
+}
+
+// requiredModules reads the module paths a go.mod requires, with the comment and the version
+// removed. The wlog modules are skipped, because those are the adapters the tool writes, not
+// the libraries that imply one.
+func requiredModules(goMod string) map[string]bool {
+	required := map[string]bool{}
+	for _, line := range strings.Split(goMod, "\n") {
+		line = strings.TrimSpace(line)
+		if rest, ok := strings.CutPrefix(line, "require "); ok {
+			line = strings.TrimSpace(rest)
+		}
+		if line == "" || strings.HasPrefix(line, "//") || line == ")" ||
+			strings.HasPrefix(line, "module ") || strings.HasPrefix(line, "go ") ||
+			strings.HasPrefix(line, "replace ") || strings.HasPrefix(line, "exclude ") ||
+			strings.HasPrefix(line, "retract ") || strings.HasPrefix(line, "toolchain ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		if strings.HasPrefix(fields[0], "github.com/jeremygprawira/wlog") {
+			continue
+		}
+		required[fields[0]] = true
+	}
+	return required
 }
 
 // patchRouter installs the middleware in the file that declares the server or the router. It
@@ -264,7 +419,7 @@ func patchRouter(dir, framework string) (string, string, error) {
 		return "", "", err
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || entry.Name() == "wlog.go" {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || entry.Name() == "wlog_setup.go" {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())

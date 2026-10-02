@@ -2,12 +2,16 @@ package init
 
 import (
 	"fmt"
+	"go/format"
 	"strings"
 )
 
-// setupFor renders the generated wlog.go and .env.example for one framework and drain.
+// setupFor renders the generated wlog_setup.go and .env.example for one framework and drain.
+//
+// The generated logger reads its drains and its identity from the environment through
+// setup.FromEnv, so a deployment changes no code. The drain flag only seeds .env.example.
 func setupFor(framework, drain, module, pkg string) (setup, error) {
-	drainImport, drainExpr, env := drainFor(drain)
+	env := drainFor(drain)
 
 	var imports []string
 	var middlewareImport, middlewareFunc string
@@ -40,14 +44,38 @@ func LoggerMiddleware() echo.MiddlewareFunc {
 func LoggerMiddleware() gin.HandlerFunc {
 	return wloggin.Middleware(NewLogger())
 }`
+	case "chi":
+		imports = append(imports, `"net/http"`)
+		middlewareImport = `wlogchi "github.com/jeremygprawira/wlog/middleware/chi"`
+		middlewareFunc = `// LoggerMiddleware covers every route with one wide event per request.
+func LoggerMiddleware() func(http.Handler) http.Handler {
+	return wlogchi.Middleware(NewLogger())
+}`
+	case "fiber":
+		imports = append(imports, `"github.com/gofiber/fiber/v2"`)
+		middlewareImport = `wlogfiber "github.com/jeremygprawira/wlog/middleware/fiber"`
+		middlewareFunc = `// LoggerMiddleware covers every route with one wide event per request.
+func LoggerMiddleware() fiber.Handler {
+	return wlogfiber.Middleware(NewLogger())
+}`
+	case "fiber3":
+		imports = append(imports, `"github.com/gofiber/fiber/v3"`)
+		middlewareImport = `wlogfiber3 "github.com/jeremygprawira/wlog/middleware/fiber3"`
+		middlewareFunc = `// LoggerMiddleware covers every route with one wide event per request.
+func LoggerMiddleware() fiber.Handler {
+	return wlogfiber3.Middleware(NewLogger())
+}`
+	case "":
+		// A module with no HTTP framework, such as a worker or a CLI, gets the logger and no
+		// middleware. Its entry point installs its own adapter.
 	default:
 		return setup{}, fmt.Errorf("unknown framework %q", framework)
 	}
 	imports = append(imports, `"github.com/jeremygprawira/wlog"`)
-	if drainImport != "" {
-		imports = append(imports, drainImport)
+	imports = append(imports, `"github.com/jeremygprawira/wlog/setup"`)
+	if middlewareImport != "" {
+		imports = append(imports, middlewareImport)
 	}
-	imports = append(imports, middlewareImport)
 
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "package %s\n\nimport (\n", pkg)
@@ -55,36 +83,40 @@ func LoggerMiddleware() gin.HandlerFunc {
 		fmt.Fprintf(&builder, "\t%s\n", line)
 	}
 	builder.WriteString(")\n\n")
-	builder.WriteString("// NewLogger builds this service's logger: one wide event per request.\n")
+	builder.WriteString("// NewLogger builds this service's logger: one wide event per request. The drains\n")
+	builder.WriteString("// and the identity come from the environment, so a deployment changes no code.\n")
 	builder.WriteString("func NewLogger() *wlog.Logger {\n")
-	fmt.Fprintf(&builder, "\treturn wlog.New(\n\t\twlog.WithService(%q, \"0.0.1\", \"local\"),\n", module)
-	drainLine := "\t\t// no drain yet: events go to stdout. Add one here.\n"
-	if drainExpr != "" {
-		drainLine = fmt.Sprintf("\t\twlog.WithDrains(%s),\n", drainExpr)
+	builder.WriteString("\treturn wlog.New(\n\t\tsetup.FromEnv(),\n")
+	fmt.Fprintf(&builder, "\t\twlog.WithService(%q, \"0.0.1\", \"local\"),\n", module)
+	builder.WriteString("\t)\n}\n")
+	if middlewareFunc != "" {
+		builder.WriteString("\n")
+		builder.WriteString(middlewareFunc)
+		builder.WriteString("\n")
 	}
-	builder.WriteString(drainLine)
-	builder.WriteString("\t)\n}\n\n")
-	builder.WriteString(middlewareFunc)
-	builder.WriteString("\n")
 
-	return setup{wlogGo: builder.String(), envExample: env}, nil
+	// go/format sorts the import block and aligns the code, so the file a user commits is
+	// already gofmt-clean.
+	formatted, err := format.Source([]byte(builder.String()))
+	if err != nil {
+		return setup{}, fmt.Errorf("format the generated setup: %w", err)
+	}
+	return setup{wlogGo: string(formatted), envExample: env}, nil
 }
 
-// drainFor returns the import, the expression, and the env example for one drain.
-func drainFor(drain string) (importLine, expression, envExample string) {
+// drainFor returns the .env.example lines for one drain. The generated code names no drain,
+// because setup.FromEnv builds the drains WLOG_DRAINS names.
+func drainFor(drain string) string {
 	switch drain {
 	case "", "stdout":
-		return "", "", "# No drain variables yet. Events go to stdout.\n"
+		return "# No drain yet. Events go to stdout. Set WLOG_DRAINS to add one.\n"
 	case "axiom":
-		return "\"github.com/jeremygprawira/wlog/drain/axiom\"\n\t\"github.com/jeremygprawira/wlog/pipeline\"", "pipeline.Wrap(axiom.MustNew())",
-			"AXIOM_TOKEN=\nAXIOM_DATASET=\n"
+		return "WLOG_DRAINS=axiom\nAXIOM_TOKEN=\nAXIOM_DATASET=\n"
 	case "loki":
-		return "\"github.com/jeremygprawira/wlog/drain/loki\"\n\t\"github.com/jeremygprawira/wlog/pipeline\"", "pipeline.Wrap(loki.MustNew())",
-			"LOKI_URL=http://localhost:3100\n"
+		return "WLOG_DRAINS=loki\nLOKI_URL=http://localhost:3100\n"
 	case "file":
-		return "\"github.com/jeremygprawira/wlog/drain/file\"\n\t\"github.com/jeremygprawira/wlog/pipeline\"", "pipeline.Wrap(file.MustNew())",
-			"WLOG_FILE_PATH=.logs/events.ndjson\n"
+		return "WLOG_DRAINS=file\nWLOG_FILE_PATH=.logs/events.ndjson\n"
 	default:
-		return "", "", ""
+		return ""
 	}
 }

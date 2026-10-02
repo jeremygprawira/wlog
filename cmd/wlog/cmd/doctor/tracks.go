@@ -9,44 +9,18 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jeremygprawira/wlog/cmd/wlog/entry"
+	"github.com/jeremygprawira/wlog/cmd/wlog/internal/adapters"
 )
 
-// adapterSetups maps every track A to C adapter to the one line that installs it. A
-// reader who installs an adapter runs doctor and reads the line for it.
-var adapterSetups = map[string]string{
-	"github.com/jeremygprawira/wlog/middleware/chi":        "wlogchi.Setup(r)",
-	"github.com/jeremygprawira/wlog/middleware/fasthttp":   "wlogfasthttp.Middleware(log)",
-	"github.com/jeremygprawira/wlog/middleware/fiber":      "wlogfiber.Setup(app)",
-	"github.com/jeremygprawira/wlog/middleware/fiber3":     "wlogfiber3.Setup(app)",
-	"github.com/jeremygprawira/wlog/middleware/httprouter": "wloghttprouter.New(log, router)",
-	"github.com/jeremygprawira/wlog/middleware/gozero":     "rest.WithRouter(wloggozero.RouterOption(log, inner))",
-	"github.com/jeremygprawira/wlog/middleware/hertz":      "wloghertz.Setup(h)",
-	"github.com/jeremygprawira/wlog/middleware/kratos":     "khttp.Filter(wlogkratos.Filter(log))",
-	"github.com/jeremygprawira/wlog/middleware/huma":       "api.UseMiddleware(wloghuma.Middleware())",
-	"github.com/jeremygprawira/wlog/middleware/nethttp":    "wlogstd.Middleware(log)",
-	"github.com/jeremygprawira/wlog/middleware/gin":        "wloggin.Middleware(log)",
-	"github.com/jeremygprawira/wlog/middleware/echo":       "wlogecho.Middleware(log)",
-	"github.com/jeremygprawira/wlog/middleware/echo5":      "wlogecho5.Middleware(log)",
-	"github.com/jeremygprawira/wlog/rpc/grpc":              "wloggrpc.ServerOptions(log)",
-	"github.com/jeremygprawira/wlog/rpc/connect":           "wlogconnect.Interceptor(log)",
-	"github.com/jeremygprawira/wlog/rpc/gqlgen":            "wloggqlgen.Extension()",
-	"github.com/jeremygprawira/wlog/rpc/twirp":             "twirp.WithServerHooks(wlogtwirp.ServerHooks())",
-	"github.com/jeremygprawira/wlog/client/http":           "wlogclient.Transport(next)",
-	"github.com/jeremygprawira/wlog/store/sql":             "sql.OpenDB(wlogsql.Wrap(connector))",
-	"github.com/jeremygprawira/wlog/store/pgx":             "wlogpgx.Tracer(next)",
-	"github.com/jeremygprawira/wlog/store/gorm":            "db.Use(wloggorm.Plugin())",
-	"github.com/jeremygprawira/wlog/store/redis":           "rdb.AddHook(wlogredis.Hook())",
-	"github.com/jeremygprawira/wlog/store/mongo":           "opts.SetMonitor(wlogmongo.Monitor(opts.Monitor))",
-	"github.com/jeremygprawira/wlog/store/bun":             "db.AddQueryHook(wlogbun.Hook())",
-	"github.com/jeremygprawira/wlog/log/slog":              "wlogslog.Handler(next)",
-	"github.com/jeremygprawira/wlog/log/logr":              "wlog.WithPlugins(wloglogr.Plugin())",
-	"github.com/jeremygprawira/wlog/log/zap":               "wlogzap.Core(next)",
-	"github.com/jeremygprawira/wlog/log/zerolog":           "rdb.AddHook? see the package doc",
-	"github.com/jeremygprawira/wlog/log/logrus":            "wloglogrus.Install(logger)",
-	"github.com/jeremygprawira/wlog/log/hclog":             "wlog.WithPlugins(wloghclog.Plugin(base))",
-	"github.com/jeremygprawira/wlog/log/std":               "wlogstdlog.Logger(ctx, prefix, flags)",
-	"github.com/jeremygprawira/wlog/drain/elastic":         "PUT _index_template/logs-wlog with elastic.Template(elastic.Elasticsearch)",
-}
+// adapterSetups maps every adapter to the one line that installs it. The list lives in the
+// shared adapters table, so `wlog init` and doctor never disagree about an install line. The
+// elastic drain adds its own row, because a drain installs through the environment, not at an
+// entry point.
+var adapterSetups = func() map[string]string {
+	setups := adapters.SetupLines()
+	setups["github.com/jeremygprawira/wlog/drain/elastic"] = "PUT _index_template/logs-wlog with elastic.Template(elastic.Elasticsearch)"
+	return setups
+}()
 
 // adapterChecks returns one check per installed adapter, with its setup line.
 func adapterChecks(dir string) []Check {
