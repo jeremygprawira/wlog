@@ -312,6 +312,13 @@ func apply(plan []write) error {
 // writeAtomic writes one file through a temporary file in the same directory. A rename within one
 // directory is atomic on every platform this runs on.
 func writeAtomic(path string, content []byte) error {
+	mode := os.FileMode(0o644)
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return os.WriteFile(path, content, info.Mode().Perm())
+		}
+		mode = info.Mode().Perm()
+	}
 	dir := filepath.Dir(path)
 	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp")
 	if err != nil {
@@ -327,7 +334,7 @@ func writeAtomic(path string, content []byte) error {
 		_ = os.Remove(tempPath)
 		return err
 	}
-	if err := os.Chmod(tempPath, 0o644); err != nil {
+	if err := os.Chmod(tempPath, mode); err != nil {
 		_ = os.Remove(tempPath)
 		return err
 	}
