@@ -239,14 +239,13 @@ func TestLLM_CAT2_CostParts(t *testing.T) {
 		t.Errorf("TotalMicros = %d, want %d", cost.TotalMicros, want)
 	}
 
-	// The Anthropic example from the research: 50 fresh tokens and 100,000 cache reads, at
-	// the old $3 input and $0.30 cache-hit rates, is 30,150 micros and not 15.
-	old := llm.NewPrices(map[string]llm.Price{
-		"claude": {InputPerMillion: 3_000_000, OutputPerMillion: 15_000_000, CachedInputPerMillion: 300_000},
+	// 50 fresh tokens and 100,000 cache reads on the claude-sonnet-4-6 row is 30,150
+	// micros. That row is $3 per million input and $0.30 per million cache reads.
+	cost, ok = llm.DefaultPrices().Cost(llm.Record{
+		Model: "claude-sonnet-4-6", InputTokens: 100_050, CachedInputTokens: 100_000,
 	})
-	cost, ok = old.Cost(llm.Record{Model: "claude", InputTokens: 100_050, CachedInputTokens: 100_000})
 	if !ok {
-		t.Fatal("Cost refused the prefix model")
+		t.Fatal("Cost refused claude-sonnet-4-6")
 	}
 	if cost.TotalMicros != 30_150 {
 		t.Errorf("TotalMicros = %d, want 30150", cost.TotalMicros)
