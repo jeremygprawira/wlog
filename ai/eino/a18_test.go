@@ -62,7 +62,7 @@ func TestEino_A18_DrainClosesStream(t *testing.T) {
 		t.Fatal("send closed before drain")
 	}
 	writer.Close()
-	drain(ctx, reader, "eino", false)
+	drain(ctx, ctx, reader, "eino", false)
 	func() {
 		defer func() {
 			if recover() != nil {
@@ -83,5 +83,5 @@ func TestEino_A18_RecoveredPanicStaysInside(t *testing.T) {
 			t.Fatalf("drain panic escaped: %v", r)
 		}
 	}()
-	drain(context.Background(), nil, "eino", false)
+	drain(context.Background(), context.Background(), nil, "eino", false)
 }
