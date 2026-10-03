@@ -1068,8 +1068,7 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-11 | `6726de3` | CloudWatch drops an entry over the byte limit as `too_large` |
 | D-24 | `1d393c0` | The three credentials are marked `Secret`, and a blank answer is retried, not dropped as `hec_code_-1` |
 | D-17 | `fd08330` | The UDP summary form is cut to the cap, and a datagram the path refuses is skipped |
+| D-6 | `f23a234` | The exact per-item sets for the CloudWatch ranges and the Splunk code 6 split |
 
-D-6, D-7, D-12, and D-22 stay open, D-24 keeps its dedup parts open, and batches F to K are
-not started. CI run 37027523125 is green on `fd08330`, after one rerun: the first attempt
-failed on a proxy download during a network outage and on `TestAsynq_ServerRecordsTask`,
-which masks one UUID segment at random and is a separate redaction fault worth a finding.
+D-7, D-12, and D-22 stay open, D-24 keeps its dedup parts open, and batches F to K are not
+started. CI run 37109050851 is green on `f23a234`.
