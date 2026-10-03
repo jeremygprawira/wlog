@@ -1069,6 +1069,13 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-24 | `1d393c0` | The three credentials are marked `Secret`, and a blank answer is retried, not dropped as `hec_code_-1` |
 | D-17 | `fd08330` | The UDP summary form is cut to the cap, and a datagram the path refuses is skipped |
 | D-6 | `f23a234` | The exact per-item sets for the CloudWatch ranges and the Splunk code 6 split |
+| D-12 | `db4d340` | The syslog drain probes the connection and dials again when the peer closed |
+| CI | `f8fc406` | A job id is never scanned by a value pattern |
 
-D-7, D-12, and D-22 stay open, D-24 keeps its dedup parts open, and batches F to K are not
-started. CI run 37109050851 is green on `f23a234`.
+D-7 and D-22 stay open, D-24 keeps its dedup parts open, and batches F to K are not started.
+CI run 37111181412 is green on `f8fc406`.
+
+The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about one run in
+three, because a random UUID at `job.id` matched the phone or card pattern and lost a
+segment. The value patterns already skip the fields that hold a system identifier, and
+`job.id` was missing from that list.
