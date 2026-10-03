@@ -1,8 +1,8 @@
 // Package wlogenai turns a google.golang.org/genai response or stream into an llm.Record.
 //
-// FromGenerateContent maps a whole response. Observe wraps a stream, so the caller still
-// reads every chunk and still builds the same Record: it re-yields each chunk through
-// Next and Current, and the last non-nil usage metadata wins. Transport wraps the
+// FromGenerateContent maps a whole response. Observe wraps a stream and re-yields each
+// chunk. The caller stops the stream by stopping the range. The last non-nil usage
+// metadata wins. Transport wraps the
 // http.Client's RoundTripper, so it never replaces the authenticated transport NewClient
 // builds around it.
 //
@@ -131,76 +131,52 @@ func contentOf(candidates []*genai.Candidate) *llm.Content {
 	return content
 }
 
-// Observer wraps a GenerateContentStream and builds a Record as the caller reads it. The
-// caller drives it with Next and Current, the same shape as the Anthropic and OpenAI
-// observers, over a stdlib iter.Seq2 pulled one step at a time.
-type Observer struct {
-	next    func() (*genai.GenerateContentResponse, error, bool)
-	stop    func()
-	current *genai.GenerateContentResponse
-	err     error
-	record  llm.Record
-	opts    []Option
-}
-
-// Observe wraps seq. The caller drives the Observer with Next and Current, and reads
-// Record once Next reports false.
-func Observe(seq iter.Seq2[*genai.GenerateContentResponse, error], backend genai.Backend, opts ...Option) *Observer {
+// Observe wraps seq and re-yields each chunk. Stopping the range stops the stream, so
+// an early return does not leave the pull or the HTTP body running. The returned
+// function reads the record built so far.
+func Observe(seq iter.Seq2[*genai.GenerateContentResponse, error], backend genai.Backend, opts ...Option) (iter.Seq2[*genai.GenerateContentResponse, error], func() llm.Record) {
 	next, stop := iter.Pull2(seq)
-	return &Observer{
-		next:   next,
-		stop:   stop,
-		record: llm.Record{Provider: providerOf(backend), Operation: operation},
-		opts:   opts,
+	record := llm.Record{Provider: providerOf(backend), Operation: operation}
+	out := func(yield func(*genai.GenerateContentResponse, error) bool) {
+		defer stop()
+		for {
+			resp, err, ok := next()
+			if !ok {
+				return
+			}
+			if err != nil {
+				yield(resp, err)
+				return
+			}
+			consume(&record, resp, opts)
+			if !yield(resp, nil) {
+				return
+			}
+		}
 	}
+	return out, func() llm.Record { return record }
 }
-
-// Next reads the next chunk and folds it into the record. It reports false at the end or
-// on a stream error, which Err then reports.
-func (o *Observer) Next() bool {
-	resp, err, ok := o.next()
-	if !ok {
-		return false
-	}
-	if err != nil {
-		o.err = err
-		o.stop()
-		return false
-	}
-	o.current = resp
-	o.consume(resp)
-	return true
-}
-
-// Current returns the chunk the caller just read.
-func (o *Observer) Current() *genai.GenerateContentResponse { return o.current }
-
-// Record returns the record built so far. Read it after Next reports false.
-func (o *Observer) Record() llm.Record { return o.record }
-
-// Err returns the stream error, if any.
-func (o *Observer) Err() error { return o.err }
 
 // consume folds one chunk into the record. Usage metadata overwrites what came before,
 // because the last non-nil block a stream sends is the authoritative total.
-func (o *Observer) consume(resp *genai.GenerateContentResponse) {
+func consume(record *llm.Record, resp *genai.GenerateContentResponse, opts []Option) {
 	if resp == nil {
 		return
 	}
 	if resp.ResponseID != "" {
-		o.record.ResponseID = resp.ResponseID
+		record.ResponseID = resp.ResponseID
 	}
 	if resp.ModelVersion != "" {
-		o.record.Model = resp.ModelVersion
+		record.Model = resp.ModelVersion
 	}
-	applyUsage(&o.record, resp.UsageMetadata)
-	applyCandidates(&o.record, resp.Candidates)
-	if resolve(o.opts...).content {
+	applyUsage(record, resp.UsageMetadata)
+	applyCandidates(record, resp.Candidates)
+	if resolve(opts...).content {
 		if c := contentOf(resp.Candidates); c != nil {
-			if o.record.Content == nil {
-				o.record.Content = &llm.Content{}
+			if record.Content == nil {
+				record.Content = &llm.Content{}
 			}
-			o.record.Content.OutputMessages = append(o.record.Content.OutputMessages, c.OutputMessages...)
+			record.Content.OutputMessages = append(record.Content.OutputMessages, c.OutputMessages...)
 		}
 	}
 }
