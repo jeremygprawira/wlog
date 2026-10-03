@@ -80,14 +80,15 @@ func FromResponse(r *responses.Response, opts ...Option) llm.Record {
 		return llm.Record{}
 	}
 	record := llm.Record{
-		Provider:          provider,
-		Model:             r.Model,
-		Operation:         "responses",
-		ResponseID:        r.ID,
-		InputTokens:       int(r.Usage.InputTokens),
-		CachedInputTokens: int(r.Usage.InputTokensDetails.CachedTokens),
-		OutputTokens:      int(r.Usage.OutputTokens),
-		ReasoningTokens:   int(r.Usage.OutputTokensDetails.ReasoningTokens),
+		Provider:              provider,
+		Model:                 r.Model,
+		Operation:             "responses",
+		ResponseID:            r.ID,
+		InputTokens:           int(r.Usage.InputTokens),
+		CachedInputTokens:     int(r.Usage.InputTokensDetails.CachedTokens),
+		CacheWriteInputTokens: int(r.Usage.InputTokensDetails.CacheWriteTokens),
+		OutputTokens:          int(r.Usage.OutputTokens),
+		ReasoningTokens:       int(r.Usage.OutputTokensDetails.ReasoningTokens),
 	}
 	for _, item := range r.Output {
 		if item.Type == "function_call" && item.Name != "" {

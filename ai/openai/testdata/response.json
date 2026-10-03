@@ -21,7 +21,8 @@
   "usage": {
     "input_tokens": 1000,
     "output_tokens": 200,
-    "input_tokens_details": {"cached_tokens": 200},
+    "input_tokens_details": {"cached_tokens": 200,
+      "cache_write_tokens": 100},
     "output_tokens_details": {"reasoning_tokens": 50}
   }
 }

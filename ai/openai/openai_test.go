@@ -69,15 +69,16 @@ func TestOpenAI_FromChatCompletion(t *testing.T) {
 func TestOpenAI_FromResponse(t *testing.T) {
 	got := wlogopenai.FromResponse(response(t))
 	check(t, got, llm.Record{
-		Provider:          "openai",
-		Model:             "gpt-5.6-sol",
-		Operation:         "responses",
-		ResponseID:        "resp_01",
-		InputTokens:       1000,
-		CachedInputTokens: 200,
-		OutputTokens:      200,
-		ReasoningTokens:   50,
-		ToolCalls:         []llm.ToolCall{{Name: "get_weather"}},
+		Provider:              "openai",
+		Model:                 "gpt-5.6-sol",
+		Operation:             "responses",
+		ResponseID:            "resp_01",
+		InputTokens:           1000,
+		CachedInputTokens:     200,
+		CacheWriteInputTokens: 100,
+		OutputTokens:          200,
+		ReasoningTokens:       50,
+		ToolCalls:             []llm.ToolCall{{Name: "get_weather"}},
 	})
 }
 
@@ -158,15 +159,16 @@ func TestOpenAI_ObserveResponses(t *testing.T) {
 		t.Fatalf("stream error: %v", err)
 	}
 	check(t, observer.Record(), llm.Record{
-		Provider:          "openai",
-		Model:             "gpt-5.6-sol",
-		Operation:         "responses",
-		ResponseID:        "resp_01",
-		InputTokens:       1000,
-		CachedInputTokens: 200,
-		OutputTokens:      200,
-		ReasoningTokens:   50,
-		ToolCalls:         []llm.ToolCall{{Name: "get_weather"}},
+		Provider:              "openai",
+		Model:                 "gpt-5.6-sol",
+		Operation:             "responses",
+		ResponseID:            "resp_01",
+		InputTokens:           1000,
+		CachedInputTokens:     200,
+		CacheWriteInputTokens: 100,
+		OutputTokens:          200,
+		ReasoningTokens:       50,
+		ToolCalls:             []llm.ToolCall{{Name: "get_weather"}},
 	})
 }
 
