@@ -1,0 +1,14 @@
+[
+  {
+    "code": -32700,
+    "message": "Parse error"
+  },
+  {
+    "code": -32600,
+    "message": "Invalid Request"
+  },
+  {
+    "code": -32601,
+    "message": "Method not found"
+  }
+]

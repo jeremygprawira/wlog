@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": {
+      "name": "orders-mcp",
+      "version": "1.0.0"
+    }
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "sunny"
+    }
+  ],
+  "resultType": "complete"
+}
