@@ -71,7 +71,7 @@ trace ids change between runs, so the example test normalizes them.
 |---|---|---|---|
 | Which tools run most | `wlog query --group-by rpc.mcp.tool --count ./logs` | `jq -r '.rpc.mcp.tool' logs.ndjson \| sort \| uniq -c` | Grafana: count by rpc.mcp.tool |
 | Which tools fail most | `wlog query --level warn --group-by rpc.mcp.tool --count ./logs` | `jq -r 'select(.level=="warn") \| .rpc.mcp.tool' logs.ndjson \| sort \| uniq -c` | ClickHouse: `SELECT rpc.mcp.tool, count() FROM events WHERE level='warn' GROUP BY 1 ORDER BY 2 DESC` |
-| Which calls are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="mcp-server"} \| json \| unwrap duration_ms [5m])` |
+| Which calls are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="weather-mcp"} \| json \| unwrap duration_ms [5m])` |
 | Which clients call the server | `wlog query --group-by rpc.mcp.client --count ./logs` | `jq -r '.rpc.mcp.client' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `rpc.mcp.client: "weather-cli/2.0.0"` |
 | How many calls ask for more input | `wlog query --where 'rpc.mcp.result=input_required' --count ./logs` | `jq -r 'select(.rpc.mcp.result=="input_required")' logs.ndjson \| wc -l` | ClickHouse: `SELECT count() FROM events WHERE rpc.mcp.result='input_required'` |
 
