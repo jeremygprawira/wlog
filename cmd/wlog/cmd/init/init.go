@@ -119,9 +119,9 @@ func verify(dir string, stdout, stderr io.Writer) int {
 	// waits forever.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "./...")
+	build := exec.CommandContext(ctx, "go", "build", "-o", os.DevNull, "./...")
 	build.Dir = dir
-	build.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	build.Env = os.Environ()
 	if output, err := build.CombinedOutput(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "wlog init: go build failed: %v\n%s", err, output)
 		return 1
@@ -201,6 +201,97 @@ func restore(files []saved) {
 		}
 		_ = os.WriteFile(file.path, file.data, 0o644)
 	}
+}
+
+// plannedModule is a go.mod or go.sum change the run will write.
+type plannedModule struct {
+	write write
+	plan  planFile
+}
+
+// requirementFiles runs go mod tidy on a copy, so the requirement change is a plan step
+// and the later build does not edit the module itself.
+func requirementFiles(modDir string, files []write) ([]plannedModule, error) {
+	tmp, err := os.MkdirTemp("", "wlog-init-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmp)
+	if err := copyModule(modDir, tmp); err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		rel, err := filepath.Rel(modDir, file.path)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			continue
+		}
+		dest := filepath.Join(tmp, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(dest, []byte(file.content), 0o644); err != nil {
+			return nil, err
+		}
+	}
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = tmp
+	tidy.Env = os.Environ()
+	if output, err := tidy.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("go mod tidy: %w\n%s", err, output)
+	}
+	var extra []plannedModule
+	for _, name := range []string{"go.mod", "go.sum"} {
+		updated, err := os.ReadFile(filepath.Join(tmp, name))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		target := filepath.Join(modDir, name)
+		current, err := os.ReadFile(target)
+		action := "update"
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, err
+			}
+			action = "create"
+			current = nil
+		}
+		if string(current) == string(updated) {
+			continue
+		}
+		extra = append(extra, plannedModule{
+			write: write{path: target, content: string(updated)},
+			plan:  planFile{Path: target, Action: action},
+		})
+	}
+	return extra, nil
+}
+
+// copyModule copies the module tree. It skips directories the tidy does not read.
+func copyModule(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			base := entry.Name()
+			if base == ".git" || base == "vendor" {
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dst, rel), data, 0o644)
+	})
 }
 
 // apply writes every planned file. The plan is complete before this runs, and each file lands
@@ -444,6 +535,14 @@ func buildPlan(opts Options) (plan, []write, error) {
 			files = append(files, write{path: routerPath, content: patched})
 			document.Files = append(document.Files, planFile{Path: routerPath, Action: "update"})
 		}
+	}
+	extra, err := requirementFiles(modDir, files)
+	if err != nil {
+		return document, nil, err
+	}
+	for _, file := range extra {
+		files = append(files, file.write)
+		document.Files = append(document.Files, file.plan)
 	}
 	return document, files, nil
 }
