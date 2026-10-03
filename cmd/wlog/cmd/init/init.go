@@ -92,14 +92,24 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
+	before, err := snapshot(files)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
+		return 1
+	}
 	if err := apply(files); err != nil {
+		restore(before)
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
 	for _, write := range files {
 		_, _ = fmt.Fprintln(stdout, "wrote", write.path)
 	}
-	return verify(opts.Dir, stdout, stderr)
+	if code := verify(opts.Dir, stdout, stderr); code != 0 {
+		restore(before)
+		return code
+	}
+	return 0
 }
 
 // verify builds the module and runs doctor over it, and prints both results. A build failure
@@ -155,6 +165,42 @@ type planFile struct {
 type write struct {
 	path    string
 	content string
+}
+
+// saved is one file as it was before apply.
+type saved struct {
+	path    string
+	data    []byte
+	existed bool
+}
+
+// snapshot reads every file the plan will write, so a failed verify can put them back.
+func snapshot(files []write) ([]saved, error) {
+	out := make([]saved, 0, len(files))
+	for _, file := range files {
+		data, err := os.ReadFile(file.path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				out = append(out, saved{path: file.path})
+				continue
+			}
+			return nil, err
+		}
+		out = append(out, saved{path: file.path, data: data, existed: true})
+	}
+	return out, nil
+}
+
+// restore puts the tree back. A file the plan created is removed.
+func restore(files []saved) {
+	for i := len(files) - 1; i >= 0; i-- {
+		file := files[i]
+		if !file.existed {
+			_ = os.Remove(file.path)
+			continue
+		}
+		_ = os.WriteFile(file.path, file.data, 0o644)
+	}
 }
 
 // apply writes every planned file. The plan is complete before this runs, and each file lands
