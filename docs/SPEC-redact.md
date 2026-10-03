@@ -34,6 +34,7 @@ user can add to and remove from**, with useful defaults. Replaces the boilerplat
 normalized it to a JSON tree (`map[string]any`, `[]any`, `string`, `float64`/`int64`, `bool`,
 `nil`). It masks
 **in place**. Structs are normalized by core via JSON tags first, so `json:"password"` is matched.
+A valid JSON object or array string stays one string until `JSONTree` expands it, so a denied key inside that text is masked.
 Key and path rules match **canonical** (default namespaced) key names. Core applies field
 renaming presets *after* redaction, so denylist entries do not change with the output names.
 

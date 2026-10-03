@@ -240,10 +240,10 @@ func fieldsFor(r Record) map[string]any {
 		// The content is written only when a module's WithContent() filled it. Core redacts
 		// the values, so a masked prompt text stays masked.
 		if len(r.Content.InputMessages) > 0 {
-			fields["input_messages"] = r.Content.InputMessages
+			fields["input_messages"] = wlog.JSONTree(r.Content.InputMessages)
 		}
 		if len(r.Content.OutputMessages) > 0 {
-			fields["output_messages"] = r.Content.OutputMessages
+			fields["output_messages"] = wlog.JSONTree(r.Content.OutputMessages)
 		}
 	}
 	return fields

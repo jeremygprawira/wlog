@@ -145,7 +145,7 @@ func addParamFields(fields map[string]any, req mcp.Request, content bool) {
 	case *mcp.CallToolParamsRaw:
 		fields["tool"] = params.Name
 		if content && len(params.Arguments) > 0 {
-			fields["arguments"] = params.Arguments
+			fields["arguments"] = wlog.JSONTree(params.Arguments)
 		}
 	case *mcp.ReadResourceParams:
 		fields["resource_uri"] = params.URI
@@ -163,10 +163,10 @@ func addResultContent(fields map[string]any, result mcp.Result) {
 		return
 	}
 	if len(res.Content) > 0 {
-		fields["result_content"] = res.Content
+		fields["result_content"] = wlog.JSONTree(res.Content)
 	}
 	if res.StructuredContent != nil {
-		fields["structured_content"] = res.StructuredContent
+		fields["structured_content"] = wlog.JSONTree(res.StructuredContent)
 	}
 }
 

@@ -239,7 +239,7 @@ func addMessageFields(fields map[string]any, message any, content bool) {
 	case *mcp.CallToolRequest:
 		fields["tool"] = m.Params.Name
 		if content && len(m.Params.RawArguments) > 0 {
-			fields["arguments"] = m.Params.RawArguments
+			fields["arguments"] = wlog.JSONTree(m.Params.RawArguments)
 		}
 	case *mcp.ReadResourceRequest:
 		fields["resource_uri"] = m.Params.URI
@@ -257,10 +257,10 @@ func addResultContent(fields map[string]any, result any) {
 		return
 	}
 	if len(res.Content) > 0 {
-		fields["result_content"] = res.Content
+		fields["result_content"] = wlog.JSONTree(res.Content)
 	}
 	if res.StructuredContent != nil {
-		fields["structured_content"] = res.StructuredContent
+		fields["structured_content"] = wlog.JSONTree(res.StructuredContent)
 	}
 }
 

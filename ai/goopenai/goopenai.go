@@ -155,7 +155,7 @@ func chatContentOf(r *openai.ChatCompletionResponse) *llm.Content {
 		for _, call := range choice.Message.ToolCalls {
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments}},
+				Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.Function.Name, Arguments: wlog.JSONTree(call.Function.Arguments)}},
 			})
 		}
 	}
@@ -182,7 +182,7 @@ func responseContentOf(raw []any) *llm.Content {
 		case "function_call":
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", ID: item.CallID, Name: item.Name, Arguments: item.Arguments}},
+				Parts: []llm.Part{{Type: "tool_call", ID: item.CallID, Name: item.Name, Arguments: wlog.JSONTree(item.Arguments)}},
 			})
 		}
 	}
