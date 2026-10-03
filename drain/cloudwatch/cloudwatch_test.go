@@ -370,6 +370,60 @@ func TestCloudWatch_D11_DropsAnEntryOverTheByteLimit(t *testing.T) {
 	}
 }
 
+// TestCloudWatch_D6_RejectedRangesNameTheOriginalIndexes proves an unsorted batch maps each
+// rejected range to the original index of the event, not to its sorted position.
+func TestCloudWatch_D6_RejectedRangesNameTheOriginalIndexes(t *testing.T) {
+	tooNew, tooOld, expired := int32(2), int32(1), int32(1)
+	api := &fakeAPI{rejected: &types.RejectedLogEventsInfo{
+		TooNewLogEventStartIndex: &tooNew,
+		TooOldLogEventEndIndex:   &tooOld,
+		ExpiredLogEventEndIndex:  &expired,
+	}}
+	sender, err := cloudwatch.NewSender(api, "group")
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	// Sorted order is 1 (10:00), 2 (11:00), 0 (12:00), so the sorted positions 0 and 2 are
+	// the original indexes 1 and 0.
+	err = sender.SendBatch(context.Background(), []map[string]any{
+		event("2026-09-22T12:00:00Z"),
+		event("2026-09-22T10:00:00Z"),
+		event("2026-09-22T11:00:00Z"),
+	})
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	got := map[int]bool{}
+	for _, i := range partial.Dropped {
+		got[i] = true
+	}
+	if !got[0] || !got[1] || got[2] {
+		t.Errorf("Dropped = %v, want the original indexes 0 and 1", partial.Dropped)
+	}
+}
+
+// TestCloudWatch_D6_SplitsAtTheByteLimit proves a batch whose entries pass the byte limit
+// together arrives as several puts.
+func TestCloudWatch_D6_SplitsAtTheByteLimit(t *testing.T) {
+	api := &fakeAPI{}
+	sender, err := cloudwatch.NewSender(api, "group")
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	big := strings.Repeat("x", 600<<10)
+	events := []map[string]any{
+		{"timestamp": "2026-09-22T10:00:00Z", "blob": big},
+		{"timestamp": "2026-09-22T10:00:01Z", "blob": big},
+	}
+	if err := sender.SendBatch(context.Background(), events); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	if got := api.putCount(); got != 2 {
+		t.Errorf("puts = %d, want 2 for a batch over the byte limit", got)
+	}
+}
+
 // TestCloudWatch_Preset proves WithPreset writes the preset output.
 func TestCloudWatch_Preset(t *testing.T) {
 	api := &fakeAPI{}

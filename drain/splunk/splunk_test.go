@@ -257,6 +257,38 @@ func TestSplunk_D24_AnUnreadableAnswerIsNotADrop(t *testing.T) {
 	}
 }
 
+// TestSplunk_D6_TheCodeSixSplitNamesTheBadEvent proves the code 6 split finds the one event
+// the collector refuses and drops exactly that event.
+func TestSplunk_D6_TheCodeSixSplitNamesTheBadEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(string(httpfake.Body(r)), "bad-event") {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"text":"Invalid data format","code":6}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"text":"Success","code":0}`))
+	}))
+	defer srv.Close()
+
+	sender, err := splunk.NewSender(splunk.WithURL(srv.URL), splunk.WithToken("token"))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	events := []map[string]any{event(), event(), event(), event()}
+	events[2]["summary"] = "bad-event"
+	err = sender.SendBatch(context.Background(), events)
+	var partial *pipeline.PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("SendBatch = %v, want a PartialError", err)
+	}
+	if len(partial.Dropped) != 1 || partial.Dropped[0] != 2 {
+		t.Errorf("Dropped = %v, want the event at index 2", partial.Dropped)
+	}
+	if len(partial.Retry) != 0 {
+		t.Errorf("Retry = %v, want none", partial.Retry)
+	}
+}
+
 // TestSplunk_ChannelIsStable proves one channel id serves the life of the drain.
 func TestSplunk_ChannelIsStable(t *testing.T) {
 	srv := newFake(t, http.StatusOK, `{"text":"Success","code":0}`)
