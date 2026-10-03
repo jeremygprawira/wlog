@@ -76,6 +76,7 @@ var allBuiltinPatterns = []builtinPattern{
 // checksum, and hiding half an event id or a trace id breaks the event.
 var identityPaths = map[string]bool{
 	"event_id":              true,
+	"job.id":                true,
 	"trace.trace_id":        true,
 	"trace.span_id":         true,
 	"trace.parent_span_id":  true,

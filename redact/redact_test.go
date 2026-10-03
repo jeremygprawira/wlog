@@ -99,6 +99,7 @@ func TestRedact_IdentityFieldsNeverScanned(t *testing.T) {
 	const card = "4111111111111111"
 	event := map[string]any{
 		"event_id": card,
+		"job":      map[string]any{"id": card},
 		"trace": map[string]any{
 			"trace_id":        card,
 			"span_id":         card,
@@ -111,6 +112,10 @@ func TestRedact_IdentityFieldsNeverScanned(t *testing.T) {
 
 	if event["event_id"] != card {
 		t.Errorf("event_id = %v, want it unchanged", event["event_id"])
+	}
+	job := event["job"].(map[string]any)
+	if job["id"] != card {
+		t.Errorf("job.id = %v, want it unchanged", job["id"])
 	}
 	trace := event["trace"].(map[string]any)
 	for _, key := range []string{"trace_id", "span_id", "parent_span_id", "parent_event_id"} {
