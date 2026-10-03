@@ -299,11 +299,19 @@ func usage() string {
 usage: wlog <command> [flags] [arguments]
 
 commands:
-  map     score every HTTP handler against the wlog rules, and write wlog.map.json
-  init    detect a project's adapters and scaffold wlog into it
-  doctor  report on the wlog setup of a project
-  agents  write agent instructions and skills
-  help    print this text
+  map      score every HTTP handler against the wlog rules, and write wlog.map.json
+  init     detect a project's adapters and scaffold wlog into it
+  doctor   report on the wlog setup of a project
+  agents   write agent instructions and skills
+  query    read events from a file or a stream
+  tail     follow events as they arrive
+  mcp      serve the wlog tools over MCP
+  explain  explain one code or one field
+  rules    list the map rules
+  schema   print the event schema
+  version  print the version
+  env      print the environment variables
+  help     print this text
 
 exit codes:
   0  the run passed every gate
