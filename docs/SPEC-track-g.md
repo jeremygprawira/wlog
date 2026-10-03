@@ -81,7 +81,7 @@ such as `Message.Accumulate` or `ChatCompletionAccumulator`.
 | `ai-openai` | `github.com/openai/openai-go/v3` v3.61.0, Go 1.25 | `FromChatCompletion`, `FromResponse` | `ObserveChat(stream)` reads usage chunks, finish reasons, and tool names. `ObserveResponses(stream)` reads terminal events | `Middleware()`, reads `x-request-id` |
 | `ai-genai` | `google.golang.org/genai` v1.71.0, Go 1.24 | `FromGenerateContent(resp, backend)` | `Observe(seq iter.Seq2[...])` re-yields each chunk, and the last non-nil usage wins | `Transport(next)` wraps the authenticated transport, never replaces it |
 | `ai-goopenai` | `github.com/sashabaranov/go-openai` v1.42.1, Go 1.21 (the SDK needs 1.18) | `FromChatCompletionResponse`, `FromResponse` | `ObserveChat(stream)` | `Doer(next)` implements `HTTPDoer` |
-| `ai-langchaingo` | `github.com/tmc/langchaingo` v0.1.14, Go 1.24.4 | `FromContentResponse(resp, provider, model)` | none | `Handler()` for `callbacks.Handler`. Tool and chain callbacks add `calls` |
+| `ai-langchaingo` | `github.com/tmc/langchaingo` v0.1.14, Go 1.24.4 | `FromContentResponse(resp, provider, model)` | none | `Handler(log)` for `callbacks.Handler`. Tool and chain callbacks add `calls` |
 | `ai-eino` | `github.com/cloudwego/eino` v0.9.19, Go 1.21 (the SDK needs 1.18) | none | the handler drains stream copies in a goroutine and closes them | `Handler()` built with `NewHandlerHelper`. It falls back to `Message.ResponseMeta.Usage` |
 
 Rules:

@@ -15,6 +15,7 @@ package wloglangchaingo
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/tmc/langchaingo/callbacks"
 	"github.com/tmc/langchaingo/llms"
@@ -150,6 +151,20 @@ func contentOf(choices []*llms.ContentChoice) *llm.Content {
 	return content
 }
 
+// callTTL and callCap bound a start that never receives an end. The library calculator
+// tool returns with no end callback, so an unbounded map would keep one entry per call.
+const (
+	callTTL = 5 * time.Minute
+	callCap = 10_000
+)
+
+// storedCall is one open start. at is the time it was stored, so a later start can drop
+// it once it is older than callTTL.
+type storedCall struct {
+	end func(wlog.CallResult)
+	at  time.Time
+}
+
 // handler turns tool and chain callback pairs into call records.
 //
 // ponytail: HandleToolStart/End and HandleChainStart/End carry no call id or name, so a
@@ -158,55 +173,104 @@ func contentOf(choices []*llms.ContentChoice) *llm.Content {
 // real id if langchaingo ever adds one to these signatures.
 type handler struct {
 	callbacks.SimpleHandler
-	tools  sync.Map // context.Context -> func(wlog.CallResult)
-	chains sync.Map // context.Context -> func(wlog.CallResult)
+	log    *wlog.Logger
+	mu     sync.Mutex
+	tools  map[context.Context]storedCall
+	chains map[context.Context]storedCall
 }
 
 // Handler returns a callbacks.Handler that turns every tool call and every chain step into
-// one entry under calls[], through wlog.StartCall. It never touches the LLM call itself;
-// call FromContentResponse on the result for that.
-func Handler() callbacks.Handler {
-	return &handler{}
+// one entry under calls[], through wlog.StartCall. It never records the LLM call itself.
+// Call FromContentResponse on the result for that. log is told when a start is dropped.
+// A nil log still drops the start.
+func Handler(log *wlog.Logger) callbacks.Handler {
+	return &handler{
+		log:    log,
+		tools:  map[context.Context]storedCall{},
+		chains: map[context.Context]storedCall{},
+	}
 }
 
 // HandleToolStart starts one call of kind "other", operation "tool".
 func (h *handler) HandleToolStart(ctx context.Context, _ string) {
-	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "other", System: "langchaingo", Operation: "tool"})
-	h.tools.Store(ctx, end)
+	h.begin(h.tools, ctx, "tool")
 }
 
 // HandleToolEnd ends the call HandleToolStart began on the same ctx.
 func (h *handler) HandleToolEnd(ctx context.Context, _ string) {
-	endCall(&h.tools, ctx, wlog.CallResult{})
+	h.finish(h.tools, ctx, wlog.CallResult{})
 }
 
 // HandleToolError ends the call HandleToolStart began on the same ctx, as a failure.
 func (h *handler) HandleToolError(ctx context.Context, err error) {
-	endCall(&h.tools, ctx, wlog.CallResult{Err: err})
+	h.finish(h.tools, ctx, wlog.CallResult{Err: err})
 }
 
 // HandleChainStart starts one call of kind "other", operation "chain".
 func (h *handler) HandleChainStart(ctx context.Context, _ map[string]any) {
-	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "other", System: "langchaingo", Operation: "chain"})
-	h.chains.Store(ctx, end)
+	h.begin(h.chains, ctx, "chain")
 }
 
 // HandleChainEnd ends the call HandleChainStart began on the same ctx.
 func (h *handler) HandleChainEnd(ctx context.Context, _ map[string]any) {
-	endCall(&h.chains, ctx, wlog.CallResult{})
+	h.finish(h.chains, ctx, wlog.CallResult{})
 }
 
 // HandleChainError ends the call HandleChainStart began on the same ctx, as a failure.
 func (h *handler) HandleChainError(ctx context.Context, err error) {
-	endCall(&h.chains, ctx, wlog.CallResult{Err: err})
+	h.finish(h.chains, ctx, wlog.CallResult{Err: err})
 }
 
-// endCall looks up the end func a start stored under ctx and calls it once. A ctx with no
-// matching start is left alone, never a panic.
-func endCall(m *sync.Map, ctx context.Context, result wlog.CallResult) {
-	v, ok := m.LoadAndDelete(ctx)
+// begin stores one start. It first drops every start older than callTTL. At the cap it
+// drops the new start instead of growing. Each drop is reported.
+func (h *handler) begin(m map[context.Context]storedCall, ctx context.Context, operation string) {
+	h.mu.Lock()
+	dropped := h.prune(m)
+	if len(m) >= callCap {
+		dropped++
+		h.mu.Unlock()
+		h.report(dropped)
+		return
+	}
+	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "other", System: "langchaingo", Operation: operation})
+	m[ctx] = storedCall{end: end, at: time.Now()}
+	h.mu.Unlock()
+	h.report(dropped)
+}
+
+// prune drops every start older than callTTL. The caller holds h.mu.
+func (h *handler) prune(m map[context.Context]storedCall) int {
+	now := time.Now()
+	dropped := 0
+	for key, slot := range m {
+		if now.Sub(slot.at) > callTTL {
+			delete(m, key)
+			dropped++
+		}
+	}
+	return dropped
+}
+
+// report tells log about each dropped start. A nil log stays quiet.
+func (h *handler) report(n int) {
+	if h.log == nil || n == 0 {
+		return
+	}
+	for i := 0; i < n; i++ {
+		h.log.Report(wlog.Problem{Code: "WLOG_CAP_REACHED", Source: "langchaingo"})
+	}
+}
+
+// finish ends the start stored under ctx. A ctx with no start is left alone.
+func (h *handler) finish(m map[context.Context]storedCall, ctx context.Context, result wlog.CallResult) {
+	h.mu.Lock()
+	slot, ok := m[ctx]
+	if ok {
+		delete(m, ctx)
+	}
+	h.mu.Unlock()
 	if !ok {
 		return
 	}
-	v.(func(wlog.CallResult))(result)
+	slot.end(result)
 }

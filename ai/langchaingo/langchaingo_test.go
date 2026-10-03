@@ -132,7 +132,7 @@ func TestLangchaingo_Handler_Tool(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
 
-	h := wloglangchaingo.Handler()
+	h := wloglangchaingo.Handler(log)
 	h.HandleToolStart(ctx, "input")
 	h.HandleToolEnd(ctx, "output")
 	end()
@@ -156,7 +156,7 @@ func TestLangchaingo_Handler_ChainError(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
 
-	h := wloglangchaingo.Handler()
+	h := wloglangchaingo.Handler(log)
 	h.HandleChainStart(ctx, map[string]any{})
 	h.HandleToolStart(ctx, "input")
 	h.HandleToolEnd(ctx, "output")
@@ -260,7 +260,7 @@ func TestLangchaingo_A4_OpenAIToolCallCountedOnce(t *testing.T) {
 func TestLangchaingo_A5_CallKindOther(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
-	h := wloglangchaingo.Handler()
+	h := wloglangchaingo.Handler(log)
 	h.HandleToolStart(ctx, "input")
 	h.HandleToolEnd(ctx, "output")
 	h.HandleChainStart(ctx, map[string]any{})
