@@ -24,17 +24,17 @@ func rewrite(filename string, source []byte, framework string) ([]byte, bool, er
 		return nil, false, fmt.Errorf("parse %s: %w", filename, err)
 	}
 
-	var changed bool
 	switch framework {
 	case "nethttp", "mux":
 		// Both start a server with a handler: net/http's ListenAndServe, or an http.Server
 		// literal whose Handler field names one.
-		changed = wrapHandlers(file)
+		if !wrapHandlers(file) {
+			return nil, false, nil
+		}
 	default:
-		changed = installRouterMiddleware(file, framework)
-	}
-	if !changed {
-		return nil, false, nil
+		// Splice the call as text. An inserted syntax node has no position, so the printer
+		// pulls the next comment into the call.
+		return spliceRouterUse(fset, file, source, framework)
 	}
 
 	var out bytes.Buffer
@@ -47,6 +47,53 @@ func rewrite(filename string, source []byte, framework string) ([]byte, bool, er
 		return nil, false, fmt.Errorf("format %s: %w", filename, err)
 	}
 	return formatted, true, nil
+}
+
+// spliceRouterUse inserts router.Use(LoggerMiddleware()) at the end of the statement that
+// builds the router, then formats the file.
+func spliceRouterUse(fset *token.FileSet, file *ast.File, source []byte, framework string) ([]byte, bool, error) {
+	offset, router, ok := routerInsert(fset, file, framework)
+	if !ok {
+		return nil, false, nil
+	}
+	insertion := []byte("\n" + router + ".Use(LoggerMiddleware())")
+	spliced := make([]byte, 0, len(source)+len(insertion))
+	spliced = append(spliced, source[:offset]...)
+	spliced = append(spliced, insertion...)
+	spliced = append(spliced, source[offset:]...)
+	formatted, err := format.Source(spliced)
+	if err != nil {
+		return nil, false, fmt.Errorf("format spliced source: %w", err)
+	}
+	return formatted, true, nil
+}
+
+// routerInsert returns the byte offset just after the router is built.
+func routerInsert(fset *token.FileSet, file *ast.File, framework string) (int, string, bool) {
+	var offset int
+	var router string
+	found := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		if found {
+			return false
+		}
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		for _, statement := range block.List {
+			name, ok := routerName(statement, framework)
+			if !ok || hasWlogMiddleware(file, block.List, name) {
+				continue
+			}
+			offset = fset.Position(statement.End()).Offset
+			router = name
+			found = true
+			return false
+		}
+		return true
+	})
+	return offset, router, found
 }
 
 // wrapHandlers wraps every server handler in the file with WrapHandler.
@@ -94,34 +141,6 @@ func wrapHandlerArg(arg ast.Expr) ast.Expr {
 		return arg
 	}
 	return callExpr("WrapHandler", arg)
-}
-
-// installRouterMiddleware inserts router.Use(LoggerMiddleware()) after the router is built, so
-// every route the file registers is covered.
-func installRouterMiddleware(file *ast.File, framework string) bool {
-	changed := false
-	ast.Inspect(file, func(node ast.Node) bool {
-		block, ok := node.(*ast.BlockStmt)
-		if !ok {
-			return true
-		}
-		for i, statement := range block.List {
-			router, ok := routerName(statement, framework)
-			if !ok || hasWlogMiddleware(file, block.List, router) {
-				continue
-			}
-			insert := i + 1
-			updated := make([]ast.Stmt, 0, len(block.List)+1)
-			updated = append(updated, block.List[:insert]...)
-			updated = append(updated, middlewareStatement(router))
-			updated = append(updated, block.List[insert:]...)
-			block.List = updated
-			changed = true
-			break
-		}
-		return true
-	})
-	return changed
 }
 
 // routerName returns the variable a statement assigns a router to, when the framework matches.
@@ -211,11 +230,6 @@ func exprUsesWlog(expr ast.Expr, names map[string]bool) bool {
 	default:
 		return false
 	}
-}
-
-// middlewareStatement builds router.Use(LoggerMiddleware()).
-func middlewareStatement(router string) ast.Stmt {
-	return &ast.ExprStmt{X: callExpr(router+".Use", callExpr("LoggerMiddleware"))}
 }
 
 // isListenAndServe reports whether a call starts an http server.
