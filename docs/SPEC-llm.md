@@ -104,7 +104,7 @@ func Enricher(p *Prices) wlog.Enricher
 ```
 
 The enricher reads the `llm` group the handler already set, prices every call whose model
-the table knows, and writes `llm.cost` and the per-call costs. An unknown model leaves the
+the table knows, and writes `llm.cost_micros` and the per-call costs. An unknown model leaves the
 cost off the event and sets `llm.cost_unknown` to true. A dashboard can then count what it
 failed to price, instead of reading a silent zero.
 
@@ -113,8 +113,10 @@ failed to price, instead of reading a silent zero.
 ```
 llm.provider llm.request_model llm.response_model llm.operation llm.status
 llm.attempts llm.request_ids
-llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.reasoning_tokens
-llm.total_tokens
+llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.cache_write_input_tokens
+llm.cache_write_1h_input_tokens llm.reasoning_tokens llm.response_id
+llm.total_tokens llm.steps llm.output_tokens_per_second
+llm.input_messages llm.output_messages
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
 llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reasons
 llm.cost_micros llm.cost_unknown
