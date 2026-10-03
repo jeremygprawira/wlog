@@ -239,6 +239,11 @@ func flattenInto(out map[string]any, value any, path string) {
 			flattenInto(out, child, childPath)
 		}
 	case []any:
+		if len(typed) == 0 {
+			// An empty array is a leaf of its own, so it differs from a missing key.
+			out[path] = typed
+			return
+		}
 		for i, child := range typed {
 			flattenInto(out, child, fmt.Sprintf("%s.%d", path, i))
 		}

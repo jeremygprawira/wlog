@@ -97,6 +97,22 @@ func TestConformance_HTTP22_DiffNamesFields(t *testing.T) {
 	}
 }
 
+// TestConformance_D22_AnEmptyArrayDiffersFromAMissingKey proves the flatten keeps an empty
+// array as a leaf, so a diff names it instead of passing, and that a nested array
+// difference names the index.
+func TestConformance_D22_AnEmptyArrayDiffersFromAMissingKey(t *testing.T) {
+	if diff := conformance.Diff(map[string]any{"calls": []any{}}, map[string]any{}); diff == "" {
+		t.Error("Diff of an empty array and a missing key = \"\", want a difference")
+	}
+	diff := conformance.Diff(
+		map[string]any{"calls": []any{map[string]any{"model": "a"}}},
+		map[string]any{"calls": []any{map[string]any{"model": "b"}}},
+	)
+	if !strings.Contains(diff, "calls.0.model") {
+		t.Errorf("Diff does not name calls.0.model:\n%s", diff)
+	}
+}
+
 // TestConformance_HTTP22_NormalizeCanonicalRoute proves that Normalize rewrites every
 // route to the braced form, so a suite compares the shape of a route and not the dialect
 // of one router.
