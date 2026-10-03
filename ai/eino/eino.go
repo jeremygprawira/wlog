@@ -20,6 +20,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	template "github.com/cloudwego/eino/utils/callbacks"
 
+	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/llm"
 )
 
@@ -57,7 +58,13 @@ func Handler(opts ...Option) callbacks.Handler {
 				return ctx
 			},
 			OnEndWithStreamOutput: func(ctx context.Context, info *callbacks.RunInfo, output *schema.StreamReader[*model.CallbackOutput]) context.Context {
-				go drain(ctx, output, providerOf(info), content)
+				// The caller may end the event before the stream does. The record
+				// lives on a detached child that this goroutine ends.
+				child, end := wlog.Detach(ctx, "eino")
+				go func() {
+					defer end()
+					drain(child, output, providerOf(info), content)
+				}()
 				return ctx
 			},
 		}).

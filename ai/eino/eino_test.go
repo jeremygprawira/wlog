@@ -137,14 +137,22 @@ func TestEino_Handler_Stream(t *testing.T) {
 
 	h := wlogeino.Handler()
 	h.OnEndWithStreamOutput(ctx, runInfo("OpenAI"), stream)
-
-	deadline := time.Now().Add(time.Second)
-	for rec.Count() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
 	end()
 
-	group, _ := rec.Last()["llm"].(map[string]any)
+	deadline := time.Now().Add(time.Second)
+	var group map[string]any
+	for time.Now().Before(deadline) {
+		for _, ev := range rec.Events() {
+			g, _ := ev["llm"].(map[string]any)
+			if g != nil {
+				group = g
+			}
+		}
+		if group != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if group["input_tokens"] != int64(1000) || group["output_tokens"] != int64(200) {
 		t.Fatalf("stream tokens = %v, want input 1000, output 200", group)
 	}
@@ -171,5 +179,42 @@ func TestEino_Handler_ProviderFallback(t *testing.T) {
 	group, _ := rec.Last()["llm"].(map[string]any)
 	if group["provider"] != "eino" {
 		t.Errorf("provider = %v, want eino", group["provider"])
+	}
+}
+
+// TestEino_A8_StreamSurvivesEarlyEnd proves a streamed call keeps its llm record
+// when the caller ends the event before the last chunk arrives.
+func TestEino_A8_StreamSurvivesEarlyEnd(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	reader, writer := schema.Pipe[callbacks.CallbackOutput](1)
+	h := wlogeino.Handler()
+	h.OnEndWithStreamOutput(ctx, runInfo("OpenAI"), reader)
+	end()
+	writer.Send(&model.CallbackOutput{
+		Message:    &schema.Message{Role: schema.Assistant, Content: "hi"},
+		TokenUsage: &model.TokenUsage{PromptTokens: 10, CompletionTokens: 4},
+	}, nil)
+	writer.Close()
+
+	deadline := time.Now().Add(time.Second)
+	var group map[string]any
+	for time.Now().Before(deadline) {
+		for _, ev := range rec.Events() {
+			g, _ := ev["llm"].(map[string]any)
+			if g != nil {
+				group = g
+			}
+		}
+		if group != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if group == nil {
+		t.Fatal("streamed call lost its llm record after the event ended")
+	}
+	if group["input_tokens"] != int64(10) || group["output_tokens"] != int64(4) {
+		t.Fatalf("llm = %v, want input 10 and output 4", group)
 	}
 }
