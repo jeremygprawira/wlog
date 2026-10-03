@@ -85,6 +85,7 @@ func (d *drain) Send(ctx context.Context, event map[string]any) {
 	kind, _ := event["kind"].(string)
 	name := "wlog." + kind
 	severity, text := severityOf(level)
+	ctx = withEventSpan(ctx, event)
 
 	if !d.logger.Enabled(ctx, log.EnabledParameters{Severity: severity, EventName: name}) {
 		return
@@ -103,7 +104,7 @@ func (d *drain) Send(ctx context.Context, event map[string]any) {
 	}
 	record.AddAttributes(recordAttributes(event, d.service)...)
 
-	d.logger.Emit(withEventSpan(ctx, event), record)
+	d.logger.Emit(ctx, record)
 }
 
 // severityOf maps a wlog level to an OTel severity and its text.

@@ -158,8 +158,8 @@ func WithServiceAttributes(on bool) Option                        // default fal
 
 - `Send` maps the redacted event to one `log.Record` and calls `Logger.Emit`. The app's provider
   owns batching, export, and the resource.
-- Before it builds a record, `Send` calls `Enabled` with the severity and the event name. It skips
-  a disabled record.
+- `Send` builds the event span context first. It then calls `Enabled` with that context, the severity,
+  and the event name. It skips a disabled record.
 - The logger name is `github.com/jeremygprawira/wlog`, with the wlog version as the
   instrumentation version.
 - The record gets its timestamp from `timestamp` and its observed timestamp from the clock at
