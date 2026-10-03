@@ -65,6 +65,11 @@ func Extract(ctx context.Context, c Carrier, opts ...Option) context.Context {
 		opt(&cfg)
 	}
 
+	// A Starter may already have written the OTel ids. Extract still reads the
+	// carrier, then puts those three fields back, so the event span matches the
+	// recording span.
+	prior, hadPrior := FromContext(ctx)
+
 	var tc TraceContext
 	parent, ok := parseTraceparent(c.Get("traceparent"))
 	if ok {
@@ -86,6 +91,16 @@ func Extract(ctx context.Context, c Carrier, opts ...Option) context.Context {
 	tc.SpanID = randomHex(8)
 	tc.TraceState = c.Get("tracestate")
 	tc.RequestID = requestID(c.Get("X-Request-ID"), tc.TraceID)
+	if hadPrior && prior.TraceID != "" && prior.SpanID != "" {
+		// A request id copied from the trace id Extract just made must follow the
+		// trace id that stays. A request id from the carrier is left alone.
+		if tc.RequestID == tc.TraceID {
+			tc.RequestID = prior.TraceID
+		}
+		tc.TraceID = prior.TraceID
+		tc.SpanID = prior.SpanID
+		tc.Sampled = prior.Sampled
+	}
 
 	return ContextWith(ctx, tc)
 }

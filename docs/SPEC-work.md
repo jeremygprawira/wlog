@@ -45,6 +45,9 @@ func WithXRay() Option  // also read X-Amzn-Trace-Id and AWSTraceHeader
 - `Extract` reads `traceparent` and `tracestate` by W3C rules. It rejects version `ff`, all-zero
   ids, and bad lengths. It accepts a future version with extra fields. With no valid parent, it
   generates a trace id. It always generates a new span id for this unit.
+- When the context already holds a trace id and a span id, `Extract` keeps that trace id, that span
+  id, and that sampled flag. A request id copied from the trace id `Extract` was about to discard
+  follows the kept trace id. A request id from the carrier, and the parent span, stay.
 - `X-Request-ID` counts only at 128 characters or fewer from `[A-Za-z0-9._:-]`. Otherwise,
   `RequestID` equals the trace id.
 - B3 and X-Ray formats are read-only fallbacks, and only with their option. An X-Ray root
