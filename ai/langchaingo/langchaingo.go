@@ -67,7 +67,9 @@ func FromContentResponse(resp *llms.ContentResponse, provider, model string, opt
 			applyGenerationInfo(&r, provider, choice.GenerationInfo)
 			usageApplied = true
 		}
-		if choice.FuncCall != nil {
+		// The OpenAI provider copies ToolCalls[0] into FuncCall. Read FuncCall only
+		// when ToolCalls is empty, so that copy is not counted twice.
+		if choice.FuncCall != nil && len(choice.ToolCalls) == 0 {
 			r.ToolCalls = append(r.ToolCalls, llm.ToolCall{Name: choice.FuncCall.Name})
 		}
 		for _, call := range choice.ToolCalls {
@@ -126,7 +128,7 @@ func contentOf(choices []*llms.ContentChoice) *llm.Content {
 				Parts: []llm.Part{{Type: "text", Content: choice.Content}},
 			})
 		}
-		if choice.FuncCall != nil {
+		if choice.FuncCall != nil && len(choice.ToolCalls) == 0 {
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
 				Parts: []llm.Part{{Type: "tool_call", Name: choice.FuncCall.Name, Arguments: choice.FuncCall.Arguments}},

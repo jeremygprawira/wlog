@@ -214,3 +214,43 @@ func check(t *testing.T, got, want llm.Record) {
 		}
 	}
 }
+
+// TestLangchaingo_A4_OpenAIToolCallCountedOnce proves the legacy FuncCall copy of
+// ToolCalls[0] is not counted again. A choice with only FuncCall still counts once.
+func TestLangchaingo_A4_OpenAIToolCallCountedOnce(t *testing.T) {
+	call := &llms.FunctionCall{Name: "get_weather", Arguments: `{"city":"Jakarta"}`}
+	resp := &llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{
+			FuncCall: call,
+			ToolCalls: []llms.ToolCall{
+				{ID: "call_1", FunctionCall: call},
+				{ID: "call_2", FunctionCall: &llms.FunctionCall{Name: "get_time", Arguments: "{}"}},
+			},
+		}},
+	}
+	got := wloglangchaingo.FromContentResponse(resp, "openai", "gpt-4o")
+	if len(got.ToolCalls) != 2 {
+		t.Fatalf("ToolCalls = %v, want get_weather and get_time once each", got.ToolCalls)
+	}
+
+	legacy := &llms.ContentResponse{Choices: []*llms.ContentChoice{{
+		FuncCall: &llms.FunctionCall{Name: "get_weather", Arguments: "{}"},
+	}}}
+	got = wloglangchaingo.FromContentResponse(legacy, "openai", "gpt-4o")
+	if len(got.ToolCalls) != 1 || got.ToolCalls[0].Name != "get_weather" {
+		t.Fatalf("legacy FuncCall = %v, want one get_weather", got.ToolCalls)
+	}
+
+	got = wloglangchaingo.FromContentResponse(resp, "openai", "gpt-4o", wloglangchaingo.WithContent())
+	parts := 0
+	for _, msg := range got.Content.OutputMessages {
+		for _, part := range msg.Parts {
+			if part.Type == "tool_call" {
+				parts++
+			}
+		}
+	}
+	if parts != 2 {
+		t.Fatalf("content tool_call parts = %d, want 2", parts)
+	}
+}
