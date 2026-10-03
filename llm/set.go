@@ -50,10 +50,22 @@ func Add(ctx context.Context, r Record) {
 // applyAdd folds r into existing. The caller holds the event lock.
 func applyAdd(existing map[string]any, r Record, dropped *int) {
 	fields := fieldsFor(r)
-	fields["input_tokens"] = intOf(existing["input_tokens"]) + r.InputTokens
-	fields["output_tokens"] = intOf(existing["output_tokens"]) + r.OutputTokens
-	if total := fields["input_tokens"].(int) + fields["output_tokens"].(int); total > 0 {
+	input := intOf(existing["input_tokens"]) + r.InputTokens
+	output := intOf(existing["output_tokens"]) + r.OutputTokens
+	if input > 0 {
+		fields["input_tokens"] = input
+	} else {
+		delete(fields, "input_tokens")
+	}
+	if output > 0 {
+		fields["output_tokens"] = output
+	} else {
+		delete(fields, "output_tokens")
+	}
+	if total := input + output; total > 0 {
 		fields["total_tokens"] = total
+	} else {
+		delete(fields, "total_tokens")
 	}
 	if cached := intOf(existing["cache_read_input_tokens"]) + r.CachedInputTokens; cached > 0 {
 		fields["cache_read_input_tokens"] = cached
@@ -107,7 +119,21 @@ func applyAdd(existing map[string]any, r Record, dropped *int) {
 	}
 
 	for key, value := range fields {
+		if _, exists := existing[key]; exists && keepFirst(key) {
+			continue
+		}
 		existing[key] = value
+	}
+}
+
+// keepFirst names the top-level fields that belong to the first call. Later calls
+// still land in llm.calls.
+func keepFirst(key string) bool {
+	switch key {
+	case "provider", "request_model", "response_model", "operation", "response_id":
+		return true
+	default:
+		return false
 	}
 }
 
