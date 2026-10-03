@@ -134,7 +134,7 @@ is masked before a drain sees it.
    dollar float, because a float rounds. `Add` also records one `calls` entry with kind `llm`,
    system `Provider`, operation `Operation`, and target `ResponseModel`.
 3. `Cost` prices a record from the token counts, and prices a cached input token at the
-   cached rate.
+   cached rate. A prefix matches a date suffix or `-latest` only. Any other suffix is unknown.
 4. `Cost` reports false for a model the table does not hold, and the enricher then sets
    `llm.cost_unknown`.
 5. Money never passes through a float before it reaches the event. A test prices a call

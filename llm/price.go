@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/jeremygprawira/wlog"
 )
@@ -116,10 +117,9 @@ func firstRate(rate int64, fallbacks ...int64) int64 {
 	return 0
 }
 
-// Price returns the row for a model. An exact row wins; otherwise the longest key that the
-// model id starts with, at a separator, wins, so a dated snapshot such as
-// "gpt-4o-2024-08-06" prices as gpt-4o and "gpt-4o-mini-2024-07-18" prices as gpt-4o-mini
-// rather than as gpt-4o.
+// Price returns the row for a model. An exact row wins. Otherwise the longest key that the
+// model id starts with wins, but only when the rest is a date or "-latest". A different
+// suffix, such as "gpt-4.1-mini", is unknown.
 func (p *Prices) Price(model string) (Price, bool) {
 	if price, ok := p.byModel[model]; ok {
 		return price, true
@@ -129,9 +129,7 @@ func (p *Prices) Price(model string) (Price, bool) {
 		if len(key) <= len(best) || !strings.HasPrefix(model, key) {
 			continue
 		}
-		// The boundary keeps "gpt-4o" from matching "gpt-4omini" while still matching a
-		// dated or tagged snapshot.
-		if rest := model[len(key):]; rest[0] != '-' && rest[0] != '.' && rest[0] != ':' && rest[0] != '@' {
+		if !snapshotSuffix(model[len(key):]) {
 			continue
 		}
 		best = key
@@ -140,6 +138,18 @@ func (p *Prices) Price(model string) (Price, bool) {
 		return Price{}, false
 	}
 	return p.byModel[best], true
+}
+
+// snapshotSuffix reports a date, as -YYYY-MM-DD or -YYYYMMDD, or -latest.
+func snapshotSuffix(rest string) bool {
+	if rest == "-latest" {
+		return true
+	}
+	if _, err := time.Parse("-2006-01-02", rest); err == nil {
+		return true
+	}
+	_, err := time.Parse("-20060102", rest)
+	return err == nil
 }
 
 // micros prices tokens at a rate of micros per million tokens, with half-up rounding.

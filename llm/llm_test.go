@@ -269,9 +269,9 @@ func TestLLM_CAT3_SnapshotPrefix(t *testing.T) {
 		{"gpt-4o-mini-2024-07-18", 150_000, true},
 		// An exact row wins over any prefix.
 		{"gpt-4o", 2_500_000, true},
-		// A suffix prices as its base model, which is how a dated snapshot is priced. A model
-		// that is not even a suffix of a row is unknown instead.
-		{"gpt-4o-omni", 2_500_000, true},
+		// A name that is not a date or -latest is unknown.
+		{"gpt-4o-omni", 0, false},
+		{"gpt-4o-latest", 2_500_000, true},
 		{"text-embedding-3", 0, false},
 		{"llama-3-70b", 0, false},
 	}
