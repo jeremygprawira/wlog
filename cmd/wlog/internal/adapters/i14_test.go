@@ -21,8 +21,6 @@ func TestAdapters_I14_RowsMatchTheWorkspace(t *testing.T) {
 	skip := map[string]bool{
 		".": true, "./examples": true, "./examples/mux": true, "./cmd/wlog": true,
 		"./tools": true, "./store/sql/drivertest": true,
-		// drain/cloudwatch has no row yet. I-16 adds it.
-		"./drain/cloudwatch": true,
 	}
 	rows := map[string]adapters.Adapter{}
 	for _, adapter := range adapters.Table {

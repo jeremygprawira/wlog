@@ -1,4 +1,4 @@
-// Package wlogkafka is wlog's kafka-go adapter: one event per consumed message, one call
+// Package wlogkafkago is wlog's kafka-go adapter: one event per consumed message, one call
 // per produced write, and a drain that ships events to a topic.
 //
 // Read top to bottom: Consume fetches one message, runs a handler inside one event, and

@@ -14,7 +14,7 @@ func TestTable_WellFormed(t *testing.T) {
 	kinds := map[string]bool{
 		"http": true, "rpc": true, "client": true, "store": true, "log": true,
 		"errors": true, "flag": true, "queue": true, "job": true, "faas": true,
-		"command": true, "ai": true, "trace": true, "metrics": true,
+		"command": true, "ai": true, "trace": true, "metrics": true, "drain": true,
 	}
 	names := map[string]bool{}
 	paths := map[string]bool{}
