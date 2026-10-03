@@ -174,27 +174,3 @@ var Table = []Adapter{
 		Libs:  []string{"go.opentelemetry.io/otel/log"},
 		Setup: "wlog.WithDrains(wlogotellog.New(provider))"},
 }
-
-// ByWlog returns the adapter with this wlog import path.
-func ByWlog(path string) (Adapter, bool) {
-	for _, adapter := range Table {
-		if adapter.Wlog == path {
-			return adapter, true
-		}
-	}
-	return Adapter{}, false
-}
-
-// ByLib returns the adapters that wrap this third-party module. Several adapters can share one
-// library, such as fasthttp, so the result is a list.
-func ByLib(path string) []Adapter {
-	var found []Adapter
-	for _, adapter := range Table {
-		for _, lib := range adapter.Libs {
-			if lib == path {
-				found = append(found, adapter)
-			}
-		}
-	}
-	return found
-}

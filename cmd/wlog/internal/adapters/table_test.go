@@ -55,21 +55,20 @@ func TestTable_Sorted(t *testing.T) {
 	}
 }
 
-// TestTable_Lookup proves the two lookups find the chi adapter by its import path and by the
-// chi library, because the same table serves detection and doctor.
+// TestTable_Lookup proves the chi row names its import path and its library.
 func TestTable_Lookup(t *testing.T) {
-	byPath, ok := adapters.ByWlog("github.com/jeremygprawira/wlog/middleware/chi")
-	if !ok || byPath.Name != "http-chi" {
-		t.Errorf("ByWlog(chi) = %+v, %v", byPath, ok)
-	}
 	found := false
-	for _, adapter := range adapters.ByLib("github.com/go-chi/chi/v5") {
-		if adapter.Name == "http-chi" {
-			found = true
+	for _, adapter := range adapters.Table {
+		if adapter.Wlog == "github.com/jeremygprawira/wlog/middleware/chi" && adapter.Name == "http-chi" {
+			for _, lib := range adapter.Libs {
+				if lib == "github.com/go-chi/chi/v5" {
+					found = true
+				}
+			}
 		}
 	}
 	if !found {
-		t.Error("ByLib(chi/v5) does not name http-chi")
+		t.Error("the chi row does not name http-chi and chi/v5")
 	}
 	var chi string
 	for _, adapter := range adapters.Table {

@@ -27,9 +27,8 @@ type Options struct {
 	Dir       string
 	Framework string // auto, nethttp, mux, echo, echo5, gin, chi, fiber, fiber3
 	Drain     string // stdout, axiom, loki, file
-	DryRun    bool
-	Yes       bool // accept the whole plan and write it
-	JSON      bool // print the plan as JSON
+	Yes       bool   // accept the whole plan and write it
+	JSON      bool   // print the plan as JSON
 }
 
 // Run parses args and runs init, returning the process exit code. Exit 0 on success,
@@ -40,7 +39,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	opts := Options{}
 	flags.StringVar(&opts.Framework, "framework", "auto", "auto, nethttp, mux, echo, echo5, gin, chi, fiber, or fiber3")
 	flags.StringVar(&opts.Drain, "drain", "stdout", "stdout, axiom, loki, or file")
-	flags.BoolVar(&opts.DryRun, "dry-run", false, "print the plan and write nothing")
 	flags.BoolVar(&opts.Yes, "yes", false, "accept the whole plan and write it")
 	flags.BoolVar(&opts.JSON, "json", false, "print the plan as JSON")
 	flags.StringVar(&opts.Dir, "dir", ".", "the module directory")
@@ -49,10 +47,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	if !knownDrain(opts.Drain) {
 		_, _ = fmt.Fprintf(stderr, "wlog init: unknown drain %q: use stdout, axiom, loki, or file\n", opts.Drain)
-		return 2
-	}
-	if err := validateGlobs(opts); err != nil {
-		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 2
 	}
 	return run(opts, stdout, stderr)
@@ -81,7 +75,7 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		}
 		_, _ = fmt.Fprintln(stdout, string(data))
 	}
-	if opts.DryRun || !opts.Yes {
+	if !opts.Yes {
 		if !opts.JSON {
 			for _, write := range files {
 				_, _ = fmt.Fprint(stdout, unifiedDiff(write.path, write.content))
@@ -758,9 +752,6 @@ func splitLines(text string) []string {
 	}
 	return lines
 }
-
-// validateGlobs checks the run's option values that can be wrong before anything is written.
-func validateGlobs(Options) error { return nil }
 
 // mergeEnvExample adds the keys the setup needs to the file that is already there.
 //

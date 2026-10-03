@@ -117,7 +117,7 @@ func buildV2(t *testing.T, dir string) {
 func TestInitV2_JSONPlanNamesEveryAdapter(t *testing.T) {
 	dir := chiTree(t)
 	var stdout bytes.Buffer
-	if code := wloginit.Run([]string{"--dir", dir, "--json", "--dry-run"}, &stdout, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--json"}, &stdout, io.Discard); code != 0 {
 		t.Fatalf("init exit %d\n%s", code, stdout.String())
 	}
 	var plan v2Plan
@@ -155,7 +155,7 @@ func TestInitV2_JSONPlanNamesEveryAdapter(t *testing.T) {
 		t.Errorf("the plan writes no wlog_setup.go: %+v", plan.Files)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "wlog_setup.go")); !os.IsNotExist(err) {
-		t.Error("--dry-run wrote wlog_setup.go")
+		t.Error("no --yes wrote wlog_setup.go")
 	}
 }
 

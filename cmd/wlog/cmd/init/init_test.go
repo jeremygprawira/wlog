@@ -129,7 +129,7 @@ func TestInit_DryRunWritesNothing(t *testing.T) {
 	dir := treeFor(t, caseDef{framework: "nethttp"}, root)
 
 	var stdout bytes.Buffer
-	if code := wloginit.Run([]string{"--dir", dir, "--dry-run"}, &stdout, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir}, &stdout, io.Discard); code != 0 {
 		t.Fatalf("dry run exit %d", code)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "wlog_setup.go")); !os.IsNotExist(err) {
@@ -184,7 +184,7 @@ func TestInit_CLI4_ServerLiteral(t *testing.T) {
 }
 
 // TestInit_CLI15_AtomicWrites proves the run leaves no partial file, merges .env.example instead
-// of replacing it, prints a unified diff on --dry-run, and refuses an unknown drain.
+// of replacing it, prints a unified diff on no --yes, and refuses an unknown drain.
 func TestInit_CLI15_AtomicWrites(t *testing.T) {
 	root := repoRoot(t)
 	dir := treeFor(t, caseDef{framework: "nethttp"}, root)
@@ -198,7 +198,7 @@ func TestInit_CLI15_AtomicWrites(t *testing.T) {
 
 	// A dry run prints a unified diff and writes nothing.
 	var stdout bytes.Buffer
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--drain", "file", "--dry-run"}, &stdout, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--drain", "file"}, &stdout, io.Discard); code != 0 {
 		t.Fatalf("dry run exit %d", code)
 	}
 	for _, marker := range []string{"---", "+++", "@@"} {
