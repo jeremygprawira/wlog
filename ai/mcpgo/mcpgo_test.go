@@ -2,6 +2,8 @@ package wlogmcpgo_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -219,5 +221,55 @@ func TestMcpgo_A2_NilResultDoesNotPanic(t *testing.T) {
 	}
 	if level != wlog.LevelInfo {
 		t.Errorf("level = %q, want info", level)
+	}
+}
+
+// TestMcpgo_A14_RequestStateLinksRetry proves a retry that echoes RequestState
+// records the same hash, even when the result itself has no state.
+func TestMcpgo_A14_RequestStateLinksRetry(t *testing.T) {
+	msg := &mcp.CallToolRequest{Params: mcp.CallToolParams{Name: "get_weather"}}
+	msg.Params.RequestState = "secret-state"
+	result := &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent("sunny")}}
+	rpc, _ := fireRecorded(t, mcp.MethodToolsCall, msg, result, nil)
+	mcpFields, _ := rpc["mcp"].(map[string]any)
+	sum := sha256.Sum256([]byte("secret-state"))
+	want := hex.EncodeToString(sum[:8])
+	if mcpFields["request_state"] != want {
+		t.Fatalf("rpc.mcp.request_state = %v, want %s", mcpFields["request_state"], want)
+	}
+}
+
+// TestMcpgo_A17_LegacyProtocolVersion proves a later call on a legacy session
+// still records the protocol version from initialize.
+func TestMcpgo_A17_LegacyProtocolVersion(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	mcpServer := server.NewMCPServer("orders-mcp", "1.0.0", server.WithHooks(wlogmcpgo.Hooks(log)))
+	mcpServer.AddTool(mcp.NewTool("get_weather"), func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent("sunny")}}, nil
+	})
+	mcpClient, err := client.NewInProcessClient(mcpServer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = mcpClient.Close() }()
+	ctx := context.Background()
+	if err := mcpClient.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = "2025-03-26"
+	initReq.Params.ClientInfo = mcp.Implementation{Name: "weather-cli", Version: "1.0.0"}
+	if _, err := mcpClient.Initialize(ctx, initReq); err != nil {
+		t.Fatal(err)
+	}
+	call := mcp.CallToolRequest{}
+	call.Params.Name = "get_weather"
+	if _, err := mcpClient.CallTool(ctx, call); err != nil {
+		t.Fatal(err)
+	}
+	rpc, _ := rec.Last()["rpc"].(map[string]any)
+	mcpFields, _ := rpc["mcp"].(map[string]any)
+	if mcpFields["protocol_version"] != "2025-03-26" {
+		t.Fatalf("rpc.mcp.protocol_version = %v, want 2025-03-26", mcpFields["protocol_version"])
 	}
 }

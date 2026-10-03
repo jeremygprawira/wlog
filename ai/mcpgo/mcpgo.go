@@ -177,9 +177,11 @@ func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
 func Open(log *wlog.Logger, opts ...Option) (*server.Hooks, server.ToolHandlerMiddleware) {
 	cfg := resolve(opts...)
 	pend := newPending()
+	vers := newProtocolVersions()
 	hooks := &server.Hooks{}
 
-	hooks.AddBeforeAny(func(ctx context.Context, id any, method mcp.MCPMethod, _ any) {
+	hooks.AddBeforeAny(func(ctx context.Context, id any, method mcp.MCPMethod, message any) {
+		vers.remember(ctx, message)
 		if strings.HasPrefix(string(method), "notifications/") {
 			return
 		}
@@ -191,10 +193,10 @@ func Open(log *wlog.Logger, opts ...Option) (*server.Hooks, server.ToolHandlerMi
 		pend.store(log, keyOf(ctx, id), ctx, next, h)
 	})
 	hooks.AddOnSuccess(func(ctx context.Context, id any, method mcp.MCPMethod, message any, result any) {
-		finish(pend, keyOf(ctx, id), message, result, nil, cfg.content)
+		finish(pend, vers, keyOf(ctx, id), message, result, nil, cfg.content)
 	})
 	hooks.AddOnError(func(ctx context.Context, id any, method mcp.MCPMethod, message any, err error) {
-		finish(pend, keyOf(ctx, id), message, nil, err, cfg.content)
+		finish(pend, vers, keyOf(ctx, id), message, nil, err, cfg.content)
 	})
 	mw := func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
 		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -205,6 +207,55 @@ func Open(log *wlog.Logger, opts ...Option) (*server.Hooks, server.ToolHandlerMi
 		}
 	}
 	return hooks, mw
+}
+
+// protocolVersions keeps the protocol version from each session's initialize
+// message. A later legacy request has no version of its own.
+type protocolVersions struct {
+	mu sync.Mutex
+	by map[any]string
+}
+
+func newProtocolVersions() *protocolVersions {
+	return &protocolVersions{by: map[any]string{}}
+}
+
+// remember stores the protocol version from an initialize message, keyed by the session.
+func (v *protocolVersions) remember(ctx context.Context, message any) {
+	req, ok := message.(*mcp.InitializeRequest)
+	if !ok || req == nil || req.Params.ProtocolVersion == "" {
+		return
+	}
+	key := sessionKey(ctx)
+	if key == nil {
+		return
+	}
+	v.mu.Lock()
+	v.by[key] = req.Params.ProtocolVersion
+	v.mu.Unlock()
+}
+
+// get returns the version remembered for the session on ctx.
+func (v *protocolVersions) get(ctx context.Context) string {
+	key := sessionKey(ctx)
+	if key == nil {
+		return ""
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.by[key]
+}
+
+// sessionKey names a session by its id, or by the session value when it has none.
+func sessionKey(ctx context.Context) any {
+	session := server.ClientSessionFromContext(ctx)
+	if session == nil {
+		return nil
+	}
+	if id := session.SessionID(); id != "" {
+		return id
+	}
+	return session
 }
 
 // keyOf reads the session id off ctx, so ai-mcpgo links a before hook to its after hook by
@@ -222,13 +273,14 @@ func keyOf(ctx context.Context, id any) pendingKey {
 // finish looks up the before hook this after hook matches, folds the result or the error
 // into the rpc group, and ends the event. A before hook this package never saw, which is
 // the documented case for a parse or a capability failure, is left alone.
-func finish(pend *pending, key pendingKey, message, result any, err error, content bool) {
+func finish(pend *pending, vers *protocolVersions, key pendingKey, message, result any, err error, content bool) {
 	ctx, h, ok := pend.take(key)
 	if !ok {
 		return
 	}
 
-	mcpFields := sessionFields(ctx)
+	vers.remember(ctx, message)
+	mcpFields := sessionFields(ctx, vers)
 	addMessageFields(mcpFields, message, content)
 
 	outcome, code, level := classify(result, err)
@@ -254,10 +306,9 @@ func finish(pend *pending, key pendingKey, message, result any, err error, conte
 }
 
 // sessionFields reads the session id and, when a request or the session already carries
-// one, the client name and version. mcp-go gives no exported accessor for the protocol
-// version a legacy session negotiated at initialize, unlike the per-request one SEP-2575
-// carries, so this leaves rpc.mcp.protocol_version unset for a legacy session.
-func sessionFields(ctx context.Context) map[string]any {
+// one, the client name and version. A legacy session has no per-request protocol version.
+// vers holds the version read from that session's initialize message.
+func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 	fields := map[string]any{}
 	if info := server.RequestProtocolInfoFromContext(ctx); info != nil {
 		if info.ProtocolVersion != "" {
@@ -273,6 +324,11 @@ func sessionFields(ctx context.Context) map[string]any {
 	}
 	if id := session.SessionID(); id != "" {
 		fields["session_id"] = id
+	}
+	if _, hasVersion := fields["protocol_version"]; !hasVersion {
+		if version := vers.get(ctx); version != "" {
+			fields["protocol_version"] = version
+		}
 	}
 	if _, hasClient := fields["client"]; !hasClient {
 		if withInfo, ok := session.(server.SessionWithClientInfo); ok {
