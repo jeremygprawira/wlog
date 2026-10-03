@@ -1071,9 +1071,10 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-6 | `f23a234` | The exact per-item sets for the CloudWatch ranges and the Splunk code 6 split |
 | D-12 | `db4d340` | The syslog drain probes the connection and dials again when the peer closed |
 | CI | `f8fc406` | A job id is never scanned by a value pattern |
+| D-22 | `d06e1e4` | An empty array is a leaf in the conformance flatten, so a diff names it |
 
-D-7 and D-22 stay open, D-24 keeps its dedup parts open, and batches F to K are not started.
-CI run 37111181412 is green on `f8fc406`.
+D-7 stays open, D-22 keeps its suite half open, D-24 keeps its dedup parts open, and batches
+F to K are not started. CI run 37111991568 is green on `d06e1e4`.
 
 The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about one run in
 three, because a random UUID at `job.id` matched the phone or card pattern and lost a
