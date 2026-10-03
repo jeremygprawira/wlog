@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,7 +67,7 @@ const (
 // within one session, because a server with several sessions can see the same id twice.
 type pendingKey struct {
 	session string
-	id      any
+	id      string
 }
 
 // pendingEntry is the state a before hook stashes for its after hook: the event's context,
@@ -153,13 +154,14 @@ func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
 
 // keyOf reads the session id off ctx, so ai-mcpgo links a before hook to its after hook by
 // session and request id, the way SPEC-track-g.md asks. A request with no session yet,
-// such as the very first initialize, keys on an empty session id.
+// such as the very first initialize, keys on an empty session id. The id is formatted,
+// because a JSON-RPC id may be an array or an object, and a map key must be comparable.
 func keyOf(ctx context.Context, id any) pendingKey {
 	session := ""
 	if s := server.ClientSessionFromContext(ctx); s != nil {
 		session = s.SessionID()
 	}
-	return pendingKey{session: session, id: id}
+	return pendingKey{session: session, id: fmt.Sprintf("%v", id)}
 }
 
 // finish looks up the before hook this after hook matches, folds the result or the error

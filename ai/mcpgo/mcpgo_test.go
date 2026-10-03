@@ -181,3 +181,24 @@ func TestMCPGo_LiveSession(t *testing.T) {
 		t.Error("result_content reached the event without WithContent")
 	}
 }
+
+// TestMcpgo_A1_ArrayIdDoesNotPanic proves a JSON-RPC id that is an array or an
+// object does not panic the before hook, and the after hook still ends the event.
+func TestMcpgo_A1_ArrayIdDoesNotPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("array or object id panicked the hook: %v", r)
+		}
+	}()
+	log, rec := wlogtest.New(t)
+	hooks := wlogmcpgo.Hooks(log)
+	ctx := context.Background()
+	message := toolCallMessage("get_weather")
+	result := &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent("sunny")}}
+
+	for _, id := range []any{[]any{"batch", 1}, map[string]any{"n": 1}} {
+		hooks.OnBeforeAny[0](ctx, id, mcp.MethodToolsCall, message)
+		hooks.OnSuccess[0](ctx, id, mcp.MethodToolsCall, message, result)
+	}
+	rec.RequireCount(t, 2)
+}
