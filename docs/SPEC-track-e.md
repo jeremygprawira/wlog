@@ -102,6 +102,7 @@ log := wlog.New(wlog.WithPlugins(p))
 - The OTel HTTP or gRPC middleware must wrap outside wlog. Then the span already exists at
   the start of the unit. The package doc shows the order for net/http, chi, gin, echo, and gRPC.
   If `wlog doctor` finds the OTel middleware inside wlog, it reports a warning. (HTTP-21)
+  The check ignores comments and `otelgrpc.NewServerHandler`, and it compares each file on its own.
 - Attribute names are the `attributes` names of the `otel` output preset. A nested value becomes
   a dotted key.
 - The plugin sets preset-mapped reserved keys first, then other reserved keys, then groups, then
