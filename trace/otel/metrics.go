@@ -50,6 +50,8 @@ func requestAttributes(m wlog.Measure) []attribute.KeyValue {
 	}
 	if m.ErrorType != "" {
 		out = append(out, attribute.String("error.type", m.ErrorType))
+	} else if code, ok := statusCode(m.Status); ok && code >= 500 {
+		out = append(out, attribute.String("error.type", m.Status))
 	}
 	return out
 }

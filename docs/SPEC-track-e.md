@@ -131,7 +131,8 @@ log := wlog.New(wlog.WithPlugins(p))
   with the semconv buckets `0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5,
   10`.
 - Its attributes are `http.request.method`, `url.scheme`, and `http.response.status_code`. For each
-  of `http.route` and `error.type` that is set, it adds that attribute. A method outside the nine standard methods is
+  of `http.route` and `error.type` that is set, it adds that attribute. A request with status 500 or
+  higher and no error uses the status text as `error.type`. A method outside the nine standard methods is
   `_OTHER`.
 - Each other kind except `log` records `wlog.work.duration` in seconds, with the same buckets. Its
   attributes are `wlog.kind`, `wlog.operation`, and `wlog.outcome`. For each of
