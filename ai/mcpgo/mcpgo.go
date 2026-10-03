@@ -9,7 +9,8 @@
 // pending links them by session id and request id, in a bounded map that expires an entry
 // after 5 minutes: the doc of [server.Hooks] warns that a handler panic with no recovery
 // middleware installed skips both OnSuccess and OnError, which would otherwise leak the
-// entry forever.
+// entry forever. Open also returns a tool middleware that only swaps in the stored event
+// context, so wlog.Set inside a tool joins the event. Hooks alone leaves the SDK context.
 package wlogmcpgo
 
 import (
@@ -75,6 +76,7 @@ type pendingKey struct {
 // it.
 type pendingEntry struct {
 	ctx     context.Context
+	sdk     context.Context
 	handle  *work.Handle
 	expires time.Time
 }
@@ -87,26 +89,34 @@ type pendingEntry struct {
 type pending struct {
 	mu      sync.Mutex
 	entries map[pendingKey]pendingEntry
+	byCtx   map[context.Context]context.Context
 }
 
-func newPending() *pending { return &pending{entries: map[pendingKey]pendingEntry{}} }
+func newPending() *pending {
+	return &pending{
+		entries: map[pendingKey]pendingEntry{},
+		byCtx:   map[context.Context]context.Context{},
+	}
+}
 
 // store adds one entry, first dropping every expired one. A map already at the cap drops
 // the new entry instead of growing further, so a request that never gets an after hook
 // costs bounded memory, not unbounded.
-func (p *pending) store(key pendingKey, ctx context.Context, h *work.Handle) {
+func (p *pending) store(key pendingKey, sdk, event context.Context, h *work.Handle) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := time.Now()
 	for k, e := range p.entries {
 		if now.After(e.expires) {
 			delete(p.entries, k)
+			delete(p.byCtx, e.sdk)
 		}
 	}
 	if len(p.entries) >= pendingCapacity {
 		return
 	}
-	p.entries[key] = pendingEntry{ctx: ctx, handle: h, expires: now.Add(pendingTTL)}
+	p.entries[key] = pendingEntry{ctx: event, sdk: sdk, handle: h, expires: now.Add(pendingTTL)}
+	p.byCtx[sdk] = event
 }
 
 // take removes and returns one entry at any age. A missing entry reports false, which
@@ -121,11 +131,29 @@ func (p *pending) take(key pendingKey) (context.Context, *work.Handle, bool) {
 		return nil, nil, false
 	}
 	delete(p.entries, key)
+	delete(p.byCtx, entry.sdk)
 	return entry.ctx, entry.handle, true
 }
 
-// Hooks returns the *server.Hooks to pass to server.WithHooks.
+// eventCtx returns the event context stored for the SDK context, without removing it.
+// The after hook still needs the entry.
+func (p *pending) eventCtx(sdk context.Context) (context.Context, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	event, ok := p.byCtx[sdk]
+	return event, ok
+}
+
+// Hooks returns the *server.Hooks to pass to server.WithHooks. The tool handler
+// still sees the SDK context. Use Open when the handler should see the event.
 func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
+	hooks, _ := Open(log, opts...)
+	return hooks
+}
+
+// Open returns the hooks and a tool middleware that only swaps in the stored event
+// context. Pass both to the server. The middleware does not record the call.
+func Open(log *wlog.Logger, opts ...Option) (*server.Hooks, server.ToolHandlerMiddleware) {
 	cfg := resolve(opts...)
 	pend := newPending()
 	hooks := &server.Hooks{}
@@ -139,7 +167,7 @@ func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
 			fields["service"] = cfg.service
 		}
 		next, h := work.Start(ctx, log, work.Unit{Kind: work.KindRPC, Fields: fields})
-		pend.store(keyOf(ctx, id), next, h)
+		pend.store(keyOf(ctx, id), ctx, next, h)
 	})
 	hooks.AddOnSuccess(func(ctx context.Context, id any, method mcp.MCPMethod, message any, result any) {
 		finish(pend, keyOf(ctx, id), message, result, nil, cfg.content)
@@ -147,7 +175,15 @@ func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
 	hooks.AddOnError(func(ctx context.Context, id any, method mcp.MCPMethod, message any, err error) {
 		finish(pend, keyOf(ctx, id), message, nil, err, cfg.content)
 	})
-	return hooks
+	mw := func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if event, ok := pend.eventCtx(ctx); ok {
+				ctx = event
+			}
+			return next(ctx, request)
+		}
+	}
+	return hooks, mw
 }
 
 // keyOf reads the session id off ctx, so ai-mcpgo links a before hook to its after hook by

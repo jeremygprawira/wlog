@@ -121,7 +121,7 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 | Module | Library and floor | Hook point |
 |---|---|---|
 | `ai-mcpsdk` | `github.com/modelcontextprotocol/go-sdk` v1.8.0, Go 1.25 | `server.AddReceivingMiddleware(wlogmcp.Middleware(log))`. Notifications are skipped. It reads client info from `InitializeParams()`, which can be nil |
-| `ai-mcpgo` | `github.com/mark3labs/mcp-go` v1.1.0, Go 1.25.5 | `server.WithHooks(wlogmcpgo.Hooks(log))`. It does not use tool middleware, which misses errors and runs twice on legacy round trips. It links before and after hooks by session and request id, in a map with a 5 minute expiry and 10,000 entries at most |
+| `ai-mcpgo` | `github.com/mark3labs/mcp-go` v1.1.0, Go 1.25.5 | `server.WithHooks(wlogmcpgo.Hooks(log))`. It does not record through tool middleware, which misses errors and runs twice on legacy round trips. Open also returns a middleware that only swaps the handler onto the event context. It links before and after hooks by session and request id, in a map with a 5 minute expiry and 10,000 entries at most |
 
 ## `wlog mcp` (in `cli-mcp`)
 
