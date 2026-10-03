@@ -94,6 +94,9 @@ func New(reg prometheus.Registerer, opts ...Option) (*Recorder, error) {
 	for _, o := range opts {
 		o(&c)
 	}
+	if err := checkBuckets(c.buckets); err != nil {
+		return nil, err
+	}
 	hist := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    histogramName,
 		Help:    histogramHelp,
@@ -190,4 +193,15 @@ func (r *Recorder) report(err error) {
 		Message: "the histogram refused a label set",
 		Err:     err,
 	})
+}
+
+// checkBuckets rejects bounds that are not strictly increasing. Prometheus panics
+// on those bounds inside Observe, so New returns the error instead.
+func checkBuckets(bounds []float64) error {
+	for i := 1; i < len(bounds); i++ {
+		if bounds[i] <= bounds[i-1] {
+			return errors.New("histogram buckets must be strictly increasing")
+		}
+	}
+	return nil
 }
