@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog/internal/version"
+	"github.com/jeremygprawira/wlog/pipeline"
 )
 
 // The OTLP/HTTP JSON wire types. Field order is fixed, and attributes are sorted, so
@@ -120,7 +121,7 @@ func severityFor(level any) (int, string) {
 // timestamp uses now.
 func timeNanos(event map[string]any) string {
 	if text, ok := event["timestamp"].(string); ok {
-		if t, err := time.Parse(time.RFC3339Nano, text); err == nil {
+		if t, ok := pipeline.ParseTimestamp(text); ok {
 			return strconv.FormatInt(t.UnixNano(), 10)
 		}
 	}

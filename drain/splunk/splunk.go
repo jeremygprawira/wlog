@@ -210,22 +210,37 @@ func (s *Sender) Setup(l *wlog.Logger) error {
 }
 
 // SendBatch posts the events, split at the byte cap, and maps the HEC code.
+// Each event is encoded once. The chunk size and the request body share that encoding.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
+	lines := make([][]byte, len(events))
+	var buildErr error
+	encode := func(i int) int {
+		if buildErr != nil {
+			return -1
+		}
+		if lines[i] != nil {
+			return len(lines[i])
+		}
+		line, err := json.Marshal(envelopeOf(events[i], s.index, s.source, s.sourceType))
+		if err != nil {
+			buildErr = err
+			return -1
+		}
+		lines[i] = append(line, '\n')
+		return len(lines[i])
+	}
 	var retry, dropped []int
 	reason := ""
 	for start := 0; start < len(events); {
-		end := share.ChunkEnd(len(events), start, s.maxBatch, func(i int) int {
-			body, err := envelopeBody(events[i:i+1], s.index, s.source, s.sourceType)
-			if err != nil {
-				return -1
-			}
-			return len(body)
-		})
+		end := share.ChunkEnd(len(events), start, s.maxBatch, encode)
+		if buildErr != nil {
+			return fmt.Errorf("splunk: build body: %w", buildErr)
+		}
 		indexes := make([]int, 0, end-start)
 		for i := start; i < end; i++ {
 			indexes = append(indexes, i)
 		}
-		r, d, why, err := s.sendChunk(ctx, events[start:end], indexes, true)
+		r, d, why, err := s.sendChunk(ctx, lines[start:end], events[start:end], indexes, true)
 		if err != nil {
 			// The chunks that landed must not be sent again: a retryable fault retries
 			// this chunk and the rest, and reports the drops so far.
@@ -256,11 +271,8 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 
 // sendChunk posts one chunk and maps its code. With split on, code 6 splits the chunk in
 // half and sends each half once.
-func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes []int, split bool) (retry, dropped []int, reason string, err error) {
-	body, err := envelopeBody(events, s.index, s.source, s.sourceType)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("splunk: build body: %w", err)
-	}
+func (s *Sender) sendChunk(ctx context.Context, lines [][]byte, events []map[string]any, indexes []int, split bool) (retry, dropped []int, reason string, err error) {
+	body := joinLines(lines)
 	answer, err := s.client.PostFor(ctx, body, "application/json")
 	if err != nil {
 		// Splunk sends the HEC code with a 4xx or a 503 answer, and the body holds it,
@@ -276,11 +288,11 @@ func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes
 				return nil, indexes, "too_large", nil
 			}
 			half := len(events) / 2
-			r1, d1, why1, err := s.sendChunk(ctx, events[:half], indexes[:half], split)
+			r1, d1, why1, err := s.sendChunk(ctx, lines[:half], events[:half], indexes[:half], split)
 			if err != nil {
 				return nil, nil, "", err
 			}
-			r2, d2, why2, err := s.sendChunk(ctx, events[half:], indexes[half:], split)
+			r2, d2, why2, err := s.sendChunk(ctx, lines[half:], events[half:], indexes[half:], split)
 			if err != nil {
 				return nil, nil, "", err
 			}
@@ -318,11 +330,11 @@ func (s *Sender) sendChunk(ctx context.Context, events []map[string]any, indexes
 			return nil, indexes, "hec_code_6", nil
 		}
 		half := len(events) / 2
-		r1, d1, why1, err := s.sendChunk(ctx, events[:half], indexes[:half], true)
+		r1, d1, why1, err := s.sendChunk(ctx, lines[:half], events[:half], indexes[:half], true)
 		if err != nil {
 			return nil, nil, "", err
 		}
-		r2, d2, why2, err := s.sendChunk(ctx, events[half:], indexes[half:], true)
+		r2, d2, why2, err := s.sendChunk(ctx, lines[half:], events[half:], indexes[half:], true)
 		if err != nil {
 			return nil, nil, "", err
 		}
@@ -358,18 +370,17 @@ type envelope struct {
 	Event      map[string]any    `json:"event"`
 }
 
-// envelopeBody builds one body: one envelope per event, joined with newlines.
-func envelopeBody(events []map[string]any, index, source, sourcetype string) ([]byte, error) {
-	var buf strings.Builder
-	for _, event := range events {
-		line, err := json.Marshal(envelopeOf(event, index, source, sourcetype))
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(line)
-		buf.WriteByte('\n')
+// joinLines returns the encoded lines as one request body.
+func joinLines(lines [][]byte) []byte {
+	size := 0
+	for _, line := range lines {
+		size += len(line)
 	}
-	return []byte(buf.String()), nil
+	body := make([]byte, 0, size)
+	for _, line := range lines {
+		body = append(body, line...)
+	}
+	return body
 }
 
 // envelopeOf builds one envelope.
@@ -395,7 +406,7 @@ func lowCardinalityFields(event map[string]any) map[string]string {
 		{"service.name", "service"},
 		{"service.env", "env"},
 	} {
-		if value, ok := pathValue(event, pair.path); ok {
+		if value, ok := share.Path(event, pair.path); ok {
 			if text, ok := value.(string); ok && text != "" {
 				out[pair.name] = text
 			}
@@ -406,7 +417,7 @@ func lowCardinalityFields(event map[string]any) map[string]string {
 
 // serviceField reads one field of the service group.
 func serviceField(event map[string]any, name string) string {
-	value, _ := pathValue(event, "service."+name)
+	value, _ := share.Path(event, "service."+name)
 	text, _ := value.(string)
 	return text
 }
@@ -414,8 +425,8 @@ func serviceField(event map[string]any, name string) string {
 // epochSeconds reads the event timestamp as epoch seconds with three decimals.
 func epochSeconds(event map[string]any) json.Number {
 	text, _ := event["timestamp"].(string)
-	stamp, err := time.Parse(time.RFC3339Nano, text)
-	if err != nil {
+	stamp, ok := pipeline.ParseTimestamp(text)
+	if !ok {
 		stamp = time.Now()
 	}
 	return json.Number(strconv.FormatFloat(float64(stamp.UnixMilli())/1000, 'f', 3, 64))
@@ -479,23 +490,6 @@ func firstReason(reasons ...string) string {
 		}
 	}
 	return ""
-}
-
-// pathValue reads a dotted path from an event.
-func pathValue(event map[string]any, path string) (any, bool) {
-	var current any = event
-	for _, part := range strings.Split(path, ".") {
-		object, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		value, ok := object[part]
-		if !ok {
-			return nil, false
-		}
-		current = value
-	}
-	return current, true
 }
 
 // newChannel returns one random channel id for the life of the drain.

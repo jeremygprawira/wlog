@@ -28,6 +28,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 )
 
@@ -482,7 +483,7 @@ func (s *Sender) structuredData(event map[string]any) string {
 		{"trace_id", "trace.trace_id"},
 		{"request_id", "trace.request_id"},
 	} {
-		if value, ok := pathValue(event, pair.path); ok {
+		if value, ok := share.Path(event, pair.path); ok {
 			if text, ok := value.(string); ok && text != "" {
 				fmt.Fprintf(&buf, " %s=\"%s\"", pair.name, paramValue(text))
 			}
@@ -494,7 +495,7 @@ func (s *Sender) structuredData(event map[string]any) string {
 
 // hostname returns service.instance, else the machine host, else "-".
 func (s *Sender) hostname(event map[string]any) string {
-	if value, ok := pathValue(event, "service.instance"); ok {
+	if value, ok := share.Path(event, "service.instance"); ok {
 		if text, ok := value.(string); ok && text != "" {
 			return cut(headerField(text), maxHostname)
 		}
@@ -510,7 +511,7 @@ func (s *Sender) appNameOf(event map[string]any) string {
 	if s.appName != "" {
 		return cut(headerField(s.appName), maxAppName)
 	}
-	if value, ok := pathValue(event, "service.name"); ok {
+	if value, ok := share.Path(event, "service.name"); ok {
 		if text, ok := value.(string); ok && text != "" {
 			return cut(headerField(text), maxAppName)
 		}
@@ -521,8 +522,8 @@ func (s *Sender) appNameOf(event map[string]any) string {
 // utcTimestamp returns the event timestamp in UTC with six fractional digits.
 func utcTimestamp(event map[string]any) string {
 	text, _ := event["timestamp"].(string)
-	stamp, err := time.Parse(time.RFC3339Nano, text)
-	if err != nil {
+	stamp, ok := pipeline.ParseTimestamp(text)
+	if !ok {
 		stamp = time.Now()
 	}
 	return stamp.UTC().Format("2006-01-02T15:04:05.000000Z")
@@ -612,21 +613,4 @@ func summaryOf(event map[string]any) string {
 func stringOf(value any) string {
 	text, _ := value.(string)
 	return text
-}
-
-// pathValue reads a dotted path from an event.
-func pathValue(event map[string]any, path string) (any, bool) {
-	var current any = event
-	for _, part := range strings.Split(path, ".") {
-		object, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		value, ok := object[part]
-		if !ok {
-			return nil, false
-		}
-		current = value
-	}
-	return current, true
 }

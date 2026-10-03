@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
@@ -260,7 +261,7 @@ func labelValue(event map[string]any, key string) string {
 		value, _ := service[field].(string)
 		return value
 	}
-	value, ok := labelPath(event, key)
+	value, ok := share.Path(event, key)
 	if !ok || value == nil {
 		return ""
 	}
@@ -268,23 +269,6 @@ func labelValue(event map[string]any, key string) string {
 		return text
 	}
 	return fmt.Sprint(value)
-}
-
-// labelPath resolves a dotted path inside the event, so http.method reads the method of
-// the http group rather than a top-level key that never exists.
-func labelPath(event map[string]any, path string) (any, bool) {
-	var current any = event
-	for _, segment := range strings.Split(path, ".") {
-		object, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		current, ok = object[segment]
-		if !ok {
-			return nil, false
-		}
-	}
-	return current, true
 }
 
 // canonicalLabels makes one stable key for a label set, so the same labels always land
@@ -309,7 +293,7 @@ func canonicalLabels(labels map[string]string) string {
 // nanosecond precision as a decimal string. A missing or bad timestamp uses now.
 func timestampNanos(event map[string]any) string {
 	if text, ok := event["timestamp"].(string); ok {
-		if t, err := time.Parse(time.RFC3339Nano, text); err == nil {
+		if t, ok := pipeline.ParseTimestamp(text); ok {
 			return strconv.FormatInt(t.UnixNano(), 10)
 		}
 	}

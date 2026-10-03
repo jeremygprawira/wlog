@@ -368,7 +368,7 @@ func (s *Sender) datasetOf(event map[string]any) string {
 	if s.dataset != "" {
 		return s.dataset
 	}
-	if name, ok := pathValue(event, "service.name"); ok {
+	if name, ok := share.Path(event, "service.name"); ok {
 		if text, ok := name.(string); ok && text != "" {
 			return text
 		}
@@ -406,7 +406,7 @@ func (s *Sender) dataOf(event map[string]any) map[string]any {
 		if outcome, _ := event["outcome"].(string); outcome == "error" {
 			data["error"] = true
 		}
-		if parent, ok := pathValue(event, "trace.parent_span_id"); ok {
+		if parent, ok := share.Path(event, "trace.parent_span_id"); ok {
 			if text, _ := parent.(string); text != "" {
 				data["trace.parent_id"] = text
 			}
@@ -511,26 +511,9 @@ func samplerateOf(event map[string]any) int {
 	return value
 }
 
-// pathValue reads a dotted path from an event.
-func pathValue(event map[string]any, path string) (any, bool) {
-	var current any = event
-	for _, part := range strings.Split(path, ".") {
-		object, ok := current.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		value, ok := object[part]
-		if !ok {
-			return nil, false
-		}
-		current = value
-	}
-	return current, true
-}
-
 // numberAt reads a number at a dotted path.
 func numberAt(event map[string]any, path string) (float64, bool) {
-	value, ok := pathValue(event, path)
+	value, ok := share.Path(event, path)
 	if !ok {
 		return 0, false
 	}

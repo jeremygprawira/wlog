@@ -205,7 +205,7 @@ func stringOf(value any) string {
 func clickHouseTime(value any) string {
 	text, _ := value.(string)
 	if text != "" {
-		if t, err := time.Parse(time.RFC3339Nano, text); err == nil {
+		if t, ok := pipeline.ParseTimestamp(text); ok {
 			return t.UTC().Format(timestampFormat)
 		}
 	}

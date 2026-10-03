@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jeremygprawira/wlog/pipeline"
 )
 
 // envelopeItem is one item inside a Sentry envelope: a header line and a payload.
@@ -256,7 +258,7 @@ func typedAttribute(value any) map[string]any {
 // secondsOf reads the event timestamp as Unix seconds with a fractional part.
 func secondsOf(event map[string]any) float64 {
 	if text := stringField(event, "timestamp"); text != "" {
-		if t, err := time.Parse(time.RFC3339Nano, text); err == nil {
+		if t, ok := pipeline.ParseTimestamp(text); ok {
 			return float64(t.UnixNano()) / 1e9
 		}
 	}

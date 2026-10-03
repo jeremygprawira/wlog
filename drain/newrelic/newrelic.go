@@ -348,8 +348,8 @@ func messageOf(event map[string]any) string {
 // timestampMillis reads the event timestamp as epoch milliseconds.
 func timestampMillis(event map[string]any) int64 {
 	text, _ := event["timestamp"].(string)
-	stamp, err := time.Parse(time.RFC3339Nano, text)
-	if err != nil {
+	stamp, ok := pipeline.ParseTimestamp(text)
+	if !ok {
 		return time.Now().UnixMilli()
 	}
 	return stamp.UnixMilli()

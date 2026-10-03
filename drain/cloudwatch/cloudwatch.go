@@ -384,8 +384,8 @@ func (s *Sender) messageOf(event map[string]any) (string, error) {
 // startMillis reads the event start in epoch milliseconds.
 func startMillis(event map[string]any) int64 {
 	text, _ := event["timestamp"].(string)
-	stamp, err := time.Parse(time.RFC3339Nano, text)
-	if err != nil {
+	stamp, ok := pipeline.ParseTimestamp(text)
+	if !ok {
 		return time.Now().UnixMilli()
 	}
 	return stamp.UnixMilli()

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jeremygprawira/wlog/pipeline"
 	wlogquery "github.com/jeremygprawira/wlog/query"
 )
 
@@ -78,11 +79,7 @@ func eventTime(event map[string]any) (time.Time, bool) {
 	if !ok {
 		return time.Time{}, false
 	}
-	parsed, err := time.Parse(time.RFC3339Nano, text)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return parsed, true
+	return pipeline.ParseTimestamp(text)
 }
 
 // HandlerOption configures the query and the stream handler.

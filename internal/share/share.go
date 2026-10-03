@@ -2,7 +2,28 @@
 // One home for each helper keeps the copies from drifting apart.
 package share
 
-import "os"
+import (
+	"os"
+	"strings"
+)
+
+// Path reads a dotted path from an event.
+// It returns false when a step is missing or is not a group.
+func Path(event map[string]any, path string) (any, bool) {
+	var current any = event
+	for _, part := range strings.Split(path, ".") {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		value, ok := object[part]
+		if !ok {
+			return nil, false
+		}
+		current = value
+	}
+	return current, true
+}
 
 // FirstEnv returns the first name that holds a non-empty value.
 // A blank value is skipped, so it does not hide the next name.
