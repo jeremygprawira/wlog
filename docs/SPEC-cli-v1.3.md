@@ -17,18 +17,16 @@ Everything here reads the phase 7 APIs, which is why it ships after them.
 ## cli-init (gap 6)
 
 ```
-wlog init [--framework auto|nethttp|mux|echo|echo5|gin] [--drain stdout|axiom|loki|file]
-          [--dry-run] [--dir .]
+wlog init [--framework auto|nethttp|mux|echo|echo5|gin|chi|fiber|fiber3]
+          [--drain stdout|axiom|loki|file] [--yes] [--json] [--dir .]
 ```
 
-`init` reads the target module and picks the framework by the imports it finds. It then
-writes three things. A `wlog.go` holds a `New` helper, with the service name taken from
-the module path. A middleware line goes in at the router it found. A `.env.example` holds
-the drain's variables. Nothing is written until the whole plan succeeds, so a failure halfway
-leaves the tree as it was.
+`init` reads the target module and picks the framework by the imports it finds. A run with
+no `--yes` prints the plan and writes nothing. It exits 0. `--yes` writes `wlog_setup.go`,
+merges `.env.example`, and edits the entry point. It then runs `go build` and `wlog doctor`.
+Nothing is written until the whole plan succeeds, so a failure halfway leaves the tree as it was.
 
-`--dry-run` prints a unified diff and writes nothing. An existing `wlog.go` is never
-overwritten. `init` reports it and exits 1.
+An existing `wlog_setup.go` or `wlog.go` is never overwritten. `init` reports it and exits 1.
 
 ## cli-doctor (gap 7)
 
@@ -114,7 +112,7 @@ included.
 
 1. `init` writes a compiling setup for each of the five frameworks, proven by building
    each generated tree in a temporary directory.
-2. `init --dry-run` writes nothing, and `init` over an existing `wlog.go` exits 1.
+2. `init` with no `--yes` writes nothing and exits 0. `init` over an existing `wlog.go` exits 1.
 3. `doctor` reports a fail for a missing middleware, a missing drain variable, and a
    disabled redactor, and passes on the repository's own `examples`.
 4. `doctor` exits 0 with warns and no fails.

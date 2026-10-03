@@ -5,6 +5,13 @@ and the version numbers follow [Semantic Versioning](https://semver.org/spec/v2.
 
 The v1.0.0 release freezes the public API. A later change to that API waits for v2.
 
+## [Unreleased]
+
+### Changed
+
+- `wlog init` with no `--yes` writes nothing and exits 0. A script that expected the old
+  `wlog init` to write files now passes `--yes`.
+
 ## [0.8.0] - 2026-09-22
 
 ### Added
