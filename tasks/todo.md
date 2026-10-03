@@ -249,7 +249,7 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Also fixed: a job id is never scanned by a value pattern, which was the asynq flake.
 - [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
 - [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23
-- [ ] H, agent frameworks and MCP: A-1 to A-9, A-11, then A-12 to A-24
+- [x] H, agent frameworks and MCP: A-1 to A-9, A-11, then A-12 to A-24
   - Done locally, waiting on CI: A-1 `fa6401b`, A-2 `be797dd`, A-3 `86c1b4a`, A-4 `81ff5ea`, A-5 `a38936b`, A-6 `603f533`, A-7 `8c557e3`, A-8 `23f8609`, A-9 `606b390`, A-11 `3844dce`, A-12 `9a42e1f`, A-13 `310d2fb`, A-15 `6f65380`, A-16 `d70756b`, A-17 `8795564`, A-18 `653fadc`, A-19 `9ef26e8`, A-20 `14488aa`, A-22 `816ce72`, A-23 `280cbd3`, A-24 `c27a895`.
   - A-14 is not its own commit. `paramStateOf` landed in `6f65380`, `d70756b`, and `8795564`.
   - A-13 replaces the earlier blocked attempt. The denylist exception is the approved one.
