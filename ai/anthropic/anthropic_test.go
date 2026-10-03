@@ -110,8 +110,9 @@ func TestAnthropic_Middleware(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
+	req.Header.Set("X-Stainless-Retry-Count", "2")
 	resp := &http.Response{
-		Header: http.Header{"Request-Id": []string{"req_1"}, "X-Stainless-Retry-Count": []string{"2"}},
+		Header: http.Header{"Request-Id": []string{"req_1"}},
 		Body:   io.NopCloser(strings.NewReader("")),
 	}
 	next := func(*http.Request) (*http.Response, error) { return resp, nil }

@@ -248,8 +248,8 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 	}
 }
 
-// Middleware returns an option.Middleware that records the request id and the retry count
-// from the response headers onto the current event. Pass it with
+// Middleware returns an option.Middleware that records the request id from the response
+// and the retry count from the request. Pass it with
 // option.WithMiddleware(Middleware()).
 func Middleware() option.Middleware {
 	return func(req *http.Request, next option.MiddlewareNext) (*http.Response, error) {
@@ -267,7 +267,7 @@ func recordHeaders(req *http.Request, resp *http.Response) {
 	if id := resp.Header.Get("request-id"); id != "" {
 		fields["request_ids"] = []any{id}
 	}
-	if count := resp.Header.Get("X-Stainless-Retry-Count"); count != "" {
+	if count := req.Header.Get("X-Stainless-Retry-Count"); count != "" {
 		if n, err := strconv.Atoi(count); err == nil {
 			fields["attempts"] = n + 1
 		}
