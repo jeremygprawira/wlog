@@ -220,7 +220,8 @@ func ObserveChat(stream *openai.ChatCompletionStream, opts ...Option) *ChatObser
 
 // Next reads the next chunk and folds it into the record. It reports false at the end of
 // the stream or on a stream error, which Err then reports.
-func (o *ChatObserver) Next() bool {
+func (o *ChatObserver) Next() (ok bool) {
+	defer reportPanic("goopenai.ObserveChat")
 	resp, err := o.stream.Recv()
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
@@ -341,4 +342,17 @@ func positiveSince(started time.Time) time.Duration {
 		return time.Nanosecond
 	}
 	return d
+}
+
+// reportPanic turns a panic in an observer into a problem. The caller does not see it.
+func reportPanic(source string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	wlog.Default().Report(wlog.Problem{
+		Code:    "WLOG_OBSERVER_PANIC",
+		Source:  source,
+		Message: "the observer panicked",
+	})
 }

@@ -91,6 +91,9 @@ func applyUsage(r *llm.Record, u *genai.GenerateContentResponseUsageMetadata) {
 // applyCandidates reads the finish reason and the tool call names off every candidate.
 func applyCandidates(r *llm.Record, candidates []*genai.Candidate) {
 	for _, c := range candidates {
+		if c == nil {
+			continue
+		}
 		if c.FinishReason != "" {
 			r.FinishReason = string(c.FinishReason)
 		}
@@ -98,9 +101,10 @@ func applyCandidates(r *llm.Record, candidates []*genai.Candidate) {
 			continue
 		}
 		for _, p := range c.Content.Parts {
-			if p.FunctionCall != nil {
-				r.ToolCalls = append(r.ToolCalls, llm.ToolCall{Name: p.FunctionCall.Name})
+			if p == nil || p.FunctionCall == nil {
+				continue
 			}
+			r.ToolCalls = append(r.ToolCalls, llm.ToolCall{Name: p.FunctionCall.Name})
 		}
 	}
 }
@@ -109,10 +113,13 @@ func applyCandidates(r *llm.Record, candidates []*genai.Candidate) {
 func contentOf(candidates []*genai.Candidate) *llm.Content {
 	content := &llm.Content{}
 	for _, c := range candidates {
-		if c.Content == nil {
+		if c == nil || c.Content == nil {
 			continue
 		}
 		for _, p := range c.Content.Parts {
+			if p == nil {
+				continue
+			}
 			switch {
 			case p.Text != "":
 				content.OutputMessages = append(content.OutputMessages, llm.Message{
@@ -137,6 +144,15 @@ func contentOf(candidates []*genai.Candidate) *llm.Content {
 // an early return does not leave the pull or the HTTP body running. The returned
 // function reads the record built so far.
 func Observe(seq iter.Seq2[*genai.GenerateContentResponse, error], backend genai.Backend, opts ...Option) (iter.Seq2[*genai.GenerateContentResponse, error], func() llm.Record) {
+	if seq == nil {
+		wlog.Default().Report(wlog.Problem{
+			Code:    "WLOG_OBSERVER_PANIC",
+			Source:  "genai.Observe",
+			Message: "the observer panicked",
+		})
+		record := llm.Record{Provider: providerOf(backend), Operation: operation, Streamed: true}
+		return func(func(*genai.GenerateContentResponse, error) bool) {}, func() llm.Record { return record }
+	}
 	next, stop := iter.Pull2(seq)
 	started := time.Now()
 	sawChunk := false
@@ -172,6 +188,7 @@ func Observe(seq iter.Seq2[*genai.GenerateContentResponse, error], backend genai
 // consume folds one chunk into the record. Usage metadata overwrites what came before,
 // because the last non-nil block a stream sends is the authoritative total.
 func consume(record *llm.Record, resp *genai.GenerateContentResponse, opts []Option) {
+	defer reportPanic("genai.Observe")
 	if resp == nil {
 		return
 	}
@@ -260,4 +277,17 @@ func positiveSince(started time.Time) time.Duration {
 		return time.Nanosecond
 	}
 	return d
+}
+
+// reportPanic turns a panic in an observer into a problem. The caller does not see it.
+func reportPanic(source string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	wlog.Default().Report(wlog.Problem{
+		Code:    "WLOG_OBSERVER_PANIC",
+		Source:  source,
+		Message: "the observer panicked",
+	})
 }

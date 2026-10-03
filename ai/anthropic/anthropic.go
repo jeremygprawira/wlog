@@ -203,7 +203,8 @@ func Observe(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], opts .
 }
 
 // Next reads the next event and folds it into the record. It reports false at the end.
-func (o *Observer) Next() bool {
+func (o *Observer) Next() (ok bool) {
+	defer reportPanic("anthropic.Observe")
 	if !o.stream.Next() {
 		o.record.Streamed = true
 		o.record.Duration = time.Since(o.started)
@@ -344,4 +345,17 @@ func positiveSince(started time.Time) time.Duration {
 		return time.Nanosecond
 	}
 	return d
+}
+
+// reportPanic turns a panic in an observer into a problem. The caller does not see it.
+func reportPanic(source string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	wlog.Default().Report(wlog.Problem{
+		Code:    "WLOG_OBSERVER_PANIC",
+		Source:  source,
+		Message: "the observer panicked",
+	})
 }

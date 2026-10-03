@@ -180,7 +180,8 @@ func ObserveChat(stream *ssestream.Stream[openai.ChatCompletionChunk], opts ...O
 }
 
 // Next reads the next chunk and folds it into the record.
-func (o *ChatObserver) Next() bool {
+func (o *ChatObserver) Next() (ok bool) {
+	defer reportPanic("openai.ObserveChat")
 	if !o.stream.Next() {
 		if !o.sawUsage {
 			o.record.UsageUnknown = true
@@ -276,7 +277,8 @@ func ObserveResponses(stream *ssestream.Stream[responses.ResponseStreamEventUnio
 }
 
 // Next reads the next event. The terminal event fills the record.
-func (o *ResponsesObserver) Next() bool {
+func (o *ResponsesObserver) Next() (ok bool) {
+	defer reportPanic("openai.ObserveResponses")
 	if !o.stream.Next() {
 		o.record.Streamed = true
 		o.record.Duration = time.Since(o.started)
@@ -340,4 +342,17 @@ func positiveSince(started time.Time) time.Duration {
 		return time.Nanosecond
 	}
 	return d
+}
+
+// reportPanic turns a panic in an observer into a problem. The caller does not see it.
+func reportPanic(source string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	wlog.Default().Report(wlog.Problem{
+		Code:    "WLOG_OBSERVER_PANIC",
+		Source:  source,
+		Message: "the observer panicked",
+	})
 }
