@@ -1082,3 +1082,32 @@ The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about on
 three, because a random UUID at `job.id` matched the phone or card pattern and lost a
 segment. The value patterns already skip the fields that hold a system identifier, and
 `job.id` was missing from that list.
+
+Batch H, agent frameworks and MCP: A-1 to A-9, A-11, A-12 to A-20, and A-22 to A-24. This review has no A-10 and no A-21. No id stays blocked. A-13 replaces the earlier blocked attempt: the approved denylist exception keeps `rpc.mcp.session`, and the value is still a short hash of the session id.
+
+| Id | Commit | What changed |
+|---|---|---|
+| A-1 | `fa6401b` | An array or object JSON-RPC id is keyed by its text, so the before hook does not panic |
+| A-2 | `be797dd` | A nil tool result does not panic the after hook |
+| A-3 | `86c1b4a` | `take` returns an entry past the pending TTL |
+| A-4 | `81ff5ea` | An OpenAI tool call is counted once |
+| A-5 | `a38936b` | Tool and chain calls are recorded as kind `other` |
+| A-6 | `603f533` | A tool start with no end is dropped, reported, and capped |
+| A-7 | `8c557e3` | Nested starts on one context stay distinct |
+| A-8 | `23f8609` | A streamed call keeps its llm record when the event ends early |
+| A-9 | `606b390` | One streamed tool call is counted once |
+| A-11 | `3844dce` | Both MCP modules match one shared golden |
+| A-12 | `9a42e1f` | The tool handler receives the event context |
+| A-13 | `310d2fb` | `rpc.mcp.session` is a short hash, and the redactor keeps that path |
+| A-14 | not its own commit | `paramStateOf` is in `6f65380`, `d70756b`, and `8795564`. Rebase was forbidden, so it was not split out |
+| A-15 | `6f65380` | A capped or pruned pending request is reported |
+| A-16 | `d70756b` | mcpsdk records a handler panic and raises it again. The mcpgo doc names `server.WithRecovery` |
+| A-17 | `8795564` | A legacy session keeps the protocol version from initialize |
+| A-18 | `653fadc` | Recorded SDK responses, and tests for the silent guards |
+| A-19 | `9ef26e8` | Cancel stops the drain, a failed stream is marked, OnError is recorded, and a panic is logged |
+| A-20 | `14488aa` | Zero token counts stay off the event, and the eino provider is lower case |
+| A-22 | `816ce72` | Two explain lines, the Loki label, and the empty content guard |
+| A-23 | `280cbd3` | The duplicated MCP helpers live in `internal/mcpshare` |
+| A-24 | `c27a895` | The spec names the missing `rpc.mcp` fields, and a handler error hides quoted arguments |
+
+`8839fbb` gives the cap test its own context key type, after `make lint` reported SA1029. `268f307` names the content condition first, after `make ste` reported a trailing condition in the A-24 spec row. `make fuzz` ran because A-13 changed redaction, and it passed.
