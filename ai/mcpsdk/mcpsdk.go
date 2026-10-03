@@ -91,10 +91,10 @@ func Middleware(log *wlog.Logger, opts ...Option) mcp.Middleware {
 	}
 }
 
-// record folds one finished request into the rpc group and picks the event's level, per
-// the rules of SPEC-track-g.md: a tool error is the caller's fault, so it gives warn; the
-// four codes that mean a malformed request also give warn; every other protocol error
-// gives error.
+// record folds one finished request into the rpc group and picks the event's level.
+// SPEC-track-g gives warn for a tool error, because that error is the caller's fault.
+// The four codes that mean a malformed request also give warn.
+// Every other protocol error gives error.
 func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Result, err error, content bool) {
 	mcpFields := sessionFields(req)
 	addParamFields(mcpFields, req, content)
@@ -238,8 +238,9 @@ func needsInput(result mcp.Result) bool {
 	return ok && r.NeedsInput()
 }
 
-// isToolError reports whether a tool call result ended in an error. Only tools/call
-// carries IsError; every other method's error is a protocol error instead.
+// isToolError reports whether a tool call result ended in an error.
+// Only tools/call carries IsError.
+// Every other method's error is a protocol error.
 func isToolError(result mcp.Result) bool {
 	r, ok := result.(*mcp.CallToolResult)
 	return ok && r != nil && r.IsError

@@ -18,37 +18,35 @@ unless the user opts in.
 <!-- snippet:sketch -->
 ```go
 type Record struct {
-	Provider               string   // OTel gen_ai.provider.name: openai, anthropic, gcp.gemini, gcp.vertex_ai, ...
-	Operation              string   // OTel gen_ai.operation.name: chat, generate_content, embeddings, execute_tool, ...
-	RequestModel           string
-	ResponseModel          string   // often a dated snapshot, such as gpt-4o-2024-08-06
-	ResponseID             string
-	FinishReasons          []string // the provider's own values
-	Status                 string   // Responses-style status, when the provider has one
-	InputTokens            int64    // every input token, cached ones included
-	CacheReadInputTokens   int64    // part of InputTokens
-	CacheWriteInputTokens  int64    // part of InputTokens, 5 minute or unspecified writes
-	CacheWrite1hInputTokens int64   // part of InputTokens, 1 hour writes
-	OutputTokens           int64
-	ReasoningTokens        int64    // part of OutputTokens
-	Streamed               bool
-	Steps                  int      // agent or chain steps, when the framework reports them
-	OutputTokensPerSecond  float64  // set by llm.Add from OutputTokens and the call duration
-	TimeToFirstChunkMs     float64
-	ToolCalls              []ToolCall // names and ids only
-	Attempts               int
-	RequestIDs             []string   // the provider's request ids, one per attempt
-	Err                    error
+	Provider                string
+	Model                   string // written as llm.request_model
+	Operation               string
+	ResponseID              string
+	InputTokens             int // every input token, cached ones included
+	CachedInputTokens       int
+	CacheWriteInputTokens   int // five minute or unspecified writes
+	CacheWrite1hInputTokens int
+	OutputTokens            int
+	ReasoningTokens         int // part of OutputTokens
+	ToolCalls               []ToolCall
+	Content                 *Content // nil unless WithContent filled it
+	TimeToFirstToken        time.Duration // written as llm.time_to_first_chunk_ms
+	Duration                time.Duration
+	Streamed                bool
+	OutputTokensPerSecond   float64 // set by llm.Add when the caller leaves it zero
+	Steps                   int
+	FinishReason            string // written as one entry of llm.finish_reasons
+	Cost                    *Cost
 }
 ```
 
-- The event keys under `llm` are the snake_case field names, such as `request_model`,
-  `cache_read_input_tokens`, and `time_to_first_chunk_ms`. `Err` becomes an `error` object with
-  `code` and `message`. Phase 11 already renamed `model`, `cached_input_tokens`, and
-  `finish_reason`. This track adds the keys for the new fields.
-- `llm.Add(ctx, r)` appends to `llm.calls`, updates the totals, and records one `calls` entry
-  with kind `llm`, system `Provider`, operation `Operation`, target `ResponseModel`, and the
-  duration. So `wlog query` ranks model calls with every other call.
+The shape above is the `Record` in `llm/record.go` on this branch. It is not a second type.
+
+- The event keys under `llm` are the snake_case names in [SPEC-llm](SPEC-llm.md). `Model` is
+  `request_model`. `FinishReason` is one entry of `finish_reasons`. `TimeToFirstToken` is
+  `time_to_first_chunk_ms`.
+- `llm.Add(ctx, r)` appends one object to `llm.calls` and updates the totals. It does not
+  write a root `calls` entry.
 - These fields close PAR-27 and BET-23.
 - `Prices` gains `CacheWritePerMillion` and `CacheWrite1hPerMillion`. `Cost` prices uncached
   input, cache reads, both write kinds, and output, each at its own rate.

@@ -22,20 +22,26 @@ which keeps this package in the root module and free of a vendor's release cycle
 // Record is one model call. A zero field is left off the event, so a caller fills only
 // what its own client reports.
 type Record struct {
-	Provider string // "openai", "anthropic", "google", or any string
-	Model    string // the exact model id billed, such as "claude-sonnet-5"
-	Operation string // "chat", "embedding", "rerank", or any string
+	Provider   string // "openai", "anthropic", "google", or any string
+	Model      string // the exact model id billed, such as "claude-sonnet-5"
+	Operation  string // "chat", "embedding", "rerank", or any string
+	ResponseID string
 
-	InputTokens       int
-	OutputTokens      int
-	CachedInputTokens int // tokens served from a prompt cache, billed at a lower rate
-	ReasoningTokens   int
+	InputTokens             int // whole input count, cache reads and writes included
+	CachedInputTokens       int
+	CacheWriteInputTokens   int
+	CacheWrite1hInputTokens int
+	OutputTokens            int
+	ReasoningTokens         int // a subset of OutputTokens
 
 	ToolCalls []ToolCall
+	Content   *Content // nil unless a module's WithContent filled it
 
-	TimeToFirstToken time.Duration // stream only, zero for a whole-response call
-	Duration         time.Duration
-	Streamed         bool
+	TimeToFirstToken      time.Duration // stream only, zero for a whole-response call
+	Duration              time.Duration
+	Streamed              bool
+	OutputTokensPerSecond float64 // Add sets this when the caller leaves it zero
+	Steps                 int
 
 	FinishReason string // "stop", "length", "tool_calls", "content_filter", or any string
 	Cost         *Cost  // nil until Price fills it
@@ -50,9 +56,12 @@ type ToolCall struct {
 // Cost is money, in whole millionths of a US dollar, so no float rounding reaches the
 // event. USD() renders it for a human.
 type Cost struct {
-	InputMicros  int64
-	OutputMicros int64
-	TotalMicros  int64
+	InputMicros        int64 // uncached input only
+	CacheReadMicros    int64
+	CacheWriteMicros   int64
+	CacheWrite1hMicros int64
+	OutputMicros       int64
+	TotalMicros        int64
 }
 
 func (c Cost) USD() float64
@@ -72,9 +81,11 @@ func Add(ctx context.Context, r Record)
 ```go
 // Price is one model's rate, in micros per million tokens.
 type Price struct {
-	InputPerMillion       int64
-	OutputPerMillion      int64
-	CachedInputPerMillion int64
+	InputPerMillion        int64
+	OutputPerMillion       int64
+	CachedInputPerMillion  int64
+	CacheWritePerMillion   int64 // five minute writes
+	CacheWrite1hPerMillion int64
 }
 
 type Prices struct{ /* unexported */ }
@@ -104,14 +115,20 @@ failed to price, instead of reading a silent zero.
 ### Fields on the event
 
 ```
-llm.provider llm.request_model llm.operation
-llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.reasoning_tokens
-llm.total_tokens
+llm.provider llm.request_model llm.operation llm.response_id
+llm.input_tokens llm.output_tokens llm.total_tokens
+llm.cache_read_input_tokens llm.cache_write_input_tokens llm.cache_write_1h_input_tokens
+llm.reasoning_tokens
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
-llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reasons
+llm.time_to_first_chunk_ms llm.duration_ms llm.streamed
+llm.steps llm.output_tokens_per_second llm.attempts llm.request_ids llm.finish_reasons
 llm.cost_micros llm.cost_unknown
-llm.calls[]  (one object per call, set by Add)
+llm.input_messages llm.output_messages
+llm.calls[]  (one object per call, set by Add, with no message text)
 ```
+
+`attempts` and `request_ids` are not `Record` fields. HTTP middleware in the AI modules
+writes them onto the group.
 
 The stream timing field avoids the word "token" on purpose. The default redactor
 denies any key whose tokens include "token", so a name such as `time_to_first_token_ms`

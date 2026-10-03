@@ -428,8 +428,9 @@ func needsInput(result any) bool {
 	return ok && r.NeedsInput()
 }
 
-// isToolError reports whether a tool call result ended in an error. Only tools/call
-// carries IsError; every other method's error is a protocol error instead.
+// isToolError reports whether a tool call result ended in an error.
+// Only tools/call carries IsError.
+// Every other method's error is a protocol error.
 func isToolError(result any) bool {
 	r, ok := result.(*mcp.CallToolResult)
 	return ok && r != nil && r.IsError
