@@ -114,8 +114,9 @@ log := wlog.New(wlog.WithPlugins(p))
 - `logs`, `errors`, `audit`, and `calls` never become span attributes. `call_stats` does.
 - Outcome `error` sets status Error, with `error.message` as the description. Outcome `success`
   leaves the status unset.
-- `error.type` is `error.code`, else `error.kind`, else `error.type`. For a request with status
-  500 or higher and no error, it is the status as text.
+- `error.type` comes from the otel preset: `error.code`, else `error.kind`, else `error.type`.
+  The span does not write that attribute again. For a request with status 500 or higher and no
+  error, it is the status as text.
 - For an event with an `error` object, the plugin adds one span event named `exception`. It holds
   `exception.type`, `exception.message`, and `exception.stacktrace`. The plugin never calls
   `RecordError`.

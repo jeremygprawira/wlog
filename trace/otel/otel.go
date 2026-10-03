@@ -107,8 +107,7 @@ func WithMaxOperations(n int) Option {
 
 // plugin holds the instruments and the per-kind operation cap of one Logger.
 type plugin struct {
-	cfg    config
-	tracer oteltrace.Tracer
+	cfg config
 
 	request metric.Float64Histogram
 	work    metric.Float64Histogram
@@ -138,9 +137,6 @@ func Plugin(opts ...Option) (wlog.Plugin, error) {
 		cfg:    c,
 		ops:    map[string]map[string]struct{}{},
 		capped: map[string]bool{},
-	}
-	if c.spans {
-		p.tracer = otel.GetTracerProvider().Tracer(instrumentationName)
 	}
 	if c.metrics {
 		meter := c.mp.Meter(instrumentationName)

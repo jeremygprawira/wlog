@@ -285,16 +285,9 @@ func messageOf(event wlog.Event) string {
 	return text
 }
 
-// spanErrorType names the error of a span: the error code, then its kind, then its Go
-// type. A request that ended 500 or higher with no error uses the status as text.
+// spanErrorType adds error.type only for a request that ended 500 or higher with no
+// error. The otel preset already maps error.code, error.kind, and error.type.
 func spanErrorType(event wlog.Event) string {
-	for _, path := range []string{"error.code", "error.kind", "error.type"} {
-		if value, ok := event.Get(path); ok {
-			if text, ok := value.(string); ok && text != "" {
-				return text
-			}
-		}
-	}
 	if _, hasError := event.Get("error"); hasError {
 		return ""
 	}
