@@ -208,6 +208,24 @@ func knownDrain(name string) bool {
 	}
 }
 
+// moduleDir walks up from dir until it finds a go.mod.
+func moduleDir(dir string) (string, error) {
+	current, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
+			return current, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("read go.mod: no go.mod at or above %s", dir)
+		}
+		current = parent
+	}
+}
+
 // moduleName reads the module path from go.mod.
 func moduleName(dir string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
@@ -326,12 +344,16 @@ func buildPlan(opts Options) (plan, []write, error) {
 	if _, err := os.Stat(legacy); err == nil {
 		return document, nil, fmt.Errorf("%s already exists", legacy)
 	}
-	module, err := moduleName(dir)
+	modDir, err := moduleDir(dir)
+	if err != nil {
+		return document, nil, err
+	}
+	module, err := moduleName(modDir)
 	if err != nil {
 		return document, nil, err
 	}
 	document.Module = module
-	goMod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	goMod, err := os.ReadFile(filepath.Join(modDir, "go.mod"))
 	if err != nil {
 		return document, nil, fmt.Errorf("read go.mod: %w", err)
 	}
