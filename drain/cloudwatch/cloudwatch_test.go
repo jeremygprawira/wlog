@@ -15,6 +15,9 @@ import (
 
 	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/drain/cloudwatch"
+	"github.com/jeremygprawira/wlog/internal/conformance"
+	drainconformance "github.com/jeremygprawira/wlog/internal/conformance/drain"
+	"github.com/jeremygprawira/wlog/internal/httpfake"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/preset"
 	"github.com/jeremygprawira/wlog/setup"
@@ -499,32 +502,21 @@ func TestCloudWatch_MustNewPanics(t *testing.T) {
 	cloudwatch.MustNew(&fakeAPI{}, "")
 }
 
-// TestCloudWatch_MaskedFieldNeverLeaks proves core redacts before the drain, so a secret
-// under a denied key never reaches the stream.
-func TestCloudWatch_MaskedFieldNeverLeaks(t *testing.T) {
+// TestCloudWatch_C1_DrainShipsEvents runs the shared drain suite: the event reaches the API
+// in the v2 shape, and a redacted value never does.
+func TestCloudWatch_C1_DrainShipsEvents(t *testing.T) {
 	api := &fakeAPI{}
-	drain, err := cloudwatch.New(api, "group")
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	log := wlog.New(wlog.WithSilent(), wlog.WithDrains(drain))
-	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
-	wlog.Set(ctx, "conformance_marker", "PIPE25-MARKER")
-	wlog.Set(ctx, "password", "PIPE25-s3cret")
-	end()
-	if err := log.Flush(ctx); err != nil {
-		t.Fatalf("Flush: %v", err)
-	}
-	if err := log.Close(ctx); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	message := *api.lastPut().LogEvents[0].Message
-	if strings.Contains(message, "PIPE25-s3cret") {
-		t.Error("the secret reached the drain")
-	}
-	if !strings.Contains(message, "PIPE25-MARKER") {
-		t.Error("the marker did not arrive")
-	}
+	drainconformance.Run(conformance.Tester{T: t}, []drainconformance.Case{{
+		Name:  "cloudwatch",
+		Build: func(*httpfake.Server) (wlog.Drain, error) { return cloudwatch.New(api, "group") },
+		Local: func(*httpfake.Server) []byte {
+			last := api.lastPut()
+			if last == nil || len(last.LogEvents) == 0 {
+				return nil
+			}
+			return []byte(*last.LogEvents[0].Message)
+		},
+	}})
 }
 
 // contains reports whether text holds sub.
