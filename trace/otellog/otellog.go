@@ -111,13 +111,13 @@ func (d *drain) Send(ctx context.Context, event map[string]any) {
 func severityOf(level string) (log.Severity, string) {
 	switch wlog.Level(level) {
 	case wlog.LevelDebug:
-		return log.SeverityDebug, log.SeverityDebug.String()
+		return log.SeverityDebug, string(wlog.LevelDebug)
 	case wlog.LevelWarn:
-		return log.SeverityWarn, log.SeverityWarn.String()
+		return log.SeverityWarn, string(wlog.LevelWarn)
 	case wlog.LevelError:
-		return log.SeverityError, log.SeverityError.String()
+		return log.SeverityError, string(wlog.LevelError)
 	default:
-		return log.SeverityInfo, log.SeverityInfo.String()
+		return log.SeverityInfo, string(wlog.LevelInfo)
 	}
 }
 

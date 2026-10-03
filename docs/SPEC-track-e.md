@@ -163,8 +163,8 @@ func WithServiceAttributes(on bool) Option                        // default fal
 - The logger name is `github.com/jeremygprawira/wlog`, with the wlog version as the
   instrumentation version.
 - The record gets its timestamp from `timestamp` and its observed timestamp from the clock at
-  `Send`. It gets severity and severity text from `level`, the body from `summary`, and the event
-  name `wlog.<kind>`.
+  `Send`. It gets the severity number and the lowercase wlog level as severity text from `level`,
+  the body from `summary`, and the event name `wlog.<kind>`.
 - Attributes are the `attributes` object of the `otel` preset. An array of objects becomes an
   `attribute.Slice` of map values.
 - If `ctx` holds no valid span, `Send` builds a span context from `trace.trace_id` and
