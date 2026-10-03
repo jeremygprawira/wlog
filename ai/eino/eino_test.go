@@ -218,3 +218,45 @@ func TestEino_A8_StreamSurvivesEarlyEnd(t *testing.T) {
 		t.Fatalf("llm = %v, want input 10 and output 4", group)
 	}
 }
+
+// TestEino_A9_StreamToolCallCountedOnce proves four deltas of one tool call count
+// once. schema.ConcatMessages merges deltas that share an index.
+func TestEino_A9_StreamToolCallCountedOnce(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	index := 0
+	parts := []string{`{"city":`, `"Jakarta"`, `}`, ``}
+	var chunks []callbacks.CallbackOutput
+	for i, part := range parts {
+		call := schema.ToolCall{Index: &index, Function: schema.FunctionCall{Arguments: part}}
+		if i == 0 {
+			call.ID = "call_1"
+			call.Function.Name = "get_weather"
+		}
+		chunks = append(chunks, &model.CallbackOutput{
+			Message: &schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{call}},
+		})
+	}
+	stream := schema.StreamReaderFromArray(chunks)
+	h := wlogeino.Handler()
+	h.OnEndWithStreamOutput(ctx, runInfo("OpenAI"), stream)
+	end()
+
+	deadline := time.Now().Add(time.Second)
+	var group map[string]any
+	for time.Now().Before(deadline) {
+		for _, ev := range rec.Events() {
+			g, _ := ev["llm"].(map[string]any)
+			if g != nil {
+				group = g
+			}
+		}
+		if group != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if group["tool_call_count"] != int64(1) {
+		t.Fatalf("tool_call_count = %v, want 1", group["tool_call_count"])
+	}
+}

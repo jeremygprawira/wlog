@@ -91,19 +91,36 @@ func drain(ctx context.Context, stream *schema.StreamReader[*model.CallbackOutpu
 	defer stream.Close()
 
 	r := llm.Record{Provider: provider, Operation: "chat", Streamed: true}
+	var messages []*schema.Message
 	for {
 		chunk, err := stream.Recv()
 		if err != nil {
 			break
 		}
-		applyOutput(&r, chunk, content)
+		if chunk == nil {
+			continue
+		}
+		if chunk.Config != nil && chunk.Config.Model != "" {
+			r.Model = chunk.Config.Model
+		}
+		applyUsage(&r, chunk)
+		if chunk.Message != nil {
+			messages = append(messages, chunk.Message)
+		}
+	}
+	if len(messages) > 0 {
+		// Deltas of one tool call share an index. Concat merges them, and it merges
+		// the text too, so a streamed call counts each tool call once.
+		merged, err := schema.ConcatMessages(messages)
+		if err == nil {
+			applyMessage(&r, merged, content)
+		}
 	}
 	llm.Add(ctx, r)
 }
 
-// applyOutput folds one CallbackOutput into r: the model name, the usage, the finish
-// reason, and the tool calls. A streamed call folds every chunk this way, so the last
-// non-empty value of each wins.
+// applyOutput folds one whole CallbackOutput into r: the model name, the usage, the
+// finish reason, and the tool calls.
 func applyOutput(r *llm.Record, output *model.CallbackOutput, content bool) {
 	if output == nil {
 		return
@@ -112,7 +129,11 @@ func applyOutput(r *llm.Record, output *model.CallbackOutput, content bool) {
 		r.Model = output.Config.Model
 	}
 	applyUsage(r, output)
-	message := output.Message
+	applyMessage(r, output.Message, content)
+}
+
+// applyMessage folds one message into r. A stream calls it once, on the merged message.
+func applyMessage(r *llm.Record, message *schema.Message, content bool) {
 	if message == nil {
 		return
 	}
