@@ -325,14 +325,24 @@ func isToolError(result any) bool {
 }
 
 // requestStateOf reads the opaque requestState a result carries when it needs input, so a
-// retry round trip can be linked to the result that asked for it.
+// retry round trip can be linked to the result that asked for it. A nil result, which a
+// tool handler may return, has no state.
 func requestStateOf(result any) string {
 	switch r := result.(type) {
 	case *mcp.CallToolResult:
+		if r == nil {
+			return ""
+		}
 		return r.RequestState
 	case *mcp.ReadResourceResult:
+		if r == nil {
+			return ""
+		}
 		return r.RequestState
 	case *mcp.GetPromptResult:
+		if r == nil {
+			return ""
+		}
 		return r.RequestState
 	}
 	return ""

@@ -202,3 +202,22 @@ func TestMcpgo_A1_ArrayIdDoesNotPanic(t *testing.T) {
 	}
 	rec.RequireCount(t, 2)
 }
+
+// TestMcpgo_A2_NilResultDoesNotPanic proves a tool handler that returns nil, nil
+// still ends the event. The SDK answers that call with a null result.
+func TestMcpgo_A2_NilResultDoesNotPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("nil result panicked the after hook: %v", r)
+		}
+	}()
+	var result *mcp.CallToolResult
+	rpc, level := fireRecorded(t, mcp.MethodToolsCall, toolCallMessage("get_weather"), result, nil)
+	mcpFields, _ := rpc["mcp"].(map[string]any)
+	if mcpFields["result"] != "ok" {
+		t.Fatalf("rpc.mcp.result = %v, want ok", mcpFields["result"])
+	}
+	if level != wlog.LevelInfo {
+		t.Errorf("level = %q, want info", level)
+	}
+}
