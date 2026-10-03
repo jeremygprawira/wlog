@@ -109,9 +109,10 @@ func (p *pending) store(key pendingKey, ctx context.Context, h *work.Handle) {
 	p.entries[key] = pendingEntry{ctx: ctx, handle: h, expires: now.Add(pendingTTL)}
 }
 
-// take removes and returns one entry. A missing or an expired entry reports false, which
+// take removes and returns one entry at any age. A missing entry reports false, which
 // is the normal outcome for the parse and capability failures that fire OnError with no
-// prior OnBeforeAny.
+// prior OnBeforeAny. Age is enforced only by the prune inside store, so a request that
+// runs longer than the TTL still ends.
 func (p *pending) take(key pendingKey) (context.Context, *work.Handle, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -120,9 +121,6 @@ func (p *pending) take(key pendingKey) (context.Context, *work.Handle, bool) {
 		return nil, nil, false
 	}
 	delete(p.entries, key)
-	if time.Now().After(entry.expires) {
-		return nil, nil, false
-	}
 	return entry.ctx, entry.handle, true
 }
 
