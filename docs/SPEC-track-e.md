@@ -90,7 +90,7 @@ log := wlog.New(wlog.WithPlugins(p))
 ### Trace ids
 
 - `WithSpans(false)` writes no span attributes. It still copies the trace ids from a recording span.
-- `WithStats(true)` registers the counters even when `WithMetrics(false)`.
+- When `WithMetrics(false)`, `WithStats(true)` still registers the counters.
 - `Enricher` is removed. The plugin is a `Starter`. If the unit context holds a recording span, it
   calls `propagate.ContextWith` with the span's trace id and span id. The event, head sampling,
   and every outbound call then use the OTel ids. (HTTP-21)
@@ -165,8 +165,8 @@ func WithServiceAttributes(on bool) Option                        // default fal
 - The logger name is `github.com/jeremygprawira/wlog`, with the wlog version as the
   instrumentation version.
 - The record gets its timestamp from `timestamp` and its observed timestamp from the clock at
-  `Send`. It gets the severity number and the lowercase wlog level as severity text from `level`,
-  the body from `summary`, and the event name `wlog.<kind>`.
+  `Send`. Severity text is the lowercase wlog level. The body is `summary`. The event name is
+  `wlog.<kind>`.
 - Attributes are the `attributes` object of the `otel` preset. An array of objects becomes an
   `attribute.Slice` of map values.
 - If `ctx` holds no valid span, `Send` builds a span context from `trace.trace_id` and
@@ -190,11 +190,11 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 
 - The recorder has one histogram, `wlog_duration_seconds`, with labels `kind`, `operation`,
   `outcome`, and `status`. For a kind with no status, `status` is empty.
-- `New` returns an error when the bucket bounds are not strictly increasing.
+- When the bucket bounds are not strictly increasing, `New` returns an error.
 - `New(nil)` returns an error. `StatsCollector(nil)` exports nothing, so a scrape does not panic.
 - `New` calls `Register`, never `MustRegister`. If the registry already holds the same histogram,
   `New` reuses it. Any other `AlreadyRegisteredError` returns an error.
-- A second `New` on that histogram returns an error when the buckets or the operation cap differ.
+- When the buckets or the operation cap differ, a second `New` on that histogram returns an error.
   Recorders of one histogram share one cap.
 - The recorder calls `GetMetricWithLabelValues`, never `WithLabelValues`. On a label error, it
   reports a problem and records nothing.

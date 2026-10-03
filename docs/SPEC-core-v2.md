@@ -168,9 +168,10 @@ type Measure struct {
 
 - `end` calls each `Measurer` for every event whose kind is not `log`. The call comes before head
   sampling and the level filter, so a sampler never changes a metric.
-- `Kind` and `Operation` come from the event fields when those fields are set, and from the values
-  `Start` stored otherwise. A kind outside `request`, `rpc`, `message`, `job`, `command`, `function`,
-  and `work` records as `_OTHER`, so an app cannot grow the label set.
+- When the event sets `kind` or `operation`, `Measure` reads that field. Otherwise it reads the value
+  `Start` stored.
+- A kind other than `request`, `rpc`, `message`, `job`, `command`, `function`, or `work` records as
+  `_OTHER`.
 - `Measure` holds reserved fields only. It never holds user keys, paths, bodies, or ids. Each
   string passes through the redactor's value patterns first, so G1 holds.
 - A disabled or closed Logger calls no `Measurer`. A panic reports `WLOG_HOOK_PANIC`.
