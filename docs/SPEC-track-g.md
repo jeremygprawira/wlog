@@ -111,7 +111,7 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 | `rpc.mcp.session` | a short hash of the session id. The redactor keeps this path. The raw id in `rpc.mcp.session_id` is still masked |
 | `rpc.mcp.result` | `ok`, `tool_error`, `protocol_error`, or `input_required` |
 | `rpc.mcp.request_state` | a short hash of the opaque request state, so a retry can be linked |
-| `rpc.mcp.arguments`, `rpc.mcp.result_content`, `rpc.mcp.structured_content` | the tool payload, only when `WithContent` is set |
+| `rpc.mcp.arguments`, `rpc.mcp.result_content`, `rpc.mcp.structured_content` | When `WithContent` is set, the tool payload |
 | `rpc.status_code` | the JSON-RPC error code for a protocol error |
 
 - A tool result with `isError` sets status class client error, so it gives level `warn`. A protocol
