@@ -34,6 +34,10 @@ func cases() []caseDef {
 			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/echo5": "middleware/echo5"}},
 		{framework: "gin", requires: []string{"github.com/gin-gonic/gin v1.12.0"},
 			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/gin": "middleware/gin"}},
+		{framework: "fiber", requires: []string{"github.com/gofiber/fiber/v2 v2.20.0"},
+			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/fiber": "middleware/fiber"}},
+		{framework: "fiber3", requires: []string{"github.com/gofiber/fiber/v3 v3.5.0"},
+			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/fiber3": "middleware/fiber3"}},
 	}
 }
 
@@ -338,7 +342,7 @@ func assertNoTempFiles(t *testing.T, dir string) {
 		t.Fatalf("read dir: %v", err)
 	}
 	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".tmp") {
+		if strings.Contains(entry.Name(), ".tmp") {
 			t.Errorf("the run left %s behind", entry.Name())
 		}
 	}
