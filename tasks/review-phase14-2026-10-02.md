@@ -1072,9 +1072,10 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-12 | `db4d340` | The syslog drain probes the connection and dials again when the peer closed |
 | CI | `f8fc406` | A job id is never scanned by a value pattern |
 | D-22 | `d06e1e4` | An empty array is a leaf in the conformance flatten, so a diff names it |
+| D-7 | `fa7ad19` | The syslog test parser follows the escape rule and checks the PRI, VERSION, and TIMESTAMP |
 
-D-7 stays open, D-22 keeps its suite half open, D-24 keeps its dedup parts open, and batches
-F to K are not started. CI run 37111991568 is green on `d06e1e4`.
+D-22 keeps its suite half open, D-24 keeps its dedup parts open, and batches F to K are not
+started. CI run 37113157926 is green on `fa7ad19`.
 
 The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about one run in
 three, because a random UUID at `job.id` matched the phone or card pattern and lost a

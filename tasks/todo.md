@@ -244,8 +244,8 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Open: P-18, and the integration half of P-21, which waits for batch K.
 - [x] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
 - [ ] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24
-  - Done and pushed: D-3, D-4, D-6, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-19, part of D-22, and part of D-24. CI run 37111991568 is green on `d06e1e4`.
-  - Open: D-7, the CloudWatch suite half of D-22, and the dedup parts of D-24.
+  - Done and pushed: D-3, D-4, D-6, D-7, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-19, part of D-22, and part of D-24. CI run 37113157926 is green on `fa7ad19`.
+  - Open: the CloudWatch suite half of D-22 and the dedup parts of D-24.
   - Also fixed: a job id is never scanned by a value pattern, which was the asynq flake.
 - [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
 - [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23
