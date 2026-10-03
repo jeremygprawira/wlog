@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -66,7 +67,24 @@ func Middleware(log *wlog.Logger, opts ...Option) mcp.Middleware {
 			}
 			ctx, h := work.Start(ctx, log, work.Unit{Kind: work.KindRPC, Fields: fields})
 
-			result, err := next(ctx, method, req)
+			var recovered any
+			defer func() {
+				if recovered != nil {
+					panic(recovered)
+				}
+			}()
+			result, err := func() (mcp.Result, error) {
+				defer func() {
+					if r := recover(); r != nil {
+						recovered = r
+					}
+				}()
+				return next(ctx, method, req)
+			}()
+			if recovered != nil {
+				result = nil
+				err = fmt.Errorf("panic: %v", recovered)
+			}
 			record(ctx, h, req, result, err, cfg.content)
 			return result, err
 		}
@@ -86,13 +104,18 @@ func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Res
 	// result is meaningless on a protocol error: the dispatcher's own concrete return
 	// type, boxed into the Result interface, is a typed nil here, and every accessor
 	// below panics on one.
+	state := ""
 	if err == nil {
-		if state := requestStateOf(result); state != "" {
-			mcpFields["request_state"] = hashState(state)
-		}
+		state = requestStateOf(result)
 		if content {
 			addResultContent(mcpFields, result)
 		}
+	}
+	if fromParams := paramStateOf(req); fromParams != "" {
+		state = fromParams
+	}
+	if state != "" {
+		mcpFields["request_state"] = hashState(state)
 	}
 	h.Set("mcp", mcpFields)
 	if code != "" {
@@ -223,6 +246,20 @@ func isToolError(result mcp.Result) bool {
 
 // requestStateOf reads the opaque requestState a result carries when it needs input, so a
 // retry round trip can be linked to the result that asked for it.
+// paramStateOf reads RequestState off a retry. The client echoes the state
+// the previous result asked it to send back.
+func paramStateOf(req mcp.Request) string {
+	switch params := req.GetParams().(type) {
+	case *mcp.CallToolParamsRaw:
+		return params.RequestState
+	case *mcp.ReadResourceParams:
+		return params.RequestState
+	case *mcp.GetPromptParams:
+		return params.RequestState
+	}
+	return ""
+}
+
 func requestStateOf(result mcp.Result) string {
 	switch r := result.(type) {
 	case *mcp.CallToolResult:

@@ -9,7 +9,7 @@
 // pending links them by session id and request id, in a bounded map that expires an entry
 // after 5 minutes: the doc of [server.Hooks] warns that a handler panic with no recovery
 // middleware installed skips both OnSuccess and OnError, which would otherwise leak the
-// entry forever. Open also returns a tool middleware that only swaps in the stored event
+// entry forever. Pass server.WithRecovery so a tool panic becomes an error and the after hook still runs. Open also returns a tool middleware that only swaps in the stored event
 // context, so wlog.Set inside a tool joins the event. Hooks alone leaves the SDK context.
 package wlogmcpgo
 
