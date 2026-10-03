@@ -11,23 +11,23 @@
 // starts. Register it first, then wlog:
 //
 //	// net/http
-//	handler := otelhttp.NewHandler(wlogNetHTTP.Setup(mux), "server")
+//	handler := otelhttp.NewHandler(wlogstd.Middleware(log)(mux), "server")
 //
 //	// chi
 //	r.Use(otelhttp.NewMiddleware("server"))
-//	r.Use(wlogchi.Middleware())
+//	r.Use(wlogchi.Middleware(log))
 //
 //	// gin
 //	r.Use(otelgin.Middleware("server"))
-//	r.Use(wloggin.Middleware())
+//	r.Use(wloggin.Middleware(log))
 //
 //	// echo
 //	e.Use(otelecho.Middleware("server"))
-//	e.Use(wlogecho.Middleware())
+//	e.Use(wlogecho.Middleware(log))
 //
 //	// gRPC
 //	grpc.NewServer(
-//		grpc.ChainUnaryInterceptor(otelgrpc.UnaryServerInterceptor(), wloggrpc.UnaryServerInterceptor()),
+//		grpc.ChainUnaryInterceptor(otelgrpc.UnaryServerInterceptor(), wloggrpc.UnaryServerInterceptor(log)),
 //	)
 //
 // The plugin never creates a span. With no recording span on the unit context it does
@@ -81,14 +81,14 @@ func WithMeterProvider(mp metric.MeterProvider) Option {
 }
 
 // WithSpans turns the span attributes, the status, and the exception event on or off.
-// The default is on.
+// It does not stop the trace id copy. The default is on.
 func WithSpans(on bool) Option { return func(c *config) { c.spans = on } }
 
 // WithMetrics turns the two duration histograms on or off. The default is on.
 func WithMetrics(on bool) Option { return func(c *config) { c.metrics = on } }
 
-// WithStats turns the observable counters that read the Logger's Stats on or off. The
-// default is on.
+// WithStats turns the observable counters that read the Logger's Stats on or off.
+// The counters do not need the duration histograms. The default is on.
 func WithStats(on bool) Option { return func(c *config) { c.stats = on } }
 
 // WithExceptionEvent turns the one span event named exception on or off. Turn it off
@@ -164,7 +164,7 @@ func (p *plugin) Name() string { return "trace-otel" }
 // through it, and it registers the observable counters.
 func (p *plugin) Setup(l *wlog.Logger) error {
 	p.logger = l
-	if !p.cfg.stats || !p.cfg.metrics || l == nil {
+	if !p.cfg.stats || l == nil {
 		return nil
 	}
 	return p.registerStats(l)
@@ -173,9 +173,6 @@ func (p *plugin) Setup(l *wlog.Logger) error {
 // OnStart copies the ids of the active span onto the event, so head sampling and every
 // outbound call use the OTel trace. With no recording span it leaves the context alone.
 func (p *plugin) OnStart(ctx context.Context, _ string) context.Context {
-	if !p.cfg.spans {
-		return ctx
-	}
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.IsRecording() {
 		return ctx
