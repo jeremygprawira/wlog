@@ -231,7 +231,8 @@ func (o *ResponsesObserver) Next() bool {
 		return false
 	}
 	event := o.stream.Current()
-	if event.Type == "response.completed" {
+	switch event.Type {
+	case "response.completed", "response.incomplete", "response.failed":
 		response := event.Response
 		o.record = FromResponse(&response, o.opts...)
 	}
