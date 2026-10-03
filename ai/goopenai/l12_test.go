@@ -1,4 +1,4 @@
-package wlogopenai_test
+package wloggoopenai_test
 
 import (
 	"context"

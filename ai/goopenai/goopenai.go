@@ -1,4 +1,4 @@
-// Package wlogopenai turns a github.com/sashabaranov/go-openai response or stream into an
+// Package wloggoopenai turns a github.com/sashabaranov/go-openai response or stream into an
 // llm.Record. It maps both the Chat Completions shape and the Responses shape.
 //
 // FromChatCompletionResponse and FromResponse map a whole response. ObserveChat wraps a
@@ -7,7 +7,7 @@
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
 // WithContent. Only output is recorded. Core redacts those values like any other.
-package wlogopenai
+package wloggoopenai
 
 import (
 	"context"
