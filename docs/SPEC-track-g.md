@@ -87,7 +87,7 @@ such as `Message.Accumulate` or `ChatCompletionAccumulator`.
 Rules:
 
 - The OpenAI stream observer never adds `stream_options.include_usage`. `WithIncludeUsage(params)`
-  sets it, as an explicit opt-in.
+  sets it, as an explicit opt-in. A chat stream that ends with no usage sets `usage_unknown`.
 - The langchaingo Anthropic provider never calls the end callback in v0.1.14. So the package doc
   says to call `FromContentResponse` on the result.
 - A middleware body tee has a 1 MiB cap. Past the cap it records `usage_unknown` and passes the

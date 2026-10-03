@@ -30,6 +30,9 @@ type Record struct {
 	RequestIDs []string
 	// Err is the call error. Add stores its message on the event.
 	Err error
+	// UsageUnknown is set when a stream ends with no usage chunk, so a zero cost is
+	// not read as a measured zero.
+	UsageUnknown bool
 
 	// InputTokens is the whole input count, the way the providers report it: it includes
 	// the cache reads and the cache writes. CachedInputTokens and CacheWriteInputTokens are

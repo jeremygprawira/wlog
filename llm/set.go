@@ -165,6 +165,9 @@ func fieldsFor(r Record) map[string]any {
 		}
 		fields["request_ids"] = ids
 	}
+	if r.UsageUnknown {
+		fields["usage_unknown"] = true
+	}
 	if r.Err != nil {
 		errObj := map[string]any{"message": r.Err.Error()}
 		if coded, ok := r.Err.(interface{ Code() string }); ok && coded.Code() != "" {

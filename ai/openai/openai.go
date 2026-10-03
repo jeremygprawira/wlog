@@ -36,6 +36,15 @@ type config struct {
 // record holds the shape of the call and no text. Core redacts the values.
 func WithContent() Option { return func(c *config) { c.content = true } }
 
+// WithIncludeUsage asks a chat stream to send a usage chunk. The caller still has to
+// set stream to true.
+func WithIncludeUsage(params *openai.ChatCompletionNewParams) {
+	if params == nil {
+		return
+	}
+	params.StreamOptions.IncludeUsage = openai.Bool(true)
+}
+
 // resolve applies the options.
 func resolve(opts ...Option) config {
 	c := config{}
@@ -149,8 +158,9 @@ func responseContentOf(r *responses.Response) *llm.Content {
 // ChatObserver wraps a Chat Completions stream and builds a Record as the caller reads it.
 // It never reads ahead, so the caller keeps every chunk.
 type ChatObserver struct {
-	stream *ssestream.Stream[openai.ChatCompletionChunk]
-	record llm.Record
+	stream   *ssestream.Stream[openai.ChatCompletionChunk]
+	record   llm.Record
+	sawUsage bool
 }
 
 // ObserveChat wraps stream. The caller drives it with Next and Current, and reads Record
@@ -163,6 +173,9 @@ func ObserveChat(stream *ssestream.Stream[openai.ChatCompletionChunk], opts ...O
 // Next reads the next chunk and folds it into the record.
 func (o *ChatObserver) Next() bool {
 	if !o.stream.Next() {
+		if !o.sawUsage {
+			o.record.UsageUnknown = true
+		}
 		return false
 	}
 	o.consume(o.stream.Current())
@@ -186,6 +199,10 @@ func (o *ChatObserver) consume(chunk openai.ChatCompletionChunk) {
 	}
 	if chunk.Model != "" {
 		o.record.Model = chunk.Model
+	}
+	if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
+		o.sawUsage = true
+		o.record.UsageUnknown = false
 	}
 	if chunk.Usage.PromptTokens > 0 {
 		o.record.InputTokens = int(chunk.Usage.PromptTokens)
