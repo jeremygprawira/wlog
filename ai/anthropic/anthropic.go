@@ -181,8 +181,9 @@ func betaContentOf(blocks []anthropic.BetaContentBlockUnion) *llm.Content {
 // Observer wraps a message stream and builds a Record as the caller reads it. Observe
 // never reads ahead, so the caller keeps every chunk and no text reaches the record.
 type Observer struct {
-	stream *ssestream.Stream[anthropic.MessageStreamEventUnion]
-	record llm.Record
+	stream   *ssestream.Stream[anthropic.MessageStreamEventUnion]
+	record   llm.Record
+	rawInput int
 }
 
 // Observe wraps stream. The caller drives it with Next and Current, and reads Record once
@@ -221,6 +222,7 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 		usage := event.Message.Usage
 		o.record.Model = event.Message.Model
 		o.record.ResponseID = event.Message.ID
+		o.rawInput = int(usage.InputTokens)
 		o.record.InputTokens = int(usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens)
 		o.record.CachedInputTokens = int(usage.CacheReadInputTokens)
 		write5m, write1h := usage.CacheCreation.Ephemeral5mInputTokens, usage.CacheCreation.Ephemeral1hInputTokens
@@ -236,8 +238,30 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 			}
 		}
 	case "message_delta":
-		o.record.OutputTokens = int(event.Usage.OutputTokens)
-		o.record.ReasoningTokens = int(event.Usage.OutputTokensDetails.ThinkingTokens)
+		usage := event.Usage
+		changed := false
+		if usage.JSON.InputTokens.Valid() {
+			o.rawInput = int(usage.InputTokens)
+			changed = true
+		}
+		if usage.JSON.CacheReadInputTokens.Valid() {
+			o.record.CachedInputTokens = int(usage.CacheReadInputTokens)
+			changed = true
+		}
+		if usage.JSON.CacheCreationInputTokens.Valid() {
+			o.record.CacheWriteInputTokens = int(usage.CacheCreationInputTokens)
+			o.record.CacheWrite1hInputTokens = 0
+			changed = true
+		}
+		if changed {
+			o.record.InputTokens = o.rawInput + o.record.CachedInputTokens + o.record.CacheWriteInputTokens + o.record.CacheWrite1hInputTokens
+		}
+		if usage.JSON.OutputTokens.Valid() {
+			o.record.OutputTokens = int(usage.OutputTokens)
+		}
+		if usage.JSON.OutputTokensDetails.Valid() {
+			o.record.ReasoningTokens = int(usage.OutputTokensDetails.ThinkingTokens)
+		}
 		if reason := string(event.Delta.StopReason); reason != "" {
 			o.record.FinishReason = reason
 		}
