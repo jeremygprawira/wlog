@@ -341,6 +341,9 @@ func buildPlan(opts Options) (plan, []write, error) {
 	if err != nil {
 		return document, nil, err
 	}
+	if err := namesTaken(dir, generatedNames(framework)); err != nil {
+		return document, nil, err
+	}
 	setup, err := setupFor(framework, opts.Drain, module, pkg)
 	if err != nil {
 		return document, nil, err
@@ -483,6 +486,45 @@ func routerAlreadyUsesWlog(filename string, source []byte, framework string) boo
 		return true
 	})
 	return found
+}
+
+// generatedNames lists the functions the setup file will declare.
+func generatedNames(framework string) []string {
+	names := []string{"NewLogger"}
+	switch framework {
+	case "nethttp", "mux":
+		names = append(names, "WrapHandler")
+	case "":
+	default:
+		names = append(names, "LoggerMiddleware")
+	}
+	return names
+}
+
+// namesTaken reports a function the app already declares that the setup would add.
+func namesTaken(dir string, names []string) error {
+	want := map[string]bool{}
+	for _, name := range names {
+		want[name] = true
+	}
+	paths, err := listGoFiles(dir)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Name == nil || !want[fn.Name.Name] {
+				continue
+			}
+			return fmt.Errorf("%s already declares %s", path, fn.Name.Name)
+		}
+	}
+	return nil
 }
 
 // unifiedDiff renders one planned file as a unified diff, the format a reader expects from a tool
