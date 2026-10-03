@@ -1006,7 +1006,7 @@ which the driver marshals in random order, so it failed about one run in twenty 
 it.
 
 Batch C, HTTP drains: P-1 to P-17, P-19, and the spec half of P-21. CI run 37005501695 is
-green on `1a1a07f`. P-18 and the integration half of P-21 stay open.
+green on `1a1a07f`. P-18 is `fb7f84e`. The integration half of P-21 stays open.
 
 | Id | Commit | What changed |
 |---|---|---|
@@ -1026,7 +1026,7 @@ green on `1a1a07f`. P-18 and the integration half of P-21 stay open.
 | P-19 | `01249aa` | The 64 KB cut lands on a rune, and an array is cut too |
 | P-21 | `51598d4` | SPEC-track-e names `HONEYCOMB_API_URL` and `HONEYCOMB_API_ENDPOINT` |
 | P-20 | not reproduced | See below |
-| P-18 | open | The duplicate `flatten`, `firstEnv`, `chunkEnd`, and the client cache |
+| P-18 | `fb7f84e` | Honeycomb and New Relic use preset.Flat, firstEnv and chunkEnd have one home, and Honeycomb does not cache a client |
 
 The coverage gate failed first at 84.7% for `pipeline` and 83.5% for `pipeline/httpdrain`,
 because the batch B and C code added no tests of its own. `1a1a07f` raised them to 89.6%
@@ -1074,9 +1074,11 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-22 | `d06e1e4` | An empty array is a leaf in the conformance flatten, so a diff names it |
 | D-7 | `fa7ad19` | The syslog test parser follows the escape rule and checks the PRI, VERSION, and TIMESTAMP |
 | D-22 | `6d8effa` | CloudWatch runs the shared drain suite, so its v2 body is checked |
+| D-24 | `93dd3ad` | The path read and the timestamp parse have one home, and Splunk encodes each event once |
 
-D-24 keeps its dedup parts open, and batches F to K are not started. CI run 37116537858 is
-green on `6d8effa`.
+The dedup parts of D-24 are closed. The integration half of P-21 stays open for batch K.
+Review point 14 stays open. Batches F to K are not started. CI run 37116537858 is green
+on `6d8effa`.
 
 The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about one run in
 three, because a random UUID at `job.id` matched the phone or card pattern and lost a

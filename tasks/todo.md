@@ -241,11 +241,12 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
 - [ ] C, HTTP drains: P-1, P-2, P-3, P-4, P-5, P-6, P-8, P-9, P-13 to P-21
   - Done and pushed: P-1 to P-17, P-19, and the spec half of P-21. CI run 37005501695 is green on `1a1a07f`.
   - P-20 is not reproduced, with the evidence in the review.
-  - Open: P-18, and the integration half of P-21, which waits for batch K.
+  - Done in this batch: P-18 at `fb7f84e`.
+  - Open: the integration half of P-21, which waits for batch K.
 - [x] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
 - [ ] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24
-  - Done and pushed: D-3, D-4, D-6, D-7, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-19, D-22, and part of D-24. CI run 37116537858 is green on `6d8effa`.
-  - Open: the dedup parts of D-24, which are the repeated `pathValue`, the repeated timestamp parse, and the Splunk double encode.
+  - Done: D-3, D-4, D-6, D-7, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-19, D-22, and D-24. The dedup parts of D-24 are `93dd3ad`.
+  - CI run 37116537858 is green on `6d8effa`. The checkbox waits for the CI run of this push.
   - Also fixed: a job id is never scanned by a value pattern, which was the asynq flake.
 - [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
 - [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23
