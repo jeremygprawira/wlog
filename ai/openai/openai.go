@@ -75,8 +75,10 @@ func FromChatCompletion(r *openai.ChatCompletion, opts ...Option) llm.Record {
 	}
 	if len(r.Choices) > 0 {
 		record.FinishReason = r.Choices[0].FinishReason
-		for _, call := range r.Choices[0].Message.ToolCalls {
-			record.ToolCalls = append(record.ToolCalls, llm.ToolCall{Name: call.Function.Name})
+		for _, choice := range r.Choices {
+			for _, call := range choice.Message.ToolCalls {
+				record.ToolCalls = append(record.ToolCalls, llm.ToolCall{Name: call.Function.Name})
+			}
 		}
 	}
 	if resolve(opts...).content {
