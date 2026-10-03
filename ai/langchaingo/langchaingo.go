@@ -167,16 +167,14 @@ type storedCall struct {
 
 // handler turns tool and chain callback pairs into call records.
 //
-// ponytail: HandleToolStart/End and HandleChainStart/End carry no call id or name, so a
-// pair correlates by the identity of the ctx value the SDK hands back unchanged between
-// the two calls. Two tool calls sharing one ctx concurrently would collide; upgrade to a
-// real id if langchaingo ever adds one to these signatures.
+// A context holds a stack of starts, not one slot. An end closes the latest open
+// start on that context, so nested pairs do not overwrite each other.
 type handler struct {
 	callbacks.SimpleHandler
 	log    *wlog.Logger
 	mu     sync.Mutex
-	tools  map[context.Context]storedCall
-	chains map[context.Context]storedCall
+	tools  map[context.Context][]storedCall
+	chains map[context.Context][]storedCall
 }
 
 // Handler returns a callbacks.Handler that turns every tool call and every chain step into
@@ -186,8 +184,8 @@ type handler struct {
 func Handler(log *wlog.Logger) callbacks.Handler {
 	return &handler{
 		log:    log,
-		tools:  map[context.Context]storedCall{},
-		chains: map[context.Context]storedCall{},
+		tools:  map[context.Context][]storedCall{},
+		chains: map[context.Context][]storedCall{},
 	}
 }
 
@@ -223,30 +221,48 @@ func (h *handler) HandleChainError(ctx context.Context, err error) {
 
 // begin stores one start. It first drops every start older than callTTL. At the cap it
 // drops the new start instead of growing. Each drop is reported.
-func (h *handler) begin(m map[context.Context]storedCall, ctx context.Context, operation string) {
+func (h *handler) begin(m map[context.Context][]storedCall, ctx context.Context, operation string) {
 	h.mu.Lock()
 	dropped := h.prune(m)
-	if len(m) >= callCap {
+	if openCalls(m) >= callCap {
 		dropped++
 		h.mu.Unlock()
 		h.report(dropped)
 		return
 	}
 	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "other", System: "langchaingo", Operation: operation})
-	m[ctx] = storedCall{end: end, at: time.Now()}
+	m[ctx] = append(m[ctx], storedCall{end: end, at: time.Now()})
 	h.mu.Unlock()
 	h.report(dropped)
 }
 
+// openCalls counts every start still held, across every context.
+func openCalls(m map[context.Context][]storedCall) int {
+	n := 0
+	for _, stack := range m {
+		n += len(stack)
+	}
+	return n
+}
+
 // prune drops every start older than callTTL. The caller holds h.mu.
-func (h *handler) prune(m map[context.Context]storedCall) int {
+func (h *handler) prune(m map[context.Context][]storedCall) int {
 	now := time.Now()
 	dropped := 0
-	for key, slot := range m {
-		if now.Sub(slot.at) > callTTL {
-			delete(m, key)
-			dropped++
+	for key, stack := range m {
+		kept := stack[:0]
+		for _, slot := range stack {
+			if now.Sub(slot.at) > callTTL {
+				dropped++
+				continue
+			}
+			kept = append(kept, slot)
 		}
+		if len(kept) == 0 {
+			delete(m, key)
+			continue
+		}
+		m[key] = kept
 	}
 	return dropped
 }
@@ -261,16 +277,21 @@ func (h *handler) report(n int) {
 	}
 }
 
-// finish ends the start stored under ctx. A ctx with no start is left alone.
-func (h *handler) finish(m map[context.Context]storedCall, ctx context.Context, result wlog.CallResult) {
+// finish ends the latest start stored under ctx. A ctx with no start is left alone.
+func (h *handler) finish(m map[context.Context][]storedCall, ctx context.Context, result wlog.CallResult) {
 	h.mu.Lock()
-	slot, ok := m[ctx]
-	if ok {
-		delete(m, ctx)
-	}
-	h.mu.Unlock()
-	if !ok {
+	stack := m[ctx]
+	if len(stack) == 0 {
+		h.mu.Unlock()
 		return
 	}
+	slot := stack[len(stack)-1]
+	stack = stack[:len(stack)-1]
+	if len(stack) == 0 {
+		delete(m, ctx)
+	} else {
+		m[ctx] = stack
+	}
+	h.mu.Unlock()
 	slot.end(result)
 }

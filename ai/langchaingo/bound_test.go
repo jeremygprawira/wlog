@@ -26,18 +26,18 @@ func TestLangchaingo_A6_DropsUnendedToolStarts(t *testing.T) {
 	}
 	extra := context.WithValue(ctx, "extra", "extra")
 	h.HandleToolStart(extra, "in")
-	if _, ok := h.tools[extra]; ok {
+	if len(h.tools[extra]) != 0 {
 		t.Fatal("the start past the cap was stored")
 	}
 
 	h.mu.Lock()
-	slot := h.tools[first]
-	slot.at = time.Now().Add(-callTTL - time.Second)
-	h.tools[first] = slot
+	stack := h.tools[first]
+	stack[0].at = time.Now().Add(-callTTL - time.Second)
+	h.tools[first] = stack
 	h.mu.Unlock()
 	fresh := context.WithValue(ctx, "fresh", "fresh")
 	h.HandleToolStart(fresh, "in")
-	if _, ok := h.tools[first]; ok {
+	if len(h.tools[first]) != 0 {
 		t.Fatal("an aged start was kept")
 	}
 	h.HandleToolEnd(fresh, "out")
