@@ -236,10 +236,13 @@ func (s *Sender) Setup(l *wlog.Logger) error {
 	return nil
 }
 
-// SendBatch dials when needed and writes one frame per event.
+// SendBatch dials when needed and writes one frame per event. Delivery over TCP is at least
+// once, because a retry can repeat a frame, and best effort over UDP, which has no
+// connection.
 func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.probe()
 	for _, event := range events {
 		frame := s.frame(event)
 		if err := s.write(ctx, frame); err != nil {
@@ -296,6 +299,33 @@ func cutString(text string, max int) string {
 		cut--
 	}
 	return text[:cut]
+}
+
+// probe reports whether the open connection is still alive, and closes it when the peer is
+// gone. A TCP write to a peer that closed its side succeeds here, so a read with an
+// immediate deadline is the only way to learn that the frames would be lost.
+func (s *Sender) probe() {
+	if s.conn == nil || s.network == "udp" {
+		return
+	}
+	// The deadline is short but not zero: a zero deadline makes every read time out before
+	// the socket is looked at, so a pending EOF would be missed.
+	if err := s.conn.SetReadDeadline(time.Now().Add(time.Millisecond)); err != nil {
+		s.closeLocked()
+		return
+	}
+	var buf [1]byte
+	_, err := s.conn.Read(buf[:])
+	if err == nil {
+		return
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		// Nothing to read and no error: the peer is still there.
+		return
+	}
+	// A closed peer reports EOF or a reset, so the next write dials again.
+	s.closeLocked()
 }
 
 // Close closes the connection, so TLS sends close_notify.

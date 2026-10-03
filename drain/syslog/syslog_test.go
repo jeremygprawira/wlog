@@ -356,6 +356,50 @@ func TestSyslog_D17_SkipsADatagramTooLargeForThePath(t *testing.T) {
 	}
 }
 
+// TestSyslog_D12_RedialsAfterThePeerCloses proves a batch after the peer closed dials again
+// instead of writing into a dead socket, where the frames would be lost.
+func TestSyslog_D12_RedialsAfterThePeerCloses(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	conns := make(chan net.Conn, 4)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			conns <- conn
+		}
+	}()
+
+	sender, err := syslog.NewSender(syslog.WithAddr(listener.Addr().String()), syslog.WithNetwork("tcp"))
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+		t.Fatalf("the first batch failed: %v", err)
+	}
+	first := <-conns
+	_ = first.Close()
+	// The peer's close travels over the loopback, so the drain learns of it on the next
+	// probe.
+	time.Sleep(100 * time.Millisecond)
+
+	// The peer is gone, so the next batch must dial again.
+	if err := sender.SendBatch(context.Background(), []map[string]any{event()}); err != nil {
+		t.Fatalf("the second batch failed: %v", err)
+	}
+	select {
+	case second := <-conns:
+		_ = second.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("the drain did not dial again after the peer closed")
+	}
+}
+
 // TestSyslog_MissingConfig proves a missing address is refused.
 func TestSyslog_MissingConfig(t *testing.T) {
 	if _, err := syslog.NewSender(); err == nil {
