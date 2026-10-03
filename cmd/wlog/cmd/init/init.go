@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -444,8 +447,38 @@ func patchRouter(dir, framework string) (string, string, error) {
 		if changed {
 			return path, string(patched), nil
 		}
+		if routerAlreadyUsesWlog(path, source, framework) {
+			return "", "", nil
+		}
 	}
 	return "", "", fmt.Errorf("no router declaration found for %s", framework)
+}
+
+// routerAlreadyUsesWlog reports whether this file builds the router and already calls wlog.
+func routerAlreadyUsesWlog(filename string, source []byte, framework string) bool {
+	if framework == "nethttp" || framework == "mux" || framework == "" {
+		return false
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, source, parser.ParseComments)
+	if err != nil {
+		return false
+	}
+	found := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		for _, statement := range block.List {
+			router, ok := routerName(statement, framework)
+			if ok && hasWlogMiddleware(file, block.List, router) {
+				found = true
+			}
+		}
+		return true
+	})
+	return found
 }
 
 // unifiedDiff renders one planned file as a unified diff, the format a reader expects from a tool

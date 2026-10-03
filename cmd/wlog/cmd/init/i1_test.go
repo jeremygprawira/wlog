@@ -79,7 +79,7 @@ func wholeRecipe(t *testing.T, name string) string {
 // runs init, go build, and wlog doctor.
 func TestInit_I1_WholeRecipesBuildAndPassDoctor(t *testing.T) {
 	recipes := []string{
-		"llm-agent", "lambda", "mcp-server",
+		"llm-agent", "lambda", "rest-api", "mcp-server",
 		"kafka-consumer", "cron-job", "cli-tool", "grpc-service",
 	}
 	for _, name := range recipes {

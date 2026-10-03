@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"strconv"
 	"strings"
 )
 
@@ -106,7 +107,7 @@ func installRouterMiddleware(file *ast.File, framework string) bool {
 		}
 		for i, statement := range block.List {
 			router, ok := routerName(statement, framework)
-			if !ok || hasMiddleware(block.List, router) {
+			if !ok || hasWlogMiddleware(file, block.List, router) {
 				continue
 			}
 			insert := i + 1
@@ -140,9 +141,10 @@ func routerName(statement ast.Stmt, framework string) (string, bool) {
 	return ident.Name, true
 }
 
-// hasMiddleware reports whether the block already calls Use on this router, so a second run of
-// the tool cannot add a second wrapper.
-func hasMiddleware(statements []ast.Stmt, router string) bool {
+// hasWlogMiddleware reports whether this router already calls wlog. Another Use, such as
+// a recoverer, is not wlog and does not count.
+func hasWlogMiddleware(file *ast.File, statements []ast.Stmt, router string) bool {
+	names := wlogImportNames(file)
 	for _, statement := range statements {
 		call, ok := statement.(*ast.ExprStmt)
 		if !ok {
@@ -156,11 +158,59 @@ func hasMiddleware(statements []ast.Stmt, router string) bool {
 		if !ok || sel.Sel.Name != "Use" {
 			continue
 		}
-		if receiver, ok := sel.X.(*ast.Ident); ok && receiver.Name == router {
+		receiver, ok := sel.X.(*ast.Ident)
+		if !ok || receiver.Name != router {
+			continue
+		}
+		if callUsesWlog(expr, names) {
 			return true
 		}
 	}
 	return false
+}
+
+// wlogImportNames maps a local name to true when that import is a wlog package.
+func wlogImportNames(file *ast.File) map[string]bool {
+	names := map[string]bool{}
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || !strings.Contains(path, "jeremygprawira/wlog") {
+			continue
+		}
+		local := path[strings.LastIndex(path, "/")+1:]
+		if spec.Name != nil && spec.Name.Name != "_" && spec.Name.Name != "." {
+			local = spec.Name.Name
+		}
+		names[local] = true
+	}
+	return names
+}
+
+// callUsesWlog reports whether a Use call's arguments name wlog.
+func callUsesWlog(call *ast.CallExpr, names map[string]bool) bool {
+	for _, arg := range call.Args {
+		if exprUsesWlog(arg, names) {
+			return true
+		}
+	}
+	return false
+}
+
+// exprUsesWlog reports whether an expression is a wlog call or a generated wrapper.
+func exprUsesWlog(expr ast.Expr, names map[string]bool) bool {
+	switch node := expr.(type) {
+	case *ast.Ident:
+		return node.Name == "LoggerMiddleware" || node.Name == "WrapHandler"
+	case *ast.SelectorExpr:
+		if ident, ok := node.X.(*ast.Ident); ok && names[ident.Name] {
+			return true
+		}
+		return node.Sel.Name == "LoggerMiddleware" || node.Sel.Name == "WrapHandler"
+	case *ast.CallExpr:
+		return exprUsesWlog(node.Fun, names)
+	default:
+		return false
+	}
 }
 
 // middlewareStatement builds router.Use(LoggerMiddleware()).
