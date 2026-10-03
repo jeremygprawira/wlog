@@ -243,15 +243,12 @@ func detectFramework(sources [][]byte) string {
 
 // packageName reads the package clause from the module's first Go file.
 func packageName(dir string) (string, error) {
-	entries, err := os.ReadDir(dir)
+	paths, err := listGoFiles(dir)
 	if err != nil {
 		return "", err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		source, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
 		if err != nil {
 			return "", err
 		}
@@ -264,18 +261,32 @@ func packageName(dir string) (string, error) {
 	return "", fmt.Errorf("no package clause found in %s", dir)
 }
 
-// goFiles returns the source of every .go file in dir.
-func goFiles(dir string) ([][]byte, error) {
+// listGoFiles returns the app's Go files. A _test.go file is not app source.
+func listGoFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	var sources [][]byte
+	var paths []string
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		source, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	return paths, nil
+}
+
+// goFiles returns the source of every app Go file in dir.
+func goFiles(dir string) ([][]byte, error) {
+	paths, err := listGoFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	var sources [][]byte
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
@@ -414,15 +425,14 @@ func requiredModules(goMod string) map[string]bool {
 // patchRouter installs the middleware in the file that declares the server or the router. It
 // returns "" when no file needs a change.
 func patchRouter(dir, framework string) (string, string, error) {
-	entries, err := os.ReadDir(dir)
+	paths, err := listGoFiles(dir)
 	if err != nil {
 		return "", "", err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || entry.Name() == "wlog_setup.go" {
+	for _, path := range paths {
+		if filepath.Base(path) == "wlog_setup.go" {
 			continue
 		}
-		path := filepath.Join(dir, entry.Name())
 		source, err := os.ReadFile(path)
 		if err != nil {
 			return "", "", err
