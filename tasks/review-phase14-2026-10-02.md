@@ -1111,3 +1111,30 @@ Batch H, agent frameworks and MCP: A-1 to A-9, A-11, A-12 to A-20, and A-22 to A
 | A-24 | `c27a895` | The spec names the missing `rpc.mcp` fields, and a handler error hides quoted arguments |
 
 `8839fbb` gives the cap test its own context key type, after `make lint` reported SA1029. `268f307` names the content condition first, after `make ste` reported a trailing condition in the A-24 spec row. `make fuzz` ran because A-13 changed redaction, and it passed.
+
+Batch I, `wlog init`: I-1 to I-19. I-20 is a design choice and has no commit. No id stays blocked.
+
+| Id | Commit | What changed |
+|---|---|---|
+| I-1 | `9e5bf3a` | Test files are not app source. The recipe test copies seven apps, and rest-api joined it in I-2 |
+| I-2 | `e08e1cd` | A router Use counts only when it calls wlog. An existing wlog call exits 0 |
+| I-3 | `188fdde` | The Use call is spliced after the router statement, so a comment stays outside it |
+| I-4 | `b60e49a` | An existing `wlog.go` is refused before any write |
+| I-5 | `2fe2fb6` | A name the setup would declare is refused before any write |
+| I-6 | `f5be788` | The generated logger no longer pins the service with `WithService` |
+| I-7 | `bf68375` | HTTP frameworks are wired. Every other adapter prints its setup line. The spec no longer says init installs each plugin |
+| I-8 | `5ee30b4` | `--dir` walks up to `go.mod` |
+| I-9 | `e5fbb15` | A failed build restores the old bytes and removes created files |
+| I-10 | `fd6e087` | The build uses the user environment and `-o` the null device. `go mod tidy` is a named plan step |
+| I-11 | `33abeea` | Indirect requires and replace blocks do not count. The `installed` field is gone |
+| I-12 | `93b157e` | With `--json`, progress and doctor go to stderr |
+| I-13 | `eeda5a7` | Doctor prints adapter lines in table order. `SetupLines` is gone |
+| I-14 | `06eb4b1` | The workspace test checks each row. Fiber and fiber3 build. A run with no `--yes` writes nothing |
+| I-15 | `5153e10` | SPEC-cli-v1.3 and the changelog say a plain `init` writes nothing and exits 0 |
+| I-16 | `27e3ca6` | The kafka-go alias is `wlogkafkago`. CloudWatch has a row |
+| I-17 | `64b2b83` | A symlink stays a symlink, and mode `0600` stays `0600` |
+| I-18 | `fa8c8f8` | `ByWlog`, `ByLib`, `validateGlobs`, and `--dry-run` are gone |
+| I-19 | `2b69a9c` | `wlog help` lists all 13 commands |
+| I-20 | design choice | A run with no `--yes` exits 0 and prints one stderr line. No code change |
+
+`27da287` fixes the three lint findings from the tidy copy: the unchecked remove, `Command` without a context, and the De Morgan form.
