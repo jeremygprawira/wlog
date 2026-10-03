@@ -23,8 +23,14 @@ which keeps this package in the root module and free of a vendor's release cycle
 // what its own client reports.
 type Record struct {
 	Provider string // "openai", "anthropic", "google", or any string
-	Model    string // the exact model id billed, such as "claude-sonnet-5"
-	Operation string // "chat", "embedding", "rerank", or any string
+	Model         string // the exact model id billed, such as "claude-sonnet-5"
+	ResponseModel string // the model the provider returned
+	Operation     string // "chat", "embedding", "rerank", or any string
+	Status        string
+	FinishReasons []string
+	Attempts      int
+	RequestIDs    []string
+	Err           error
 
 	InputTokens       int
 	OutputTokens      int
@@ -42,6 +48,7 @@ type Record struct {
 }
 
 type ToolCall struct {
+	ID       string
 	Name     string
 	Duration time.Duration
 	Failed   bool
@@ -104,7 +111,8 @@ failed to price, instead of reading a silent zero.
 ### Fields on the event
 
 ```
-llm.provider llm.request_model llm.operation
+llm.provider llm.request_model llm.response_model llm.operation llm.status
+llm.attempts llm.request_ids
 llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.reasoning_tokens
 llm.total_tokens
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
@@ -123,7 +131,8 @@ is masked before a drain sees it.
 2. `Add` folds token counts and costs into one total, and appends each call to `llm.calls[]`,
    capped at 200 entries each by llm itself, with every entry past the cap counted in
    wlog.dropped_fields (gate G4). Money stays in whole micros: an event never carries a
-   dollar float, because a float rounds.
+   dollar float, because a float rounds. `Add` also records one `calls` entry with kind `llm`,
+   system `Provider`, operation `Operation`, and target `ResponseModel`.
 3. `Cost` prices a record from the token counts, and prices a cached input token at the
    cached rate.
 4. `Cost` reports false for a model the table does not hold, and the enricher then sets

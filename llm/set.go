@@ -93,6 +93,14 @@ func Add(ctx context.Context, r Record) {
 	}
 
 	wlog.SetGroup(ctx, group, fields)
+	// One calls entry, so a query ranks this model call with every other call.
+	_, endCall := wlog.StartCall(ctx, wlog.Call{
+		Kind:      "llm",
+		System:    r.Provider,
+		Operation: r.Operation,
+		Target:    r.ResponseModel,
+	})
+	endCall(wlog.CallResult{Status: r.Status, Err: r.Err, Duration: r.Duration})
 	// The count goes through core, so an entry that hit llm's own cap appears in
 	// wlog.dropped_fields beside every other capped write.
 	wlog.CountDropped(ctx, dropped)
@@ -107,8 +115,31 @@ func fieldsFor(r Record) map[string]any {
 	if r.Model != "" {
 		fields["request_model"] = r.Model
 	}
+	if r.ResponseModel != "" {
+		fields["response_model"] = r.ResponseModel
+	}
 	if r.Operation != "" {
 		fields["operation"] = r.Operation
+	}
+	if r.Status != "" {
+		fields["status"] = r.Status
+	}
+	if r.Attempts > 0 {
+		fields["attempts"] = r.Attempts
+	}
+	if len(r.RequestIDs) > 0 {
+		ids := make([]any, len(r.RequestIDs))
+		for i, id := range r.RequestIDs {
+			ids[i] = id
+		}
+		fields["request_ids"] = ids
+	}
+	if r.Err != nil {
+		errObj := map[string]any{"message": r.Err.Error()}
+		if coded, ok := r.Err.(interface{ Code() string }); ok && coded.Code() != "" {
+			errObj["code"] = coded.Code()
+		}
+		fields["error"] = errObj
 	}
 	if r.ResponseID != "" {
 		fields["response_id"] = r.ResponseID
@@ -156,7 +187,13 @@ func fieldsFor(r Record) map[string]any {
 	if r.OutputTokensPerSecond > 0 {
 		fields["output_tokens_per_second"] = r.OutputTokensPerSecond
 	}
-	if r.FinishReason != "" {
+	if len(r.FinishReasons) > 0 {
+		reasons := make([]any, len(r.FinishReasons))
+		for i, reason := range r.FinishReasons {
+			reasons[i] = reason
+		}
+		fields["finish_reasons"] = reasons
+	} else if r.FinishReason != "" {
 		// finish_reasons is an array, because a request may finish more than one way.
 		fields["finish_reasons"] = []any{r.FinishReason}
 	}
@@ -192,6 +229,9 @@ func toolCallMaps(calls []ToolCall) []any {
 	out := make([]any, 0, len(calls))
 	for _, call := range calls {
 		entry := map[string]any{"name": call.Name}
+		if call.ID != "" {
+			entry["id"] = call.ID
+		}
 		if call.Duration > 0 {
 			entry["duration_ms"] = call.Duration.Milliseconds()
 		}
