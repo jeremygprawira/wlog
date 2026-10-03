@@ -148,11 +148,10 @@ type plan struct {
 
 // planAdapter is one adapter the module uses.
 type planAdapter struct {
-	Name      string `json:"name"`
-	Wlog      string `json:"wlog"`
-	Kind      string `json:"kind"`
-	Setup     string `json:"setup"`
-	Installed bool   `json:"installed"`
+	Name  string `json:"name"`
+	Wlog  string `json:"wlog"`
+	Kind  string `json:"kind"`
+	Setup string `json:"setup"`
 }
 
 // planFile is one file the run writes.
@@ -573,23 +572,36 @@ func detectAdapters(goMod string, sources [][]byte) []planAdapter {
 		}
 		found = append(found, planAdapter{
 			Name: adapter.Name, Wlog: adapter.Wlog, Kind: adapter.Kind,
-			Setup: adapter.Setup, Installed: true,
+			Setup: adapter.Setup,
 		})
 	}
 	return found
 }
 
 // requiredModules reads the module paths a go.mod requires, with the comment and the version
-// removed. The wlog modules are skipped, because those are the adapters the tool writes, not
+// removed. An indirect line does not count, and neither does a replace or exclude block.
+// The wlog modules are skipped, because those are the adapters the tool writes, not
 // the libraries that imply one.
 func requiredModules(goMod string) map[string]bool {
 	required := map[string]bool{}
-	for _, line := range strings.Split(goMod, "\n") {
-		line = strings.TrimSpace(line)
+	skipBlock := false
+	for _, raw := range strings.Split(goMod, "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "replace (") || strings.HasPrefix(line, "exclude (") {
+			skipBlock = true
+			continue
+		}
+		if line == ")" {
+			skipBlock = false
+			continue
+		}
+		if skipBlock || strings.Contains(raw, "// indirect") {
+			continue
+		}
 		if rest, ok := strings.CutPrefix(line, "require "); ok {
 			line = strings.TrimSpace(rest)
 		}
-		if line == "" || strings.HasPrefix(line, "//") || line == ")" ||
+		if line == "" || strings.HasPrefix(line, "//") ||
 			strings.HasPrefix(line, "module ") || strings.HasPrefix(line, "go ") ||
 			strings.HasPrefix(line, "replace ") || strings.HasPrefix(line, "exclude ") ||
 			strings.HasPrefix(line, "retract ") || strings.HasPrefix(line, "toolchain ") {
