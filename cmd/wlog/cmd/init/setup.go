@@ -87,7 +87,6 @@ func LoggerMiddleware() fiber.Handler {
 	builder.WriteString("// and the identity come from the environment, so a deployment changes no code.\n")
 	builder.WriteString("func NewLogger() *wlog.Logger {\n")
 	builder.WriteString("\treturn wlog.New(\n\t\tsetup.FromEnv(),\n")
-	fmt.Fprintf(&builder, "\t\twlog.WithService(%q, \"0.0.1\", \"local\"),\n", module)
 	builder.WriteString("\t)\n}\n")
 	if middlewareFunc != "" {
 		builder.WriteString("\n")
