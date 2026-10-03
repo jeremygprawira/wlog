@@ -66,10 +66,23 @@ func parseFrame(t *testing.T, frame string) parts {
 	if err != nil {
 		t.Fatalf("PRI is not a number: %q", frame)
 	}
+	if pri > 191 {
+		t.Fatalf("PRI %d is above 191: %q", pri, frame)
+	}
 	rest := frame[gt+1:]
 	fields := strings.SplitN(rest, " ", 7)
 	if len(fields) != 7 {
 		t.Fatalf("frame has %d fields, want 7: %q", len(fields), frame)
+	}
+	// VERSION is one to three digits with a non-zero first, and TIMESTAMP is RFC 3339 or
+	// the nil value.
+	if fields[0] == "" || fields[0][0] == '0' {
+		t.Fatalf("VERSION %q starts with a zero: %q", fields[0], frame)
+	}
+	if fields[1] != "-" {
+		if _, err := time.Parse(time.RFC3339Nano, fields[1]); err != nil {
+			t.Fatalf("TIMESTAMP %q is not RFC 3339: %q", fields[1], frame)
+		}
 	}
 	sdAndMsg := fields[6]
 	var sd, msg string
@@ -77,7 +90,19 @@ func parseFrame(t *testing.T, frame string) parts {
 	case strings.HasPrefix(sdAndMsg, "-"):
 		sd, msg = "-", strings.TrimPrefix(sdAndMsg[1:], " ")
 	case strings.HasPrefix(sdAndMsg, "["):
-		end := strings.IndexByte(sdAndMsg, ']')
+		// The closing bracket is the first unescaped one, because \] inside a parameter
+		// value is a character and not the end of the structured data.
+		end := -1
+		for i := 1; i < len(sdAndMsg); i++ {
+			if sdAndMsg[i] == '\\' {
+				i++
+				continue
+			}
+			if sdAndMsg[i] == ']' {
+				end = i
+				break
+			}
+		}
 		if end < 0 {
 			t.Fatalf("structured data has no ]: %q", frame)
 		}
@@ -431,6 +456,36 @@ func TestSyslog_MustNewPanics(t *testing.T) {
 		}
 	}()
 	syslog.MustNew()
+}
+
+// TestSyslog_D7_EscapesTheStructuredData proves a value holding the three SD characters, a
+// space, and a character outside ASCII arrives escaped, so the frame parses.
+func TestSyslog_D7_EscapesTheStructuredData(t *testing.T) {
+	srv := listenUDP(t)
+	sender, err := syslog.NewSender(
+		syslog.WithAddr(srv.addr),
+		syslog.WithNetwork("udp"),
+		syslog.WithStructuredData("wlog@32473"),
+	)
+	if err != nil {
+		t.Fatalf("NewSender: %v", err)
+	}
+	tricky := "a\"b\\c]d e\u00e9"
+	event := event()
+	trace, _ := event["trace"].(map[string]any)
+	trace["request_id"] = tricky
+	if err := sender.SendBatch(context.Background(), []map[string]any{event}); err != nil {
+		t.Fatalf("SendBatch: %v", err)
+	}
+	got := parseFrame(t, srv.recv(t))
+	want := `request_id="a\"b\\c\]d eé"`
+	if !strings.Contains(got.sd, want) {
+		t.Errorf("structured data %q is missing %q", got.sd, want)
+	}
+	// The structured data still closes with one bracket, so the escapes did not end it.
+	if !strings.HasSuffix(got.sd, "]") {
+		t.Errorf("structured data %q does not end with ]", got.sd)
+	}
 }
 
 // TestSyslog_Options proves every option reaches the sender, New wraps it, and Close
