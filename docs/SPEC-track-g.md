@@ -149,8 +149,9 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 - `wlog init` reads `go.mod` and matches each required module to the adapter table in
   CAPABILITIES.md. It covers routers, RPC, queues, jobs, stores, loggers, error libraries, and
   LLM SDKs.
-- It writes one `wlog_setup.go` that builds the Logger with `setup.FromEnv()` and installs each
-  plugin. It edits each entry point through `go/ast`.
+- It writes one `wlog_setup.go` that builds the Logger with `setup.FromEnv()`. It wires an HTTP
+  framework into the entry point through `go/ast`. For every other adapter, it prints the setup
+  line and writes no call.
 - `--yes` accepts the whole plan. `--json` prints the plan. After writing, it runs `go build` and
   `wlog doctor`, and prints both results. (PAR-33)
 

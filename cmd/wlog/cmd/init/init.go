@@ -65,6 +65,14 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
+	if !opts.JSON {
+		for _, adapter := range document.Adapters {
+			if adapter.Kind == "http" || adapter.Setup == "" {
+				continue
+			}
+			_, _ = fmt.Fprintf(stdout, "%s: %s\n", adapter.Name, adapter.Setup)
+		}
+	}
 	if opts.JSON {
 		data, err := json.MarshalIndent(document, "", "  ")
 		if err != nil {
