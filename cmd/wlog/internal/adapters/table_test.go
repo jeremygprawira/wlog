@@ -71,7 +71,13 @@ func TestTable_Lookup(t *testing.T) {
 	if !found {
 		t.Error("ByLib(chi/v5) does not name http-chi")
 	}
-	if lines := adapters.SetupLines(); lines["github.com/jeremygprawira/wlog/middleware/chi"] != "wlogchi.Setup(r)" {
-		t.Errorf("SetupLines()[chi] = %q", lines["github.com/jeremygprawira/wlog/middleware/chi"])
+	var chi string
+	for _, adapter := range adapters.Table {
+		if adapter.Wlog == "github.com/jeremygprawira/wlog/middleware/chi" {
+			chi = adapter.Setup
+		}
+	}
+	if chi != "wlogchi.Setup(r)" {
+		t.Errorf("chi setup = %q", chi)
 	}
 }

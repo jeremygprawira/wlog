@@ -196,15 +196,3 @@ func ByLib(path string) []Adapter {
 	}
 	return found
 }
-
-// SetupLines returns the setup line of every adapter that has one, keyed by the wlog import
-// path. wlog doctor reads this to name the install line of an adapter a project imports.
-func SetupLines() map[string]string {
-	lines := map[string]string{}
-	for _, adapter := range Table {
-		if adapter.Setup != "" {
-			lines[adapter.Wlog] = adapter.Setup
-		}
-	}
-	return lines
-}
