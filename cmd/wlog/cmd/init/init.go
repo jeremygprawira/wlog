@@ -314,6 +314,10 @@ func buildPlan(opts Options) (plan, []write, error) {
 	if _, err := os.Stat(setupPath); err == nil {
 		return document, nil, fmt.Errorf("%s already exists", setupPath)
 	}
+	legacy := filepath.Join(dir, "wlog.go")
+	if _, err := os.Stat(legacy); err == nil {
+		return document, nil, fmt.Errorf("%s already exists", legacy)
+	}
 	module, err := moduleName(dir)
 	if err != nil {
 		return document, nil, err
