@@ -35,9 +35,17 @@ func Add(ctx context.Context, r Record) {
 	existing, _ := current.(map[string]any)
 
 	fields := fieldsFor(r)
-	fields["input_tokens"] = intOf(existing["input_tokens"]) + r.InputTokens
-	fields["output_tokens"] = intOf(existing["output_tokens"]) + r.OutputTokens
-	if total := fields["input_tokens"].(int) + fields["output_tokens"].(int); total > 0 {
+	// A zero total stays off the event. An unmapped provider leaves the counts
+	// unset, and a written zero would read as a measured count.
+	input := intOf(existing["input_tokens"]) + r.InputTokens
+	output := intOf(existing["output_tokens"]) + r.OutputTokens
+	if input > 0 {
+		fields["input_tokens"] = input
+	}
+	if output > 0 {
+		fields["output_tokens"] = output
+	}
+	if total := input + output; total > 0 {
 		fields["total_tokens"] = total
 	}
 	if cached := intOf(existing["cache_read_input_tokens"]) + r.CachedInputTokens; cached > 0 {

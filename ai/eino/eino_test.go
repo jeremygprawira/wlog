@@ -47,8 +47,8 @@ func TestEino_Handler_OnEnd(t *testing.T) {
 	end()
 
 	group, _ := rec.Last()["llm"].(map[string]any)
-	if group["provider"] != "OpenAI" || group["request_model"] != "gpt-4o" {
-		t.Fatalf("llm group = %v, want provider OpenAI, request_model gpt-4o", group)
+	if group["provider"] != "openai" || group["request_model"] != "gpt-4o" {
+		t.Fatalf("llm group = %v, want provider openai, request_model gpt-4o", group)
 	}
 	if group["input_tokens"] != int64(1000) || group["output_tokens"] != int64(200) {
 		t.Errorf("tokens = %v, want input 1000, output 200", group)
@@ -258,5 +258,20 @@ func TestEino_A9_StreamToolCallCountedOnce(t *testing.T) {
 	}
 	if group["tool_call_count"] != int64(1) {
 		t.Fatalf("tool_call_count = %v, want 1", group["tool_call_count"])
+	}
+}
+
+// TestEino_A20_ProviderIsLowerCase proves the provider name is lower case,
+// matching the other modules.
+func TestEino_A20_ProviderIsLowerCase(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	wlogeino.Handler().OnEnd(ctx, runInfo("OpenAI"), &model.CallbackOutput{
+		Message: &schema.Message{Content: "hi"},
+	})
+	end()
+	group, _ := rec.Last()["llm"].(map[string]any)
+	if group["provider"] != "openai" {
+		t.Fatalf("provider = %v, want openai", group["provider"])
 	}
 }

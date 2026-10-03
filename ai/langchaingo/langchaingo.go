@@ -48,8 +48,8 @@ func resolve(opts ...Option) config {
 // FromContentResponse turns one llms.ContentResponse into an llm.Record. provider and
 // model name the call, because ContentResponse carries neither: langchaingo folds every
 // provider's usage into GenerationInfo under its own key names, so provider picks how to
-// read them. Only "anthropic" and "openai" are mapped; any other provider's record holds
-// the shape of the call with its token counts at 0.
+// read them. Only "anthropic" and "openai" are mapped. Any other provider leaves the token
+// counts unset, so they stay off the event.
 //
 // The Anthropic provider gives one ContentChoice per content block of one message, each
 // repeating the same usage, so only the first choice with a non-empty GenerationInfo

@@ -278,3 +278,20 @@ func TestLangchaingo_A5_CallKindOther(t *testing.T) {
 		}
 	}
 }
+
+// TestLangchaingo_A20_UnmappedProviderOmitsTokens proves an unmapped provider
+// does not record zero tokens. Zero would read as a measured count.
+func TestLangchaingo_A20_UnmappedProviderOmitsTokens(t *testing.T) {
+	got := wloglangchaingo.FromContentResponse(openAIResponse(), "google", "gemini")
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	llm.Add(ctx, got)
+	end()
+	group, _ := rec.Last()["llm"].(map[string]any)
+	if _, ok := group["input_tokens"]; ok {
+		t.Fatalf("input_tokens = %v, want the field left off", group["input_tokens"])
+	}
+	if _, ok := group["output_tokens"]; ok {
+		t.Fatalf("output_tokens = %v, want the field left off", group["output_tokens"])
+	}
+}

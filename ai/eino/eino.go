@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
@@ -87,7 +88,7 @@ func providerOf(info *callbacks.RunInfo) string {
 	if info == nil || info.Type == "" {
 		return "eino"
 	}
-	return info.Type
+	return strings.ToLower(info.Type)
 }
 
 // streamItem is one read from the model stream.
