@@ -108,6 +108,9 @@ func (c *histCollector) Collect(ch chan<- prometheus.Metric) { c.hist.Collect(ch
 // same histogram, New reuses it, so a second New on one registry works. Any other
 // registration error returns an error.
 func New(reg prometheus.Registerer, opts ...Option) (*Recorder, error) {
+	if reg == nil {
+		return nil, errors.New("the Prometheus registerer is nil")
+	}
 	c := defaultConfig()
 	for _, o := range opts {
 		o(&c)

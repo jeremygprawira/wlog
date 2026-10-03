@@ -36,6 +36,9 @@ func (c *statsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect sends one counter per number the Logger reports.
 func (c *statsCollector) Collect(ch chan<- prometheus.Metric) {
+	if c.logger == nil {
+		return
+	}
 	stats := c.logger.Stats()
 	ch <- prometheus.MustNewConstMetric(c.emitted, prometheus.CounterValue, float64(stats.Emitted))
 	for reason, count := range stats.Dropped {

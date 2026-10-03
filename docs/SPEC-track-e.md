@@ -188,6 +188,7 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 - The recorder has one histogram, `wlog_duration_seconds`, with labels `kind`, `operation`,
   `outcome`, and `status`. For a kind with no status, `status` is empty.
 - `New` returns an error when the bucket bounds are not strictly increasing.
+- `New(nil)` returns an error. `StatsCollector(nil)` exports nothing, so a scrape does not panic.
 - `New` calls `Register`, never `MustRegister`. If the registry already holds the same histogram,
   `New` reuses it. Any other `AlreadyRegisteredError` returns an error.
 - A second `New` on that histogram returns an error when the buckets or the operation cap differ.
