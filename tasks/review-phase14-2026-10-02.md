@@ -1077,8 +1077,8 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | D-24 | `93dd3ad` | The path read and the timestamp parse have one home, and Splunk encodes each event once |
 
 The dedup parts of D-24 are closed. The integration half of P-21 stays open for batch K.
-Review point 14 stays open. Batches F to K are not started. CI run 37116537858 is green
-on `6d8effa`.
+Review point 14 stays open. Batches F to K are not started. CI run 37117834761 is green
+on `a64faf5`.
 
 The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about one run in
 three, because a random UUID at `job.id` matched the phone or card pattern and lost a
