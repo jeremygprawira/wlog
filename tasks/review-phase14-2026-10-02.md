@@ -1073,9 +1073,10 @@ and D-16. CI run 37014150796 is green on `cc59a9e`.
 | CI | `f8fc406` | A job id is never scanned by a value pattern |
 | D-22 | `d06e1e4` | An empty array is a leaf in the conformance flatten, so a diff names it |
 | D-7 | `fa7ad19` | The syslog test parser follows the escape rule and checks the PRI, VERSION, and TIMESTAMP |
+| D-22 | `6d8effa` | CloudWatch runs the shared drain suite, so its v2 body is checked |
 
-D-22 keeps its suite half open, D-24 keeps its dedup parts open, and batches F to K are not
-started. CI run 37113157926 is green on `fa7ad19`.
+D-24 keeps its dedup parts open, and batches F to K are not started. CI run 37116537858 is
+green on `6d8effa`.
 
 The job id fix is not a review id. `TestAsynq_ServerRecordsTask` failed about one run in
 three, because a random UUID at `job.id` matched the phone or card pattern and lost a
