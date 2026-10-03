@@ -140,6 +140,8 @@ type Finisher interface { // replaces RequestFinisher
   `zerolog.Ctx(ctx)` folds into the event with no app code.
 - `end` calls each `Finisher` with the read-only event after finalize and before drains. A
   `Finisher` sees `summary`, `outcome`, and the redacted fields.
+- The event view has `Fields`. It returns a copy of the redacted map, including nested maps
+  and slices. A write to that copy does not change the drained event.
 - Both run under recover. A panic reports `WLOG_HOOK_PANIC` and keeps the previous context.
   (PAR-25)
 - Go has no diagnostics channel like Node's. A `Finisher` or `drain-memory` `Subscribe` gives
