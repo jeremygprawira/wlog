@@ -108,6 +108,7 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 | `rpc.service` | the server name |
 | `rpc.mcp.tool`, `rpc.mcp.resource_uri`, `rpc.mcp.prompt` | the tool name, resource URI, or prompt name |
 | `rpc.mcp.session_id`, `rpc.mcp.protocol_version`, `rpc.mcp.client` | the session and the client name and version |
+| `rpc.mcp.session` | a short hash of the session id. The redactor keeps this path. The raw id in `rpc.mcp.session_id` is still masked |
 | `rpc.mcp.result` | `ok`, `tool_error`, `protocol_error`, or `input_required` |
 | `rpc.status_code` | the JSON-RPC error code for a protocol error |
 

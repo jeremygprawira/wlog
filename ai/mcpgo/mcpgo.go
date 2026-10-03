@@ -324,6 +324,7 @@ func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 	}
 	if id := session.SessionID(); id != "" {
 		fields["session_id"] = id
+		fields["session"] = hashState(id)
 	}
 	if _, hasVersion := fields["protocol_version"]; !hasVersion {
 		if version := vers.get(ctx); version != "" {

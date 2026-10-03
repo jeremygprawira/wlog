@@ -138,6 +138,7 @@ func sessionFields(req mcp.Request) map[string]any {
 	}
 	if id := session.ID(); id != "" {
 		fields["session_id"] = id
+		fields["session"] = hashState(id)
 	}
 	params := session.InitializeParams()
 	if params == nil {
