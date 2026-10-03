@@ -8,7 +8,7 @@
 // client that is already authenticated.
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
-// WithContent. Core redacts those values like any other.
+// WithContent. Only output is recorded. Core redacts those values like any other.
 package wlogenai
 
 import (

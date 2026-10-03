@@ -5,7 +5,7 @@
 // request id and the retry count from the response headers.
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
-// WithContent. Core redacts those values like any other.
+// WithContent. Only output is recorded. Core redacts those values like any other.
 package wloganthropic
 
 import (
@@ -170,7 +170,7 @@ func betaContentOf(blocks []anthropic.BetaContentBlockUnion) *llm.Content {
 		case toolUse:
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", ID: block.ID, Name: block.Name}},
+				Parts: []llm.Part{{Type: "tool_call", ID: block.ID, Name: block.Name, Arguments: block.Input}},
 			})
 		}
 	}
@@ -188,16 +188,17 @@ type Observer struct {
 	rawInput int
 	started  time.Time
 	sawChunk bool
+	content  bool
 }
 
 // Observe wraps stream. The caller drives it with Next and Current, and reads Record once
 // Next reports false.
 func Observe(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], opts ...Option) *Observer {
-	_ = resolve(opts...)
 	return &Observer{
 		stream:  stream,
 		record:  llm.Record{Provider: provider, Operation: operation, Streamed: true},
 		started: time.Now(),
+		content: resolve(opts...).content,
 	}
 }
 
@@ -280,7 +281,22 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 		if event.ContentBlock.Type == toolUse {
 			o.record.ToolCalls = append(o.record.ToolCalls, llm.ToolCall{Name: event.ContentBlock.Name})
 		}
+	case "content_block_delta":
+		if o.content && event.Delta.Text != "" {
+			addOutputText(&o.record, event.Delta.Text)
+		}
 	}
+}
+
+// addOutputText appends one output text part. Input is never recorded.
+func addOutputText(record *llm.Record, text string) {
+	if record.Content == nil {
+		record.Content = &llm.Content{}
+	}
+	record.Content.OutputMessages = append(record.Content.OutputMessages, llm.Message{
+		Role:  "assistant",
+		Parts: []llm.Part{{Type: "text", Content: text}},
+	})
 }
 
 // Middleware returns an option.Middleware that records the request id from the response

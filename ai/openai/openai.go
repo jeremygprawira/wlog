@@ -6,7 +6,7 @@
 // same Record. Middleware records the request id.
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
-// WithContent. Core redacts those values like any other.
+// WithContent. Only output is recorded. Core redacts those values like any other.
 package wlogopenai
 
 import (
@@ -165,16 +165,17 @@ type ChatObserver struct {
 	sawUsage bool
 	started  time.Time
 	sawChunk bool
+	content  bool
 }
 
 // ObserveChat wraps stream. The caller drives it with Next and Current, and reads Record
 // once Next reports false.
 func ObserveChat(stream *ssestream.Stream[openai.ChatCompletionChunk], opts ...Option) *ChatObserver {
-	_ = resolve(opts...)
 	return &ChatObserver{
 		stream:  stream,
 		record:  llm.Record{Provider: provider, Operation: "chat", Streamed: true},
 		started: time.Now(),
+		content: resolve(opts...).content,
 	}
 }
 
@@ -231,12 +232,26 @@ func (o *ChatObserver) consume(chunk openai.ChatCompletionChunk) {
 		if choice.FinishReason != "" {
 			o.record.FinishReason = choice.FinishReason
 		}
+		if o.content && choice.Delta.Content != "" {
+			addOutputText(&o.record, choice.Delta.Content)
+		}
 		for _, call := range choice.Delta.ToolCalls {
 			if call.Function.Name != "" {
 				o.record.ToolCalls = append(o.record.ToolCalls, llm.ToolCall{Name: call.Function.Name})
 			}
 		}
 	}
+}
+
+// addOutputText appends one output text part. Input is never recorded.
+func addOutputText(record *llm.Record, text string) {
+	if record.Content == nil {
+		record.Content = &llm.Content{}
+	}
+	record.Content.OutputMessages = append(record.Content.OutputMessages, llm.Message{
+		Role:  "assistant",
+		Parts: []llm.Part{{Type: "text", Content: text}},
+	})
 }
 
 // ResponsesObserver wraps a Responses stream. The terminal response.completed event carries

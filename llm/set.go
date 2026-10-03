@@ -118,12 +118,25 @@ func applyAdd(existing map[string]any, r Record, dropped *int) {
 		fields["finish_reasons"] = append(reasons, r.FinishReason)
 	}
 
+	appendMessages(existing, fields, "input_messages")
+	appendMessages(existing, fields, "output_messages")
 	for key, value := range fields {
 		if _, exists := existing[key]; exists && keepFirst(key) {
 			continue
 		}
 		existing[key] = value
 	}
+}
+
+// appendMessages keeps every call's messages. A later Add must not replace the earlier text.
+func appendMessages(existing, fields map[string]any, key string) {
+	next, ok := fields[key].([]any)
+	if !ok {
+		return
+	}
+	delete(fields, key)
+	prev, _ := existing[key].([]any)
+	existing[key] = append(prev, next...)
 }
 
 // keepFirst names the top-level fields that belong to the first call. Later calls
