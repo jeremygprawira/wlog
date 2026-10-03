@@ -32,7 +32,7 @@ func main() {
 	useAt := strings.Index(text, "e.Use(LoggerMiddleware())")
 	commentAt := strings.Index(text, "// Routes")
 	getAt := strings.Index(text, "e.GET")
-	if useAt < 0 || commentAt < 0 || getAt < 0 || !(useAt < commentAt && commentAt < getAt) {
+	if useAt < 0 || commentAt < 0 || getAt < 0 || useAt >= commentAt || commentAt >= getAt {
 		t.Fatalf("comment moved into the call:\n%s", text)
 	}
 }

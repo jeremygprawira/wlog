@@ -213,7 +213,7 @@ func requirementFiles(modDir string, files []write) ([]plannedModule, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	if err := copyModule(modDir, tmp); err != nil {
 		return nil, err
 	}
@@ -230,7 +230,9 @@ func requirementFiles(modDir string, files []write) ([]plannedModule, error) {
 			return nil, err
 		}
 	}
-	tidy := exec.Command("go", "mod", "tidy")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	tidy := exec.CommandContext(ctx, "go", "mod", "tidy")
 	tidy.Dir = tmp
 	tidy.Env = os.Environ()
 	if output, err := tidy.CombinedOutput(); err != nil {
