@@ -15,8 +15,6 @@ package wlogmcpgo
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -28,6 +26,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/mcpshare"
 	"github.com/jeremygprawira/wlog/work"
 )
 
@@ -290,7 +289,7 @@ func finish(pend *pending, vers *protocolVersions, key pendingKey, message, resu
 		state = fromParams
 	}
 	if state != "" {
-		mcpFields["request_state"] = hashState(state)
+		mcpFields["request_state"] = mcpshare.ShortHash(state)
 	}
 	if content {
 		addResultContent(mcpFields, result)
@@ -315,7 +314,7 @@ func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 			fields["protocol_version"] = info.ProtocolVersion
 		}
 		if info.ClientInfo != nil {
-			fields["client"] = clientOf(info.ClientInfo.Name, info.ClientInfo.Version)
+			fields["client"] = mcpshare.ClientName(info.ClientInfo.Name, info.ClientInfo.Version)
 		}
 	}
 	session := server.ClientSessionFromContext(ctx)
@@ -324,7 +323,7 @@ func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 	}
 	if id := session.SessionID(); id != "" {
 		fields["session_id"] = id
-		fields["session"] = hashState(id)
+		fields["session"] = mcpshare.ShortHash(id)
 	}
 	if _, hasVersion := fields["protocol_version"]; !hasVersion {
 		if version := vers.get(ctx); version != "" {
@@ -334,7 +333,7 @@ func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 	if _, hasClient := fields["client"]; !hasClient {
 		if withInfo, ok := session.(server.SessionWithClientInfo); ok {
 			if info := withInfo.GetClientInfo(); info.Name != "" {
-				fields["client"] = clientOf(info.Name, info.Version)
+				fields["client"] = mcpshare.ClientName(info.Name, info.Version)
 			}
 		}
 	}
@@ -344,16 +343,7 @@ func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 // visibleError hides a handler error that quotes its arguments, unless the
 // caller opted into content. A protocol error that does not quote them stays.
 func visibleError(err error, message any, content bool) error {
-	if err == nil || content {
-		return err
-	}
-	text := err.Error()
-	for _, value := range argumentValues(message) {
-		if strings.Contains(text, value) {
-			return errors.New("mcp handler error")
-		}
-	}
-	return err
+	return mcpshare.HideQuoted(err, argumentValues(message), content)
 }
 
 // argumentValues lists the string values of a tool call's arguments.
@@ -362,35 +352,7 @@ func argumentValues(message any) []string {
 	if !ok || req == nil {
 		return nil
 	}
-	return stringsOf(req.Params.Arguments)
-}
-
-func stringsOf(v any) []string {
-	var out []string
-	switch x := v.(type) {
-	case string:
-		if len(x) >= 3 {
-			out = append(out, x)
-		}
-	case map[string]any:
-		for _, item := range x {
-			out = append(out, stringsOf(item)...)
-		}
-	case []any:
-		for _, item := range x {
-			out = append(out, stringsOf(item)...)
-		}
-	}
-	return out
-}
-
-// clientOf formats a client name and version as one string, so rpc.mcp.client stays a
-// single field like every other identity field on the event.
-func clientOf(name, version string) string {
-	if version == "" {
-		return name
-	}
-	return name + "/" + version
+	return mcpshare.StringsOf(req.Params.Arguments)
 }
 
 // addMessageFields reads the tool name, the resource URI, or the prompt name off the
@@ -440,7 +402,7 @@ func classify(result any, err error) (outcome, code string, level wlog.Level) {
 		if wireErr, ok := err.(jsonRPCErrorer); ok {
 			c := wireErr.ToJSONRPCError().Error.Code
 			code = strconv.Itoa(c)
-			if isClientCode(c) {
+			if mcpshare.ClientFault(int64(c)) {
 				return "protocol_error", code, wlog.LevelWarn
 			}
 			return "protocol_error", code, wlog.LevelError
@@ -454,16 +416,6 @@ func classify(result any, err error) (outcome, code string, level wlog.Level) {
 		return "tool_error", "", wlog.LevelWarn
 	}
 	return "ok", "", ""
-}
-
-// isClientCode reports whether a JSON-RPC code means the request itself was malformed,
-// which is the caller's fault and not the server's.
-func isClientCode(code int) bool {
-	switch code {
-	case mcp.PARSE_ERROR, mcp.INVALID_REQUEST, mcp.METHOD_NOT_FOUND, mcp.INVALID_PARAMS:
-		return true
-	}
-	return false
 }
 
 // needsInputResult is the shape every MCP result with an input-required state shares.
@@ -519,11 +471,4 @@ func requestStateOf(result any) string {
 		return r.RequestState
 	}
 	return ""
-}
-
-// hashState hashes an opaque requestState instead of storing it, because the MCP spec
-// requires an unauthenticated server to encrypt and sign that value.
-func hashState(state string) string {
-	sum := sha256.Sum256([]byte(state))
-	return hex.EncodeToString(sum[:8])
 }

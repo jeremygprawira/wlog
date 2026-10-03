@@ -11,8 +11,6 @@ package wlogmcp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/mcpshare"
 	"github.com/jeremygprawira/wlog/work"
 )
 
@@ -116,7 +115,7 @@ func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Res
 		state = fromParams
 	}
 	if state != "" {
-		mcpFields["request_state"] = hashState(state)
+		mcpFields["request_state"] = mcpshare.ShortHash(state)
 	}
 	h.Set("mcp", mcpFields)
 	if code != "" {
@@ -139,7 +138,7 @@ func sessionFields(req mcp.Request) map[string]any {
 	}
 	if id := session.ID(); id != "" {
 		fields["session_id"] = id
-		fields["session"] = hashState(id)
+		fields["session"] = mcpshare.ShortHash(id)
 	}
 	params := session.InitializeParams()
 	if params == nil {
@@ -149,7 +148,7 @@ func sessionFields(req mcp.Request) map[string]any {
 		fields["protocol_version"] = params.ProtocolVersion
 	}
 	if params.ClientInfo != nil {
-		fields["client"] = clientOf(params.ClientInfo.Name, params.ClientInfo.Version)
+		fields["client"] = mcpshare.ClientName(params.ClientInfo.Name, params.ClientInfo.Version)
 	}
 	return fields
 }
@@ -157,16 +156,7 @@ func sessionFields(req mcp.Request) map[string]any {
 // visibleError hides a handler error that quotes its arguments, unless the
 // caller opted into content. A protocol error that does not quote them stays.
 func visibleError(err error, req mcp.Request, content bool) error {
-	if err == nil || content {
-		return err
-	}
-	text := err.Error()
-	for _, value := range argumentValues(req) {
-		if strings.Contains(text, value) {
-			return errors.New("mcp handler error")
-		}
-	}
-	return err
+	return mcpshare.HideQuoted(err, argumentValues(req), content)
 }
 
 // argumentValues lists the string values of a tool call's arguments.
@@ -179,35 +169,7 @@ func argumentValues(req mcp.Request) []string {
 	if err := json.Unmarshal(params.Arguments, &decoded); err != nil {
 		return nil
 	}
-	return stringsOf(decoded)
-}
-
-func stringsOf(v any) []string {
-	var out []string
-	switch x := v.(type) {
-	case string:
-		if len(x) >= 3 {
-			out = append(out, x)
-		}
-	case map[string]any:
-		for _, item := range x {
-			out = append(out, stringsOf(item)...)
-		}
-	case []any:
-		for _, item := range x {
-			out = append(out, stringsOf(item)...)
-		}
-	}
-	return out
-}
-
-// clientOf formats a client name and version as one string, so rpc.mcp.client stays a
-// single field like every other identity field on the event.
-func clientOf(name, version string) string {
-	if version == "" {
-		return name
-	}
-	return name + "/" + version
+	return mcpshare.StringsOf(decoded)
 }
 
 // addParamFields reads the tool name, the resource URI, or the prompt name off the
@@ -250,7 +212,7 @@ func classify(result mcp.Result, err error) (outcome, code string, level wlog.Le
 		var wireErr *jsonrpc.Error
 		if errors.As(err, &wireErr) {
 			code = strconv.FormatInt(wireErr.Code, 10)
-			if isClientCode(wireErr.Code) {
+			if mcpshare.ClientFault(wireErr.Code) {
 				return "protocol_error", code, wlog.LevelWarn
 			}
 			return "protocol_error", code, wlog.LevelError
@@ -264,16 +226,6 @@ func classify(result mcp.Result, err error) (outcome, code string, level wlog.Le
 		return "tool_error", "", wlog.LevelWarn
 	}
 	return "ok", "", ""
-}
-
-// isClientCode reports whether a JSON-RPC code means the request itself was malformed,
-// which is the caller's fault and not the server's.
-func isClientCode(code int64) bool {
-	switch code {
-	case jsonrpc.CodeParseError, jsonrpc.CodeInvalidRequest, jsonrpc.CodeMethodNotFound, jsonrpc.CodeInvalidParams:
-		return true
-	}
-	return false
 }
 
 // needsInputResult is the shape every MCP result with an input-required state shares.
@@ -319,11 +271,4 @@ func requestStateOf(result mcp.Result) string {
 		return r.RequestState
 	}
 	return ""
-}
-
-// hashState hashes an opaque requestState instead of storing it, because the MCP spec
-// requires an unauthenticated server to encrypt and sign that value.
-func hashState(state string) string {
-	sum := sha256.Sum256([]byte(state))
-	return hex.EncodeToString(sum[:8])
 }
