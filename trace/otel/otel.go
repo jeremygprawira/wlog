@@ -113,6 +113,10 @@ type plugin struct {
 	request metric.Float64Histogram
 	work    metric.Float64Histogram
 
+	emitted       metric.Int64ObservableCounter
+	dropped       metric.Int64ObservableCounter
+	writerDropped metric.Int64ObservableCounter
+
 	mu     sync.Mutex
 	ops    map[string]map[string]struct{}
 	capped map[string]bool
@@ -150,6 +154,22 @@ func Plugin(opts ...Option) (wlog.Plugin, error) {
 		p.work, err = meter.Float64Histogram("wlog.work.duration",
 			metric.WithUnit("s"),
 			metric.WithExplicitBucketBoundaries(semconvBuckets...))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if c.stats {
+		meter := c.mp.Meter(instrumentationName)
+		var err error
+		p.emitted, err = meter.Int64ObservableCounter("wlog.events.emitted")
+		if err != nil {
+			return nil, err
+		}
+		p.dropped, err = meter.Int64ObservableCounter("wlog.events.dropped")
+		if err != nil {
+			return nil, err
+		}
+		p.writerDropped, err = meter.Int64ObservableCounter("wlog.writer.dropped")
 		if err != nil {
 			return nil, err
 		}

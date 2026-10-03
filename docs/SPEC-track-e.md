@@ -138,8 +138,9 @@ log := wlog.New(wlog.WithPlugins(p))
 - After `WithMaxOperations` distinct operations in one kind, a new operation records as `_OTHER`.
   The plugin reports `WLOG_CAP_REACHED` once per kind.
 - `url.path`, user ids, and client addresses never become metric attributes.
-- With `WithStats(true)`, observable counters report the Logger's `Stats`. The counters are
-  `wlog.events.emitted`, `wlog.events.dropped` with `wlog.reason`, and `wlog.writer.dropped`.
+- With `WithStats(true)`, `Plugin` builds the observable counters that report the Logger's `Stats`.
+  `Setup` only registers their callback. The counters are `wlog.events.emitted`,
+  `wlog.events.dropped` with `wlog.reason`, and `wlog.writer.dropped`.
   Drain counters are not exported. A queue depth is not a counter, and two drains can share a name.
 - If an instrument fails to build, `Plugin` returns the error. Nothing panics.
 
