@@ -2,18 +2,19 @@
 //
 // FromGenerateContent maps a whole response. Observe wraps a stream and re-yields each
 // chunk. The caller stops the stream by stopping the range. The last non-nil usage
-// metadata wins. Transport wraps the
-// http.Client's RoundTripper, so it never replaces the authenticated transport NewClient
-// builds around it.
+// metadata wins. Transport counts attempts for each request. A retry of the same
+// request adds one. A later call does not add to an earlier call.
+// With HTTPClient set, NewClient adds no auth on Vertex AI. Wrap the transport of a
+// client that is already authenticated.
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
 // WithContent. Core redacts those values like any other.
 package wlogenai
 
 import (
-	"context"
 	"iter"
 	"net/http"
+	"sync"
 
 	"google.golang.org/genai"
 
@@ -181,11 +182,14 @@ func consume(record *llm.Record, resp *genai.GenerateContentResponse, opts []Opt
 	}
 }
 
-// Transport wraps next, so every round trip records its attempt count onto the llm group
-// of the current event. A nil next means http.DefaultTransport. Set it as the Transport of
-// the http.Client passed in ClientConfig.HTTPClient, before NewClient wraps that client
-// with its own authorization middleware, so the authenticated transport is wrapped and
-// never replaced.
+// Transport wraps next. Each request has its own attempt count, so three calls with no
+// retry stay at one. A retry uses the same request and adds one. A nil next means
+// http.DefaultTransport.
+//
+// On the Gemini API, set this as the Transport of the client passed in
+// ClientConfig.HTTPClient. NewClient adds its own auth around that client.
+// With HTTPClient set, NewClient adds no auth on Vertex AI. Wrap the transport of a
+// client that is already authenticated.
 func Transport(next http.RoundTripper) http.RoundTripper {
 	if next == nil {
 		next = http.DefaultTransport
@@ -193,27 +197,46 @@ func Transport(next http.RoundTripper) http.RoundTripper {
 	return &transport{next: next}
 }
 
-// transport counts attempts around the wrapped round tripper.
-type transport struct{ next http.RoundTripper }
+// transport counts attempts for each request around the wrapped round tripper.
+type transport struct {
+	next   http.RoundTripper
+	mu     sync.Mutex
+	counts map[*http.Request]int
+}
 
-// RoundTrip records one attempt and returns exactly what the wrapped round tripper
-// returned.
+// RoundTrip records one attempt of this request and returns exactly what the wrapped
+// round tripper returned.
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.next.RoundTrip(req)
-	recordAttempt(req.Context())
+	t.recordAttempt(req)
 	return resp, err
 }
 
-// recordAttempt adds one to the attempts count on the event of ctx.
-func recordAttempt(ctx context.Context) {
-	wlog.UpdateGroup(ctx, "llm", func(existing map[string]any) {
-		attempts := 1
-		switch n := existing["attempts"].(type) {
-		case int:
-			attempts = n + 1
-		case int64:
-			attempts = int(n) + 1
-		}
-		existing["attempts"] = attempts
+// recordAttempt writes this request's attempt count. A different request starts again.
+func (t *transport) recordAttempt(req *http.Request) {
+	n := t.bump(req)
+	wlog.UpdateGroup(req.Context(), "llm", func(existing map[string]any) {
+		existing["attempts"] = n
 	})
+}
+
+// bump returns how many times req has been sent. The map stays small, so a long-lived
+// transport does not keep every request.
+func (t *transport) bump(req *http.Request) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.counts == nil {
+		t.counts = map[*http.Request]int{}
+	}
+	t.counts[req]++
+	n := t.counts[req]
+	if len(t.counts) > 64 {
+		for old := range t.counts {
+			if old != req {
+				delete(t.counts, old)
+				break
+			}
+		}
+	}
+	return n
 }
