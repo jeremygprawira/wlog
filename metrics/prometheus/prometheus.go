@@ -78,13 +78,31 @@ func MaxOperations(n int) Option {
 // Recorder is a wlog.Plugin and a wlog.Measurer that records one histogram.
 type Recorder struct {
 	hist   *prometheus.HistogramVec
-	maxOps int
+	shared *histState
 	logger *wlog.Logger
-
-	mu     sync.Mutex
-	ops    map[string]map[string]struct{}
-	capped map[string]bool
 }
+
+// histState is the bucket list and the operation cap of one registered histogram.
+// Every recorder that reuses the histogram shares this state.
+type histState struct {
+	buckets []float64
+	maxOps  int
+	mu      sync.Mutex
+	ops     map[string]map[string]struct{}
+	capped  map[string]bool
+}
+
+// histCollector is what New registers, so a second New can see the buckets and the cap.
+type histCollector struct {
+	hist  *prometheus.HistogramVec
+	state *histState
+}
+
+// Describe forwards the histogram descriptors.
+func (c *histCollector) Describe(ch chan<- *prometheus.Desc) { c.hist.Describe(ch) }
+
+// Collect forwards the histogram samples.
+func (c *histCollector) Collect(ch chan<- prometheus.Metric) { c.hist.Collect(ch) }
 
 // New registers the histogram on reg and returns the recorder. If reg already holds the
 // same histogram, New reuses it, so a second New on one registry works. Any other
@@ -102,23 +120,27 @@ func New(reg prometheus.Registerer, opts ...Option) (*Recorder, error) {
 		Help:    histogramHelp,
 		Buckets: c.buckets,
 	}, histogramLabels)
-	if err := reg.Register(hist); err != nil {
+	col := &histCollector{hist: hist, state: &histState{
+		buckets: append([]float64(nil), c.buckets...),
+		maxOps:  c.maxOps,
+		ops:     map[string]map[string]struct{}{},
+		capped:  map[string]bool{},
+	}}
+	if err := reg.Register(col); err != nil {
 		var already prometheus.AlreadyRegisteredError
 		if !errors.As(err, &already) {
 			return nil, err
 		}
-		existing, ok := already.ExistingCollector.(*prometheus.HistogramVec)
+		existing, ok := already.ExistingCollector.(*histCollector)
 		if !ok {
 			return nil, err
 		}
-		hist = existing
+		if !sameBuckets(existing.state.buckets, c.buckets) || existing.state.maxOps != c.maxOps {
+			return nil, errors.New("the registered histogram has different buckets or a different operation cap")
+		}
+		col = existing
 	}
-	return &Recorder{
-		hist:   hist,
-		maxOps: c.maxOps,
-		ops:    map[string]map[string]struct{}{},
-		capped: map[string]bool{},
-	}, nil
+	return &Recorder{hist: col.hist, shared: col.state}, nil
 }
 
 // Name returns the plugin name, which OnProblem reports as the source.
@@ -146,28 +168,41 @@ func (r *Recorder) Measure(_ context.Context, m wlog.Measure) {
 // operation returns the operation to record for a kind. Past the cap, a new operation
 // records as _OTHER, and the recorder reports WLOG_CAP_REACHED once for that kind.
 func (r *Recorder) operation(kind, name string) string {
-	r.mu.Lock()
-	seen := r.ops[kind]
+	r.shared.mu.Lock()
+	seen := r.shared.ops[kind]
 	if seen == nil {
 		seen = map[string]struct{}{}
-		r.ops[kind] = seen
+		r.shared.ops[kind] = seen
 	}
 	if _, ok := seen[name]; ok {
-		r.mu.Unlock()
+		r.shared.mu.Unlock()
 		return name
 	}
-	if len(seen) >= r.maxOps {
-		first := !r.capped[kind]
-		r.capped[kind] = true
-		r.mu.Unlock()
+	if len(seen) >= r.shared.maxOps {
+		first := !r.shared.capped[kind]
+		r.shared.capped[kind] = true
+		r.shared.mu.Unlock()
 		if first {
 			r.reportCap(kind)
 		}
 		return "_OTHER"
 	}
 	seen[name] = struct{}{}
-	r.mu.Unlock()
+	r.shared.mu.Unlock()
 	return name
+}
+
+// sameBuckets reports whether two bucket lists are the same length and the same values.
+func sameBuckets(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // reportCap tells the caller that one kind reached its operation cap.

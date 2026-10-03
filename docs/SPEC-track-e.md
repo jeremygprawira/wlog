@@ -89,6 +89,8 @@ log := wlog.New(wlog.WithPlugins(p))
 
 ### Trace ids
 
+- `WithSpans(false)` writes no span attributes. It still copies the trace ids from a recording span.
+- `WithStats(true)` registers the counters even when `WithMetrics(false)`.
 - `Enricher` is removed. The plugin is a `Starter`. If the unit context holds a recording span, it
   calls `propagate.ContextWith` with the span's trace id and span id. The event, head sampling,
   and every outbound call then use the OTel ids. (HTTP-21)
@@ -188,6 +190,8 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 - `New` returns an error when the bucket bounds are not strictly increasing.
 - `New` calls `Register`, never `MustRegister`. If the registry already holds the same histogram,
   `New` reuses it. Any other `AlreadyRegisteredError` returns an error.
+- A second `New` on that histogram returns an error when the buckets or the operation cap differ.
+  Recorders of one histogram share one cap.
 - The recorder calls `GetMetricWithLabelValues`, never `WithLabelValues`. On a label error, it
   reports a problem and records nothing.
 - The operation cap and the `_OTHER` rule match `trace-otel`.
