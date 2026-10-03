@@ -12,6 +12,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -185,6 +186,8 @@ type Observer struct {
 	stream   *ssestream.Stream[anthropic.MessageStreamEventUnion]
 	record   llm.Record
 	rawInput int
+	started  time.Time
+	sawChunk bool
 }
 
 // Observe wraps stream. The caller drives it with Next and Current, and reads Record once
@@ -192,15 +195,22 @@ type Observer struct {
 func Observe(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], opts ...Option) *Observer {
 	_ = resolve(opts...)
 	return &Observer{
-		stream: stream,
-		record: llm.Record{Provider: provider, Operation: operation},
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: operation, Streamed: true},
+		started: time.Now(),
 	}
 }
 
 // Next reads the next event and folds it into the record. It reports false at the end.
 func (o *Observer) Next() bool {
 	if !o.stream.Next() {
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
+	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
 	}
 	o.consume(o.stream.Current())
 	return true
@@ -308,4 +318,14 @@ func appendRequestID(ctx context.Context, id string) {
 		next[len(ids)] = id
 		fields["request_ids"] = next
 	})
+}
+
+// positiveSince reports the time since started. A clock that has not moved still
+// counts as one nanosecond, so a first chunk is never stored as zero.
+func positiveSince(started time.Time) time.Duration {
+	d := time.Since(started)
+	if d <= 0 {
+		return time.Nanosecond
+	}
+	return d
 }

@@ -12,6 +12,7 @@ package wlogopenai
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -162,13 +163,19 @@ type ChatObserver struct {
 	stream   *ssestream.Stream[openai.ChatCompletionChunk]
 	record   llm.Record
 	sawUsage bool
+	started  time.Time
+	sawChunk bool
 }
 
 // ObserveChat wraps stream. The caller drives it with Next and Current, and reads Record
 // once Next reports false.
 func ObserveChat(stream *ssestream.Stream[openai.ChatCompletionChunk], opts ...Option) *ChatObserver {
 	_ = resolve(opts...)
-	return &ChatObserver{stream: stream, record: llm.Record{Provider: provider, Operation: "chat"}}
+	return &ChatObserver{
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: "chat", Streamed: true},
+		started: time.Now(),
+	}
 }
 
 // Next reads the next chunk and folds it into the record.
@@ -177,7 +184,13 @@ func (o *ChatObserver) Next() bool {
 		if !o.sawUsage {
 			o.record.UsageUnknown = true
 		}
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
+	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
 	}
 	o.consume(o.stream.Current())
 	return true
@@ -229,31 +242,43 @@ func (o *ChatObserver) consume(chunk openai.ChatCompletionChunk) {
 // ResponsesObserver wraps a Responses stream. The terminal response.completed event carries
 // the whole response, so the observer maps that event.
 type ResponsesObserver struct {
-	stream *ssestream.Stream[responses.ResponseStreamEventUnion]
-	record llm.Record
-	opts   []Option
+	stream   *ssestream.Stream[responses.ResponseStreamEventUnion]
+	record   llm.Record
+	opts     []Option
+	started  time.Time
+	sawChunk bool
 }
 
 // ObserveResponses wraps stream. The caller drives it with Next and Current, and reads
 // Record once Next reports false.
 func ObserveResponses(stream *ssestream.Stream[responses.ResponseStreamEventUnion], opts ...Option) *ResponsesObserver {
 	return &ResponsesObserver{
-		stream: stream,
-		record: llm.Record{Provider: provider, Operation: "responses"},
-		opts:   opts,
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: "responses", Streamed: true},
+		opts:    opts,
+		started: time.Now(),
 	}
 }
 
 // Next reads the next event. The terminal event fills the record.
 func (o *ResponsesObserver) Next() bool {
 	if !o.stream.Next() {
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
+	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
 	}
 	event := o.stream.Current()
 	switch event.Type {
 	case "response.completed", "response.incomplete", "response.failed":
+		first := o.record.TimeToFirstToken
 		response := event.Response
 		o.record = FromResponse(&response, o.opts...)
+		o.record.Streamed = true
+		o.record.TimeToFirstToken = first
 	}
 	return true
 }
@@ -290,4 +315,14 @@ func appendRequestID(ctx context.Context, id string) {
 		next[len(ids)] = id
 		fields["request_ids"] = next
 	})
+}
+
+// positiveSince reports the time since started. A clock that has not moved still
+// counts as one nanosecond, so a first chunk is never stored as zero.
+func positiveSince(started time.Time) time.Duration {
+	d := time.Since(started)
+	if d <= 0 {
+		return time.Nanosecond
+	}
+	return d
 }

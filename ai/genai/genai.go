@@ -15,6 +15,7 @@ import (
 	"iter"
 	"net/http"
 	"sync"
+	"time"
 
 	"google.golang.org/genai"
 
@@ -137,13 +138,23 @@ func contentOf(candidates []*genai.Candidate) *llm.Content {
 // function reads the record built so far.
 func Observe(seq iter.Seq2[*genai.GenerateContentResponse, error], backend genai.Backend, opts ...Option) (iter.Seq2[*genai.GenerateContentResponse, error], func() llm.Record) {
 	next, stop := iter.Pull2(seq)
-	record := llm.Record{Provider: providerOf(backend), Operation: operation}
+	started := time.Now()
+	sawChunk := false
+	record := llm.Record{Provider: providerOf(backend), Operation: operation, Streamed: true}
 	out := func(yield func(*genai.GenerateContentResponse, error) bool) {
 		defer stop()
+		defer func() {
+			record.Streamed = true
+			record.Duration = time.Since(started)
+		}()
 		for {
 			resp, err, ok := next()
 			if !ok {
 				return
+			}
+			if !sawChunk {
+				sawChunk = true
+				record.TimeToFirstToken = positiveSince(started)
 			}
 			if err != nil {
 				yield(resp, err)
@@ -239,4 +250,14 @@ func (t *transport) bump(req *http.Request) int {
 		}
 	}
 	return n
+}
+
+// positiveSince reports the time since started. A clock that has not moved still
+// counts as one nanosecond, so a first chunk is never stored as zero.
+func positiveSince(started time.Time) time.Duration {
+	d := time.Since(started)
+	if d <= 0 {
+		return time.Nanosecond
+	}
+	return d
 }

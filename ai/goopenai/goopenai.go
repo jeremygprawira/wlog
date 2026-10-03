@@ -15,6 +15,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 
@@ -201,13 +202,19 @@ type ChatObserver struct {
 	record   llm.Record
 	err      error
 	sawUsage bool
+	started  time.Time
+	sawChunk bool
 }
 
 // ObserveChat wraps stream. The caller drives it with Next and Current, and reads Record
 // once Next reports false.
 func ObserveChat(stream *openai.ChatCompletionStream, opts ...Option) *ChatObserver {
 	_ = resolve(opts...)
-	return &ChatObserver{stream: stream, record: llm.Record{Provider: provider, Operation: "chat"}}
+	return &ChatObserver{
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: "chat", Streamed: true},
+		started: time.Now(),
+	}
 }
 
 // Next reads the next chunk and folds it into the record. It reports false at the end of
@@ -221,7 +228,13 @@ func (o *ChatObserver) Next() bool {
 		if !o.sawUsage {
 			o.record.UsageUnknown = true
 		}
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
+	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
 	}
 	o.current = resp
 	o.consume(resp)
@@ -303,4 +316,14 @@ func appendRequestID(ctx context.Context, id string) {
 		next[len(ids)] = id
 		fields["request_ids"] = next
 	})
+}
+
+// positiveSince reports the time since started. A clock that has not moved still
+// counts as one nanosecond, so a first chunk is never stored as zero.
+func positiveSince(started time.Time) time.Duration {
+	d := time.Since(started)
+	if d <= 0 {
+		return time.Nanosecond
+	}
+	return d
 }
