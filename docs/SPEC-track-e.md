@@ -136,8 +136,8 @@ log := wlog.New(wlog.WithPlugins(p))
   The plugin reports `WLOG_CAP_REACHED` once per kind.
 - `url.path`, user ids, and client addresses never become metric attributes.
 - With `WithStats(true)`, observable counters report the Logger's `Stats`. The counters are
-  `wlog.events.emitted`, `wlog.events.dropped` with `wlog.reason`, `wlog.writer.dropped`, and
-  `wlog.drain.events` with `wlog.drain` and `wlog.state`.
+  `wlog.events.emitted`, `wlog.events.dropped` with `wlog.reason`, and `wlog.writer.dropped`.
+  Drain counters are not exported. A queue depth is not a counter, and two drains can share a name.
 - If an instrument fails to build, `Plugin` returns the error. Nothing panics.
 
 Floor: otel, otel/trace, and otel/metric v1.20.0, the first release with
@@ -190,7 +190,7 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
   reports a problem and records nothing.
 - The operation cap and the `_OTHER` rule match `trace-otel`.
 - `StatsCollector` exports `wlog_events_emitted_total`, `wlog_events_dropped_total{reason}`,
-  `wlog_writer_dropped_total`, and `wlog_drain_events_total{drain,state}`. It reads `Stats` on
+  and `wlog_writer_dropped_total`. It does not export drain counters. It reads `Stats` on
   each scrape.
 - The module serves no HTTP handler. The app exposes its registry with `promhttp`.
 - Floor: client_golang v1.11.1, the first release free of GO-2022-0322. Go 1.21.
