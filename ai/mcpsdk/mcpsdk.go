@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -124,7 +125,7 @@ func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Res
 	if level != "" {
 		wlog.SetLevel(ctx, level)
 	}
-	h.End(err)
+	h.End(visibleError(err, req, content))
 }
 
 // sessionFields reads the session id, the negotiated protocol version, and the client
@@ -151,6 +152,53 @@ func sessionFields(req mcp.Request) map[string]any {
 		fields["client"] = clientOf(params.ClientInfo.Name, params.ClientInfo.Version)
 	}
 	return fields
+}
+
+// visibleError hides a handler error that quotes its arguments, unless the
+// caller opted into content. A protocol error that does not quote them stays.
+func visibleError(err error, req mcp.Request, content bool) error {
+	if err == nil || content {
+		return err
+	}
+	text := err.Error()
+	for _, value := range argumentValues(req) {
+		if strings.Contains(text, value) {
+			return errors.New("mcp handler error")
+		}
+	}
+	return err
+}
+
+// argumentValues lists the string values of a tool call's arguments.
+func argumentValues(req mcp.Request) []string {
+	params, ok := req.GetParams().(*mcp.CallToolParamsRaw)
+	if !ok || params == nil || len(params.Arguments) == 0 {
+		return nil
+	}
+	var decoded any
+	if err := json.Unmarshal(params.Arguments, &decoded); err != nil {
+		return nil
+	}
+	return stringsOf(decoded)
+}
+
+func stringsOf(v any) []string {
+	var out []string
+	switch x := v.(type) {
+	case string:
+		if len(x) >= 3 {
+			out = append(out, x)
+		}
+	case map[string]any:
+		for _, item := range x {
+			out = append(out, stringsOf(item)...)
+		}
+	case []any:
+		for _, item := range x {
+			out = append(out, stringsOf(item)...)
+		}
+	}
+	return out
 }
 
 // clientOf formats a client name and version as one string, so rpc.mcp.client stays a

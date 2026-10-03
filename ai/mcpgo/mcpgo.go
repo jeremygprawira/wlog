@@ -302,7 +302,7 @@ func finish(pend *pending, vers *protocolVersions, key pendingKey, message, resu
 	if level != "" {
 		wlog.SetLevel(ctx, level)
 	}
-	h.End(err)
+	h.End(visibleError(err, message, content))
 }
 
 // sessionFields reads the session id and, when a request or the session already carries
@@ -339,6 +339,49 @@ func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 		}
 	}
 	return fields
+}
+
+// visibleError hides a handler error that quotes its arguments, unless the
+// caller opted into content. A protocol error that does not quote them stays.
+func visibleError(err error, message any, content bool) error {
+	if err == nil || content {
+		return err
+	}
+	text := err.Error()
+	for _, value := range argumentValues(message) {
+		if strings.Contains(text, value) {
+			return errors.New("mcp handler error")
+		}
+	}
+	return err
+}
+
+// argumentValues lists the string values of a tool call's arguments.
+func argumentValues(message any) []string {
+	req, ok := message.(*mcp.CallToolRequest)
+	if !ok || req == nil {
+		return nil
+	}
+	return stringsOf(req.Params.Arguments)
+}
+
+func stringsOf(v any) []string {
+	var out []string
+	switch x := v.(type) {
+	case string:
+		if len(x) >= 3 {
+			out = append(out, x)
+		}
+	case map[string]any:
+		for _, item := range x {
+			out = append(out, stringsOf(item)...)
+		}
+	case []any:
+		for _, item := range x {
+			out = append(out, stringsOf(item)...)
+		}
+	}
+	return out
 }
 
 // clientOf formats a client name and version as one string, so rpc.mcp.client stays a

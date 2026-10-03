@@ -110,6 +110,8 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 | `rpc.mcp.session_id`, `rpc.mcp.protocol_version`, `rpc.mcp.client` | the session and the client name and version |
 | `rpc.mcp.session` | a short hash of the session id. The redactor keeps this path. The raw id in `rpc.mcp.session_id` is still masked |
 | `rpc.mcp.result` | `ok`, `tool_error`, `protocol_error`, or `input_required` |
+| `rpc.mcp.request_state` | a short hash of the opaque request state, so a retry can be linked |
+| `rpc.mcp.arguments`, `rpc.mcp.result_content`, `rpc.mcp.structured_content` | the tool payload, only when `WithContent` is set |
 | `rpc.status_code` | the JSON-RPC error code for a protocol error |
 
 - A tool result with `isError` sets status class client error, so it gives level `warn`. A protocol
@@ -117,7 +119,7 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
   so they give `warn`.
 - A result that asks for more input (MCP spec 2026-07-28) records `rpc.mcp.result` `input_required`,
   and holds a hash of `requestState` so round trips link up.
-- Tool arguments and results are never stored unless `WithContent()` is set.
+- Tool arguments and results are never stored unless `WithContent()` is set. A handler error that quotes those arguments is stored as `mcp handler error` unless content is on.
 
 | Module | Library and floor | Hook point |
 |---|---|---|
