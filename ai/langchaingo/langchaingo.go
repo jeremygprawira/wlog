@@ -169,9 +169,9 @@ func Handler() callbacks.Handler {
 	return &handler{}
 }
 
-// HandleToolStart starts one call of kind "agent", operation "tool".
+// HandleToolStart starts one call of kind "other", operation "tool".
 func (h *handler) HandleToolStart(ctx context.Context, _ string) {
-	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "agent", System: "langchaingo", Operation: "tool"})
+	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "other", System: "langchaingo", Operation: "tool"})
 	h.tools.Store(ctx, end)
 }
 
@@ -185,9 +185,9 @@ func (h *handler) HandleToolError(ctx context.Context, err error) {
 	endCall(&h.tools, ctx, wlog.CallResult{Err: err})
 }
 
-// HandleChainStart starts one call of kind "agent", operation "chain".
+// HandleChainStart starts one call of kind "other", operation "chain".
 func (h *handler) HandleChainStart(ctx context.Context, _ map[string]any) {
-	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "agent", System: "langchaingo", Operation: "chain"})
+	_, end := wlog.StartCall(ctx, wlog.Call{Kind: "other", System: "langchaingo", Operation: "chain"})
 	h.chains.Store(ctx, end)
 }
 

@@ -142,8 +142,8 @@ func TestLangchaingo_Handler_Tool(t *testing.T) {
 		t.Fatalf("calls = %v, want 1 entry", calls)
 	}
 	call, _ := calls[0].(map[string]any)
-	if call["kind"] != "agent" || call["operation"] != "tool" {
-		t.Errorf("call = %v, want kind agent, operation tool", call)
+	if call["kind"] != "other" || call["operation"] != "tool" {
+		t.Errorf("call = %v, want kind other, operation tool", call)
 	}
 	if _, hasErr := call["error"]; hasErr {
 		t.Errorf("call has an error, want none: %v", call)
@@ -252,5 +252,29 @@ func TestLangchaingo_A4_OpenAIToolCallCountedOnce(t *testing.T) {
 	}
 	if parts != 2 {
 		t.Fatalf("content tool_call parts = %d, want 2", parts)
+	}
+}
+
+// TestLangchaingo_A5_CallKindOther proves a tool call and a chain step use kind
+// other. The event schema rejects kind agent.
+func TestLangchaingo_A5_CallKindOther(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	h := wloglangchaingo.Handler()
+	h.HandleToolStart(ctx, "input")
+	h.HandleToolEnd(ctx, "output")
+	h.HandleChainStart(ctx, map[string]any{})
+	h.HandleChainEnd(ctx, map[string]any{})
+	end()
+
+	calls, _ := rec.Last()["calls"].([]any)
+	if len(calls) != 2 {
+		t.Fatalf("calls = %v, want 2", calls)
+	}
+	for _, c := range calls {
+		call, _ := c.(map[string]any)
+		if call["kind"] != "other" {
+			t.Errorf("call kind = %v, want other", call["kind"])
+		}
 	}
 }
