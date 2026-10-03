@@ -102,10 +102,14 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
-	for _, write := range files {
-		_, _ = fmt.Fprintln(stdout, "wrote", write.path)
+	progress := stdout
+	if opts.JSON {
+		progress = stderr
 	}
-	if code := verify(opts.Dir, stdout, stderr); code != 0 {
+	for _, write := range files {
+		_, _ = fmt.Fprintln(progress, "wrote", write.path)
+	}
+	if code := verify(opts.Dir, progress, stderr); code != 0 {
 		restore(before)
 		return code
 	}
