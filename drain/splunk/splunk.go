@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
@@ -213,7 +214,13 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	var retry, dropped []int
 	reason := ""
 	for start := 0; start < len(events); {
-		end := s.chunkEnd(events, start)
+		end := share.ChunkEnd(len(events), start, s.maxBatch, func(i int) int {
+			body, err := envelopeBody(events[i:i+1], s.index, s.source, s.sourceType)
+			if err != nil {
+				return -1
+			}
+			return len(body)
+		})
 		indexes := make([]int, 0, end-start)
 		for i := start; i < end; i++ {
 			indexes = append(indexes, i)
@@ -338,22 +345,6 @@ func statusReason(err error) string {
 		return "hec_code_" + strconv.Itoa(hec.code)
 	}
 	return "transport"
-}
-
-// chunkEnd returns the end index of the next chunk, so the body stays under the byte cap.
-func (s *Sender) chunkEnd(events []map[string]any, start int) int {
-	size := 0
-	for i := start; i < len(events); i++ {
-		body, err := envelopeBody(events[i:i+1], s.index, s.source, s.sourceType)
-		if err != nil {
-			return i + 1
-		}
-		if i > start && size+len(body) > s.maxBatch {
-			return i
-		}
-		size += len(body)
-	}
-	return len(events)
 }
 
 // envelope is one Splunk event.

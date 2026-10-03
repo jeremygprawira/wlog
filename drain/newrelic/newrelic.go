@@ -22,8 +22,10 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
+	"github.com/jeremygprawira/wlog/preset"
 )
 
 // maxAttributes is the attribute cap New Relic documents for one log.
@@ -147,7 +149,7 @@ func MustNew(opts ...Option) wlog.Drain {
 // newSender resolves one configuration from opts and the environment.
 func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
-		key:    firstEnv("NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY"),
+		key:    share.FirstEnv("NEW_RELIC_LICENSE_KEY", "NEW_RELIC_API_KEY"),
 		region: os.Getenv("NEW_RELIC_REGION"),
 		gzip:   true,
 	}
@@ -289,8 +291,7 @@ func (s *Sender) buildLog(event map[string]any) (logItem, int) {
 // reserved user key under wlog.fields, and keeps at most 255 attributes. It returns the
 // count it dropped.
 func attributesOf(event map[string]any) (map[string]any, int) {
-	flat := map[string]any{}
-	flatten(flat, "", event)
+	flat := preset.Flat().Apply(event)
 	out := make(map[string]any, len(flat))
 	for key, value := range flat {
 		name := key
@@ -336,24 +337,6 @@ func reservedRank(key string) int {
 		return 0
 	}
 	return 1
-}
-
-// flatten copies a nested map into dotted keys.
-func flatten(out map[string]any, prefix string, value any) {
-	nested, ok := value.(map[string]any)
-	if !ok {
-		if prefix != "" {
-			out[prefix] = value
-		}
-		return
-	}
-	for key, child := range nested {
-		path := key
-		if prefix != "" {
-			path = prefix + "." + key
-		}
-		flatten(out, path, child)
-	}
 }
 
 // messageOf returns the summary as plain text.
@@ -425,14 +408,4 @@ func endpointOf(c config) (string, error) {
 		return "", fmt.Errorf("newrelic: unknown region %q", c.region)
 	}
 	return host, nil
-}
-
-// firstEnv returns the first of the names that holds a value.
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if value := os.Getenv(name); value != "" {
-			return value
-		}
-	}
-	return ""
 }

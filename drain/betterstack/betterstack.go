@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 )
@@ -77,7 +78,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
 		token: os.Getenv("BETTERSTACK_SOURCE_TOKEN"),
 		// The ingesting host is the current name; the older name stays an alias.
-		host: firstEnv("BETTERSTACK_INGESTING_HOST", "BETTERSTACK_HOST"),
+		host: share.FirstEnv("BETTERSTACK_INGESTING_HOST", "BETTERSTACK_HOST"),
 	}
 	for _, opt := range opts {
 		opt(&c)
@@ -106,16 +107,6 @@ func MustNew(opts ...Option) wlog.Drain {
 		panic(err)
 	}
 	return d
-}
-
-// firstEnv returns the first of the names that holds a value.
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if value := os.Getenv(name); value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 // normalizeHost turns the configured host into an intake URL. A bare host gets https, and

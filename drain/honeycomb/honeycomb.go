@@ -20,13 +20,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
+	"github.com/jeremygprawira/wlog/preset"
 )
 
 // defaultAPIURL is Honeycomb's US endpoint. An EU team sets the EU one.
@@ -113,9 +114,6 @@ type Sender struct {
 	dataset string
 	spans   bool
 	base    []httpdrain.Option
-
-	mu      sync.Mutex
-	clients map[string]*httpdrain.Client
 }
 
 // New returns the drain with the pipeline defaults, or with the options WithPipeline set.
@@ -147,7 +145,7 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
 		key:     os.Getenv("HONEYCOMB_API_KEY"),
 		dataset: os.Getenv("HONEYCOMB_DATASET"),
-		apiURL:  firstEnv("HONEYCOMB_API_URL", "HONEYCOMB_API_ENDPOINT"),
+		apiURL:  share.FirstEnv("HONEYCOMB_API_URL", "HONEYCOMB_API_ENDPOINT"),
 		spans:   true,
 		gzip:    true,
 	}
@@ -182,7 +180,6 @@ func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 		dataset: c.dataset,
 		spans:   c.spans,
 		base:    base,
-		clients: map[string]*httpdrain.Client{},
 	}, c.pipelineOpts, nil
 }
 
@@ -379,16 +376,10 @@ func (s *Sender) datasetOf(event map[string]any) string {
 	return "unknown_service"
 }
 
-// clientFor returns the client for one dataset, building it once.
+// clientFor returns a client for one dataset.
+// Building a client costs nothing, so the drain does not keep one.
 func (s *Sender) clientFor(dataset string) *httpdrain.Client {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if client, ok := s.clients[dataset]; ok {
-		return client
-	}
-	client := httpdrain.New(s.apiURL+"/1/batch/"+url.PathEscape(dataset), s.base...)
-	s.clients[dataset] = client
-	return client
+	return httpdrain.New(s.apiURL+"/1/batch/"+url.PathEscape(dataset), s.base...)
 }
 
 // itemOf builds one Honeycomb batch item.
@@ -403,8 +394,7 @@ func (s *Sender) itemOf(event map[string]any) map[string]any {
 // dataOf returns the event as dotted keys at every depth. An array becomes one JSON
 // string, because Honeycomb holds no array.
 func (s *Sender) dataOf(event map[string]any) map[string]any {
-	flat := map[string]any{}
-	flatten(flat, "", event)
+	flat := preset.Flat().Apply(event)
 	data := make(map[string]any, len(flat)+3)
 	for key, value := range flat {
 		data[key] = dataValue(value)
@@ -426,24 +416,6 @@ func (s *Sender) dataOf(event map[string]any) map[string]any {
 		delete(data, "trace.parent_id")
 	}
 	return capFields(data, maxFields)
-}
-
-// flatten copies a nested map into dotted keys.
-func flatten(out map[string]any, prefix string, value any) {
-	nested, ok := value.(map[string]any)
-	if !ok {
-		if prefix != "" {
-			out[prefix] = value
-		}
-		return
-	}
-	for key, child := range nested {
-		path := key
-		if prefix != "" {
-			path = prefix + "." + key
-		}
-		flatten(out, path, child)
-	}
 }
 
 // dataValue converts one value for the Honeycomb data object.
@@ -572,16 +544,6 @@ func numberAt(event map[string]any, path string) (float64, bool) {
 		return f, err == nil
 	}
 	return 0, false
-}
-
-// firstEnv returns the first of the names that holds a value.
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if value := os.Getenv(name); value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 // normalizeURL turns the configured API URL into a base URL.

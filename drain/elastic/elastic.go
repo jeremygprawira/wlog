@@ -64,6 +64,7 @@ import (
 	"time"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/share"
 	"github.com/jeremygprawira/wlog/pipeline"
 	"github.com/jeremygprawira/wlog/pipeline/httpdrain"
 	"github.com/jeremygprawira/wlog/preset"
@@ -199,7 +200,7 @@ func MustNew(opts ...Option) wlog.Drain {
 // newSender resolves one configuration from opts and the environment.
 func newSender(opts ...Option) (*Sender, []pipeline.Option, error) {
 	c := config{
-		url:      firstEnv("ELASTICSEARCH_URL", "OPENSEARCH_URL"),
+		url:      share.FirstEnv("ELASTICSEARCH_URL", "OPENSEARCH_URL"),
 		apiKey:   os.Getenv("ELASTICSEARCH_API_KEY"),
 		user:     os.Getenv("ELASTICSEARCH_USERNAME"),
 		password: os.Getenv("ELASTICSEARCH_PASSWORD"),
@@ -248,7 +249,13 @@ func (s *Sender) SendBatch(ctx context.Context, events []map[string]any) error {
 	var retry, dropped []int
 	reason := ""
 	for start := 0; start < len(events); {
-		end := s.chunkEnd(events, start)
+		end := share.ChunkEnd(len(events), start, s.maxBatch, func(i int) int {
+			line, err := eventLines(events[i])
+			if err != nil {
+				return -1
+			}
+			return len(line) + len(actionLine) + 1
+		})
 		chunk := httpdrain.Chunk{Start: start, End: end}
 		post := func(ctx context.Context, chunkEvents []map[string]any) error {
 			body, err := bulkBody(chunkEvents)
@@ -327,23 +334,6 @@ func statusReason(err error) string {
 
 // actionLine is the create line of one bulk entry. It counts toward the request size.
 const actionLine = "{\"create\":{}}\n"
-
-// chunkEnd returns the end index of the next chunk, so the body stays under the byte cap.
-// One event is always in a chunk, even when it alone passes the cap.
-func (s *Sender) chunkEnd(events []map[string]any, start int) int {
-	size := 0
-	for i := start; i < len(events); i++ {
-		line, err := eventLines(events[i])
-		if err != nil {
-			return i + 1
-		}
-		if i > start && size+len(line)+len(actionLine)+1 > s.maxBatch {
-			return i
-		}
-		size += len(line) + len(actionLine) + 1
-	}
-	return len(events)
-}
 
 // bulkBody builds the ndjson body: a create line and an ECS line per event.
 func bulkBody(events []map[string]any) ([]byte, error) {
@@ -467,14 +457,4 @@ func Template(engine Engine) []byte {
 		return nil
 	}
 	return append(body, '\n')
-}
-
-// firstEnv returns the first of the names that holds a value.
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if value := os.Getenv(name); value != "" {
-			return value
-		}
-	}
-	return ""
 }
