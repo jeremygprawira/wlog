@@ -9,6 +9,7 @@
 package wloganthropic
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -287,16 +288,24 @@ func Middleware() option.Middleware {
 
 // recordHeaders writes the request id and the attempt count onto the event of req.
 func recordHeaders(req *http.Request, resp *http.Response) {
-	fields := map[string]any{}
+	ctx := req.Context()
 	if id := resp.Header.Get("request-id"); id != "" {
-		fields["request_ids"] = []any{id}
+		appendRequestID(ctx, id)
 	}
 	if count := req.Header.Get("X-Stainless-Retry-Count"); count != "" {
 		if n, err := strconv.Atoi(count); err == nil {
-			fields["attempts"] = n + 1
+			wlog.SetGroup(ctx, "llm", map[string]any{"attempts": n + 1})
 		}
 	}
-	if len(fields) > 0 {
-		wlog.SetGroup(req.Context(), "llm", fields)
-	}
+}
+
+// appendRequestID keeps every id. SetGroup would replace the list with the last one.
+func appendRequestID(ctx context.Context, id string) {
+	wlog.UpdateGroup(ctx, "llm", func(fields map[string]any) {
+		ids, _ := fields["request_ids"].([]any)
+		next := make([]any, len(ids)+1)
+		copy(next, ids)
+		next[len(ids)] = id
+		fields["request_ids"] = next
+	})
 }

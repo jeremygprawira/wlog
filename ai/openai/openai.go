@@ -10,6 +10,7 @@
 package wlogopenai
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/openai/openai-go/v3"
@@ -273,9 +274,20 @@ func Middleware() option.Middleware {
 		resp, err := next(req)
 		if resp != nil {
 			if id := resp.Header.Get("x-request-id"); id != "" {
-				wlog.SetGroup(req.Context(), "llm", map[string]any{"request_ids": []any{id}})
+				appendRequestID(req.Context(), id)
 			}
 		}
 		return resp, err
 	}
+}
+
+// appendRequestID keeps every id. SetGroup would replace the list with the last one.
+func appendRequestID(ctx context.Context, id string) {
+	wlog.UpdateGroup(ctx, "llm", func(fields map[string]any) {
+		ids, _ := fields["request_ids"].([]any)
+		next := make([]any, len(ids)+1)
+		copy(next, ids)
+		next[len(ids)] = id
+		fields["request_ids"] = next
+	})
 }
