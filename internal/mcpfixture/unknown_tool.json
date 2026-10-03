@@ -1,0 +1,25 @@
+{
+  "error": {
+    "code": "INTERNAL"
+  },
+  "kind": "rpc",
+  "level": "warn",
+  "operation": "orders-mcp/tools/call",
+  "outcome": "success",
+  "rpc": {
+    "mcp": {
+      "result": "protocol_error",
+      "tool": "no_such_tool"
+    },
+    "method": "tools/call",
+    "service": "orders-mcp",
+    "status_code": "-32602",
+    "system": "mcp"
+  },
+  "summary": "mcp orders-mcp/tools/call -32602 in {d}: INTERNAL unknown tool \"no_such_tool\"",
+  "trace": {},
+  "wlog": {
+    "redact_fingerprint": "ea9d09038103ddf9",
+    "schema_version": 2
+  }
+}
