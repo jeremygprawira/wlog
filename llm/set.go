@@ -23,17 +23,32 @@ func Set(ctx context.Context, r Record) {
 // Add folds r into the current event's llm totals and appends it to llm.calls[]. Use it
 // when one request makes several model calls. It is a no-op outside a wlog.Start.
 //
-// Add is not safe to call concurrently on one event, because it reads and writes the
-// group. A request's model calls are sequential in practice.
+// Add updates the group under the event lock, so two calls on one event do not race.
 func Add(ctx context.Context, r Record) {
 	// The decode speed follows from the output count and the call duration, so a caller
 	// does not compute it.
 	if r.OutputTokensPerSecond == 0 && r.OutputTokens > 0 && r.Duration > 0 {
 		r.OutputTokensPerSecond = float64(r.OutputTokens) / r.Duration.Seconds()
 	}
-	current, _ := wlog.Field(ctx, group)
-	existing, _ := current.(map[string]any)
+	dropped := 0
+	wlog.UpdateGroup(ctx, group, func(existing map[string]any) {
+		applyAdd(existing, r, &dropped)
+	})
+	// One calls entry, so a query ranks this model call with every other call.
+	_, endCall := wlog.StartCall(ctx, wlog.Call{
+		Kind:      "llm",
+		System:    r.Provider,
+		Operation: r.Operation,
+		Target:    r.ResponseModel,
+	})
+	endCall(wlog.CallResult{Status: r.Status, Err: r.Err, Duration: r.Duration})
+	// The count goes through core, so an entry that hit llm's own cap appears in
+	// wlog.dropped_fields beside every other capped write.
+	wlog.CountDropped(ctx, dropped)
+}
 
+// applyAdd folds r into existing. The caller holds the event lock.
+func applyAdd(existing map[string]any, r Record, dropped *int) {
 	fields := fieldsFor(r)
 	fields["input_tokens"] = intOf(existing["input_tokens"]) + r.InputTokens
 	fields["output_tokens"] = intOf(existing["output_tokens"]) + r.OutputTokens
@@ -58,16 +73,15 @@ func Add(ctx context.Context, r Record) {
 
 	calls, _ := existing["calls"].([]any)
 	toolCalls, _ := existing["tool_calls"].([]any)
-	dropped := 0
 
 	if len(calls) < maxCalls {
 		fields["calls"] = append(calls, callMap(r))
 	} else {
-		dropped++
+		*dropped++
 	}
 	for _, call := range toolCallMaps(r.ToolCalls) {
 		if len(toolCalls) >= maxCalls {
-			dropped++
+			*dropped++
 			continue
 		}
 		toolCalls = append(toolCalls, call)
@@ -92,18 +106,9 @@ func Add(ctx context.Context, r Record) {
 		fields["finish_reasons"] = append(reasons, r.FinishReason)
 	}
 
-	wlog.SetGroup(ctx, group, fields)
-	// One calls entry, so a query ranks this model call with every other call.
-	_, endCall := wlog.StartCall(ctx, wlog.Call{
-		Kind:      "llm",
-		System:    r.Provider,
-		Operation: r.Operation,
-		Target:    r.ResponseModel,
-	})
-	endCall(wlog.CallResult{Status: r.Status, Err: r.Err, Duration: r.Duration})
-	// The count goes through core, so an entry that hit llm's own cap appears in
-	// wlog.dropped_fields beside every other capped write.
-	wlog.CountDropped(ctx, dropped)
+	for key, value := range fields {
+		existing[key] = value
+	}
 }
 
 // fieldsFor maps one record to the group fields. Zero values stay off.

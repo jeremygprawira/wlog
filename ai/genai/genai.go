@@ -230,14 +230,14 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // recordAttempt adds one to the attempts count on the event of ctx.
 func recordAttempt(ctx context.Context) {
-	current, _ := wlog.Field(ctx, "llm")
-	existing, _ := current.(map[string]any)
-	attempts := 1
-	switch n := existing["attempts"].(type) {
-	case int:
-		attempts = n + 1
-	case int64:
-		attempts = int(n) + 1
-	}
-	wlog.SetGroup(ctx, "llm", map[string]any{"attempts": attempts})
+	wlog.UpdateGroup(ctx, "llm", func(existing map[string]any) {
+		attempts := 1
+		switch n := existing["attempts"].(type) {
+		case int:
+			attempts = n + 1
+		case int64:
+			attempts = int(n) + 1
+		}
+		existing["attempts"] = attempts
+	})
 }

@@ -246,6 +246,35 @@ func SetGroup(ctx context.Context, group string, kv ...any) {
 	}
 }
 
+// UpdateGroup calls update with the named group while holding the event lock.
+// update must not call a wlog function, because those functions take the same lock.
+// With no event on ctx, or a nil update, it does nothing.
+func UpdateGroup(ctx context.Context, name string, update func(map[string]any)) {
+	if update == nil {
+		return
+	}
+	e := eventFrom(ctx)
+	if e == nil {
+		noEvent(ctx, name)
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.sealed {
+		e.recordLateWrite()
+		return
+	}
+	g, ok := e.fields[name].(map[string]any)
+	if !ok {
+		if !e.reserveTopLevelSlot(name) {
+			return
+		}
+		g = map[string]any{}
+		e.fields[name] = g
+	}
+	update(g)
+}
+
 // Append appends value to a named array field, creating it on first use. The array
 // counts as one top-level slot; its own length is capped separately by maxArrayLen.
 func Append(ctx context.Context, key string, value any) {

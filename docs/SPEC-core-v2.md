@@ -245,6 +245,8 @@ func CurrentLevel(ctx context.Context) (Level, bool)
   of package-level state.
 - `Start` and `Detach` with no Logger on `ctx` use `Default()`.
 - `Set`, `SetGroup`, `Append`, `SetLevel`, and `AppendLog` with no event on `ctx` do nothing.
+- `UpdateGroup` runs a function on one group while the event lock is held. The function must not
+  call wlog. With no event, it does nothing.
   Each one reports `WLOG_NO_EVENT` with the key name.
 - `Error` with no event on `ctx` emits a `log` event at level `error`, with the `ErrorInfo`, so no
   error is lost. It also reports `WLOG_NO_EVENT`.
