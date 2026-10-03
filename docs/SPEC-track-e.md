@@ -97,6 +97,8 @@ log := wlog.New(wlog.WithPlugins(p))
 
 - The plugin is a `Finisher`. It reads the span from the unit context with
   `trace.SpanFromContext`. If no span is recording, it does nothing.
+- Kind `log` writes nothing onto the span. A unit that starts under a span another unit already
+  claimed writes nothing onto that span. A failed inner unit cannot mark the outer span as Error.
 - The OTel HTTP or gRPC middleware must wrap outside wlog. Then the span already exists at
   the start of the unit. The package doc shows the order for net/http, chi, gin, echo, and gRPC.
   If `wlog doctor` finds the OTel middleware inside wlog, it reports a warning. (HTTP-21)

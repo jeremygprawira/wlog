@@ -181,9 +181,35 @@ func (p *plugin) OnStart(ctx context.Context, _ string) context.Context {
 		return ctx
 	}
 	sc := span.SpanContext()
-	return propagate.ContextWith(ctx, propagate.TraceContext{
+	ctx = propagate.ContextWith(ctx, propagate.TraceContext{
 		TraceID: sc.TraceID().String(),
 		SpanID:  sc.SpanID().String(),
 		Sampled: sc.IsSampled(),
 	})
+	// The first unit under this span claims it. A unit that starts later sees the
+	// claim and does not write on the span at the end.
+	return markSpan(ctx, sc.SpanID())
+}
+
+// spanMark records whether this unit claimed the span on its context.
+type spanMark struct {
+	id   oteltrace.SpanID
+	mine bool
+}
+
+// spanMarkKey is the private key a span claim travels under.
+type spanMarkKey struct{}
+
+// markSpan claims id for this unit, or records that an outer unit already claimed it.
+func markSpan(ctx context.Context, id oteltrace.SpanID) context.Context {
+	if cur, ok := ctx.Value(spanMarkKey{}).(spanMark); ok && cur.mine && cur.id == id {
+		return context.WithValue(ctx, spanMarkKey{}, spanMark{id: id, mine: false})
+	}
+	return context.WithValue(ctx, spanMarkKey{}, spanMark{id: id, mine: true})
+}
+
+// spanIsMine reports whether this unit claimed the span.
+func spanIsMine(ctx context.Context, id oteltrace.SpanID) bool {
+	cur, ok := ctx.Value(spanMarkKey{}).(spanMark)
+	return ok && cur.mine && cur.id == id
 }

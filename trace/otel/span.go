@@ -23,8 +23,16 @@ func (p *plugin) OnFinish(ctx context.Context, event wlog.Event) {
 	if !p.cfg.spans {
 		return
 	}
+	// A log line is its own event. It must not copy its pairs onto the request span.
+	if kind, _ := event.Get("kind"); kind == "log" {
+		return
+	}
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.IsRecording() {
+		return
+	}
+	// A nested unit shares the outer span. Only the unit that claimed it may write.
+	if !spanIsMine(ctx, span.SpanContext().SpanID()) {
 		return
 	}
 	fields := eventFields(event)
