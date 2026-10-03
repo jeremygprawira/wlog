@@ -47,13 +47,15 @@ func TestHTTPCore_HTTP14_SessionValuesNeverKept(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	handler := httpcore.NetHTTP(log)(okHandler())
 
-	req := httptest.NewRequest(http.MethodGet, "/orders?code=c-1&key=k-1&sig=s-1", nil)
+	// cx-1 cannot sit inside an event id. The letters c-1 can, and the test
+	// would then fail on an id that never held the query value.
+	req := httptest.NewRequest(http.MethodGet, "/orders?code=cx-1&key=k-1&sig=s-1", nil)
 	req.AddCookie(&http.Cookie{Name: "sid", Value: "sid-value"})
 	req.AddCookie(&http.Cookie{Name: "PHPSESSID", Value: "sess-value"})
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
 	body := eventJSON(t, rec.Last())
-	for _, secret := range []string{"c-1", "k-1", "s-1", "sid-value", "sess-value"} {
+	for _, secret := range []string{"cx-1", "k-1", "s-1", "sid-value", "sess-value"} {
 		if strings.Contains(body, secret) {
 			t.Errorf("the value %q reached the event: %s", secret, body)
 		}
