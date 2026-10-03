@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -102,21 +103,41 @@ func newPending() *pending {
 // store adds one entry, first dropping every expired one. A map already at the cap drops
 // the new entry instead of growing further, so a request that never gets an after hook
 // costs bounded memory, not unbounded.
-func (p *pending) store(key pendingKey, sdk, event context.Context, h *work.Handle) {
+// errPendingExpired is the error on an event the prune loop drops.
+var errPendingExpired = errors.New("the mcp request expired before it finished")
+
+func (p *pending) store(log *wlog.Logger, key pendingKey, sdk, event context.Context, h *work.Handle) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	now := time.Now()
+	var dropped []pendingEntry
 	for k, e := range p.entries {
 		if now.After(e.expires) {
 			delete(p.entries, k)
 			delete(p.byCtx, e.sdk)
+			dropped = append(dropped, e)
 		}
 	}
-	if len(p.entries) >= pendingCapacity {
+	overCap := len(p.entries) >= pendingCapacity
+	if !overCap {
+		p.entries[key] = pendingEntry{ctx: event, sdk: sdk, handle: h, expires: now.Add(pendingTTL)}
+		p.byCtx[sdk] = event
+	}
+	p.mu.Unlock()
+	for _, e := range dropped {
+		if e.handle != nil {
+			e.handle.End(errPendingExpired)
+		}
+	}
+	reports := len(dropped)
+	if overCap {
+		reports++
+	}
+	if log == nil {
 		return
 	}
-	p.entries[key] = pendingEntry{ctx: event, sdk: sdk, handle: h, expires: now.Add(pendingTTL)}
-	p.byCtx[sdk] = event
+	for i := 0; i < reports; i++ {
+		log.Report(wlog.Problem{Code: "WLOG_CAP_REACHED", Source: "mcpgo"})
+	}
 }
 
 // take removes and returns one entry at any age. A missing entry reports false, which
@@ -167,7 +188,7 @@ func Open(log *wlog.Logger, opts ...Option) (*server.Hooks, server.ToolHandlerMi
 			fields["service"] = cfg.service
 		}
 		next, h := work.Start(ctx, log, work.Unit{Kind: work.KindRPC, Fields: fields})
-		pend.store(keyOf(ctx, id), ctx, next, h)
+		pend.store(log, keyOf(ctx, id), ctx, next, h)
 	})
 	hooks.AddOnSuccess(func(ctx context.Context, id any, method mcp.MCPMethod, message any, result any) {
 		finish(pend, keyOf(ctx, id), message, result, nil, cfg.content)
@@ -212,7 +233,11 @@ func finish(pend *pending, key pendingKey, message, result any, err error, conte
 
 	outcome, code, level := classify(result, err)
 	mcpFields["result"] = outcome
-	if state := requestStateOf(result); state != "" {
+	state := requestStateOf(result)
+	if fromParams := paramStateOf(message); fromParams != "" {
+		state = fromParams
+	}
+	if state != "" {
 		mcpFields["request_state"] = hashState(state)
 	}
 	if content {
@@ -361,6 +386,20 @@ func isToolError(result any) bool {
 // requestStateOf reads the opaque requestState a result carries when it needs input, so a
 // retry round trip can be linked to the result that asked for it. A nil result, which a
 // tool handler may return, has no state.
+// paramStateOf reads RequestState off a retry. The client echoes the state
+// the previous result asked it to send back.
+func paramStateOf(message any) string {
+	switch m := message.(type) {
+	case *mcp.CallToolRequest:
+		return m.Params.RequestState
+	case *mcp.ReadResourceRequest:
+		return m.Params.RequestState
+	case *mcp.GetPromptRequest:
+		return m.Params.RequestState
+	}
+	return ""
+}
+
 func requestStateOf(result any) string {
 	switch r := result.(type) {
 	case *mcp.CallToolResult:

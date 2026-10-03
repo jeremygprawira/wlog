@@ -12,7 +12,7 @@ func TestMcpgo_A3_TakeReturnsExpiredEntry(t *testing.T) {
 	pend := newPending()
 	key := pendingKey{session: "s", id: "req-1"}
 	ctx := context.WithValue(context.Background(), struct{ name string }{name: "mark"}, "kept")
-	pend.store(key, ctx, ctx, nil)
+	pend.store(nil, key, ctx, ctx, nil)
 
 	pend.mu.Lock()
 	entry := pend.entries[key]
