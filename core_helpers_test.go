@@ -74,7 +74,8 @@ func TestCore_L1_HelpersAreUsable(t *testing.T) {
 		t.Error("ReservedFields() is empty")
 	}
 
-	ctx, end := wlog.Start(context.Background(), "op")
+	log, _ := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
 	wlog.Error(ctx, context.Canceled)
 	if _, ok := wlog.CurrentError(ctx); !ok {
 		t.Error("CurrentError found no error after wlog.Error")
