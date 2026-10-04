@@ -1,0 +1,21 @@
+{
+  "kind": "rpc",
+  "level": "info",
+  "operation": "orders-mcp/tools/call",
+  "outcome": "success",
+  "rpc": {
+    "mcp": {
+      "result": "ok",
+      "tool": "get_weather"
+    },
+    "method": "tools/call",
+    "service": "orders-mcp",
+    "system": "mcp"
+  },
+  "summary": "mcp orders-mcp/tools/call in {d}",
+  "trace": {},
+  "wlog": {
+    "redact_fingerprint": "810fb01c801b3a00",
+    "schema_version": 2
+  }
+}

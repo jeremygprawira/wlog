@@ -50,17 +50,15 @@ func Add(ctx context.Context, r Record) {
 // applyAdd folds r into existing. The caller holds the event lock.
 func applyAdd(existing map[string]any, r Record, dropped *int) {
 	fields := fieldsFor(r)
+	// A zero total stays off the event. An unmapped provider leaves the counts
+	// unset, and a written zero would read as a measured count.
 	input := intOf(existing["input_tokens"]) + r.InputTokens
 	output := intOf(existing["output_tokens"]) + r.OutputTokens
 	if input > 0 {
 		fields["input_tokens"] = input
-	} else {
-		delete(fields, "input_tokens")
 	}
 	if output > 0 {
 		fields["output_tokens"] = output
-	} else {
-		delete(fields, "output_tokens")
 	}
 	if total := input + output; total > 0 {
 		fields["total_tokens"] = total

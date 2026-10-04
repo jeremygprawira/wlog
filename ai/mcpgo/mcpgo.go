@@ -9,13 +9,14 @@
 // pending links them by session id and request id, in a bounded map that expires an entry
 // after 5 minutes: the doc of [server.Hooks] warns that a handler panic with no recovery
 // middleware installed skips both OnSuccess and OnError, which would otherwise leak the
-// entry forever.
+// entry forever. Pass server.WithRecovery so a tool panic becomes an error and the after hook still runs. Open also returns a tool middleware that only swaps in the stored event
+// context, so wlog.Set inside a tool joins the event. Hooks alone leaves the SDK context.
 package wlogmcpgo
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/mcpshare"
 	"github.com/jeremygprawira/wlog/work"
 )
 
@@ -66,7 +68,7 @@ const (
 // within one session, because a server with several sessions can see the same id twice.
 type pendingKey struct {
 	session string
-	id      any
+	id      string
 }
 
 // pendingEntry is the state a before hook stashes for its after hook: the event's context,
@@ -74,6 +76,7 @@ type pendingKey struct {
 // it.
 type pendingEntry struct {
 	ctx     context.Context
+	sdk     context.Context
 	handle  *work.Handle
 	expires time.Time
 }
@@ -86,31 +89,60 @@ type pendingEntry struct {
 type pending struct {
 	mu      sync.Mutex
 	entries map[pendingKey]pendingEntry
+	byCtx   map[context.Context]context.Context
 }
 
-func newPending() *pending { return &pending{entries: map[pendingKey]pendingEntry{}} }
+func newPending() *pending {
+	return &pending{
+		entries: map[pendingKey]pendingEntry{},
+		byCtx:   map[context.Context]context.Context{},
+	}
+}
 
 // store adds one entry, first dropping every expired one. A map already at the cap drops
 // the new entry instead of growing further, so a request that never gets an after hook
 // costs bounded memory, not unbounded.
-func (p *pending) store(key pendingKey, ctx context.Context, h *work.Handle) {
+// errPendingExpired is the error on an event the prune loop drops.
+var errPendingExpired = errors.New("the mcp request expired before it finished")
+
+func (p *pending) store(log *wlog.Logger, key pendingKey, sdk, event context.Context, h *work.Handle) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	now := time.Now()
+	var dropped []pendingEntry
 	for k, e := range p.entries {
 		if now.After(e.expires) {
 			delete(p.entries, k)
+			delete(p.byCtx, e.sdk)
+			dropped = append(dropped, e)
 		}
 	}
-	if len(p.entries) >= pendingCapacity {
+	overCap := len(p.entries) >= pendingCapacity
+	if !overCap {
+		p.entries[key] = pendingEntry{ctx: event, sdk: sdk, handle: h, expires: now.Add(pendingTTL)}
+		p.byCtx[sdk] = event
+	}
+	p.mu.Unlock()
+	for _, e := range dropped {
+		if e.handle != nil {
+			e.handle.End(errPendingExpired)
+		}
+	}
+	reports := len(dropped)
+	if overCap {
+		reports++
+	}
+	if log == nil {
 		return
 	}
-	p.entries[key] = pendingEntry{ctx: ctx, handle: h, expires: now.Add(pendingTTL)}
+	for i := 0; i < reports; i++ {
+		log.Report(wlog.Problem{Code: "WLOG_CAP_REACHED", Source: "mcpgo"})
+	}
 }
 
-// take removes and returns one entry. A missing or an expired entry reports false, which
+// take removes and returns one entry at any age. A missing entry reports false, which
 // is the normal outcome for the parse and capability failures that fire OnError with no
-// prior OnBeforeAny.
+// prior OnBeforeAny. Age is enforced only by the prune inside store, so a request that
+// runs longer than the TTL still ends.
 func (p *pending) take(key pendingKey) (context.Context, *work.Handle, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -119,19 +151,36 @@ func (p *pending) take(key pendingKey) (context.Context, *work.Handle, bool) {
 		return nil, nil, false
 	}
 	delete(p.entries, key)
-	if time.Now().After(entry.expires) {
-		return nil, nil, false
-	}
+	delete(p.byCtx, entry.sdk)
 	return entry.ctx, entry.handle, true
 }
 
-// Hooks returns the *server.Hooks to pass to server.WithHooks.
+// eventCtx returns the event context stored for the SDK context, without removing it.
+// The after hook still needs the entry.
+func (p *pending) eventCtx(sdk context.Context) (context.Context, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	event, ok := p.byCtx[sdk]
+	return event, ok
+}
+
+// Hooks returns the *server.Hooks to pass to server.WithHooks. The tool handler
+// still sees the SDK context. Use Open when the handler should see the event.
 func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
+	hooks, _ := Open(log, opts...)
+	return hooks
+}
+
+// Open returns the hooks and a tool middleware that only swaps in the stored event
+// context. Pass both to the server. The middleware does not record the call.
+func Open(log *wlog.Logger, opts ...Option) (*server.Hooks, server.ToolHandlerMiddleware) {
 	cfg := resolve(opts...)
 	pend := newPending()
+	vers := newProtocolVersions()
 	hooks := &server.Hooks{}
 
-	hooks.AddBeforeAny(func(ctx context.Context, id any, method mcp.MCPMethod, _ any) {
+	hooks.AddBeforeAny(func(ctx context.Context, id any, method mcp.MCPMethod, message any) {
+		vers.remember(ctx, message)
 		if strings.HasPrefix(string(method), "notifications/") {
 			return
 		}
@@ -140,44 +189,107 @@ func Hooks(log *wlog.Logger, opts ...Option) *server.Hooks {
 			fields["service"] = cfg.service
 		}
 		next, h := work.Start(ctx, log, work.Unit{Kind: work.KindRPC, Fields: fields})
-		pend.store(keyOf(ctx, id), next, h)
+		pend.store(log, keyOf(ctx, id), ctx, next, h)
 	})
 	hooks.AddOnSuccess(func(ctx context.Context, id any, method mcp.MCPMethod, message any, result any) {
-		finish(pend, keyOf(ctx, id), message, result, nil, cfg.content)
+		finish(pend, vers, keyOf(ctx, id), message, result, nil, cfg.content)
 	})
 	hooks.AddOnError(func(ctx context.Context, id any, method mcp.MCPMethod, message any, err error) {
-		finish(pend, keyOf(ctx, id), message, nil, err, cfg.content)
+		finish(pend, vers, keyOf(ctx, id), message, nil, err, cfg.content)
 	})
-	return hooks
+	mw := func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if event, ok := pend.eventCtx(ctx); ok {
+				ctx = event
+			}
+			return next(ctx, request)
+		}
+	}
+	return hooks, mw
+}
+
+// protocolVersions keeps the protocol version from each session's initialize
+// message. A later legacy request has no version of its own.
+type protocolVersions struct {
+	mu sync.Mutex
+	by map[any]string
+}
+
+func newProtocolVersions() *protocolVersions {
+	return &protocolVersions{by: map[any]string{}}
+}
+
+// remember stores the protocol version from an initialize message, keyed by the session.
+func (v *protocolVersions) remember(ctx context.Context, message any) {
+	req, ok := message.(*mcp.InitializeRequest)
+	if !ok || req == nil || req.Params.ProtocolVersion == "" {
+		return
+	}
+	key := sessionKey(ctx)
+	if key == nil {
+		return
+	}
+	v.mu.Lock()
+	v.by[key] = req.Params.ProtocolVersion
+	v.mu.Unlock()
+}
+
+// get returns the version remembered for the session on ctx.
+func (v *protocolVersions) get(ctx context.Context) string {
+	key := sessionKey(ctx)
+	if key == nil {
+		return ""
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.by[key]
+}
+
+// sessionKey names a session by its id, or by the session value when it has none.
+func sessionKey(ctx context.Context) any {
+	session := server.ClientSessionFromContext(ctx)
+	if session == nil {
+		return nil
+	}
+	if id := session.SessionID(); id != "" {
+		return id
+	}
+	return session
 }
 
 // keyOf reads the session id off ctx, so ai-mcpgo links a before hook to its after hook by
 // session and request id, the way SPEC-track-g.md asks. A request with no session yet,
-// such as the very first initialize, keys on an empty session id.
+// such as the very first initialize, keys on an empty session id. The id is formatted,
+// because a JSON-RPC id may be an array or an object, and a map key must be comparable.
 func keyOf(ctx context.Context, id any) pendingKey {
 	session := ""
 	if s := server.ClientSessionFromContext(ctx); s != nil {
 		session = s.SessionID()
 	}
-	return pendingKey{session: session, id: id}
+	return pendingKey{session: session, id: fmt.Sprintf("%v", id)}
 }
 
 // finish looks up the before hook this after hook matches, folds the result or the error
 // into the rpc group, and ends the event. A before hook this package never saw, which is
 // the documented case for a parse or a capability failure, is left alone.
-func finish(pend *pending, key pendingKey, message, result any, err error, content bool) {
+func finish(pend *pending, vers *protocolVersions, key pendingKey, message, result any, err error, content bool) {
 	ctx, h, ok := pend.take(key)
 	if !ok {
 		return
 	}
 
-	mcpFields := sessionFields(ctx)
+	vers.remember(ctx, message)
+	mcpFields := sessionFields(ctx, vers)
 	addMessageFields(mcpFields, message, content)
 
 	outcome, code, level := classify(result, err)
 	mcpFields["result"] = outcome
-	if state := requestStateOf(result); state != "" {
-		mcpFields["request_state"] = hashState(state)
+	state := requestStateOf(result)
+	if fromParams := paramStateOf(message); fromParams != "" {
+		state = fromParams
+	}
+	if state != "" {
+		mcpFields["request_state"] = mcpshare.ShortHash(state)
 	}
 	if content {
 		addResultContent(mcpFields, result)
@@ -189,21 +301,20 @@ func finish(pend *pending, key pendingKey, message, result any, err error, conte
 	if level != "" {
 		wlog.SetLevel(ctx, level)
 	}
-	h.End(err)
+	h.End(visibleError(err, message, content))
 }
 
 // sessionFields reads the session id and, when a request or the session already carries
-// one, the client name and version. mcp-go gives no exported accessor for the protocol
-// version a legacy session negotiated at initialize, unlike the per-request one SEP-2575
-// carries, so this leaves rpc.mcp.protocol_version unset for a legacy session.
-func sessionFields(ctx context.Context) map[string]any {
+// one, the client name and version. A legacy session has no per-request protocol version.
+// vers holds the version read from that session's initialize message.
+func sessionFields(ctx context.Context, vers *protocolVersions) map[string]any {
 	fields := map[string]any{}
 	if info := server.RequestProtocolInfoFromContext(ctx); info != nil {
 		if info.ProtocolVersion != "" {
 			fields["protocol_version"] = info.ProtocolVersion
 		}
 		if info.ClientInfo != nil {
-			fields["client"] = clientOf(info.ClientInfo.Name, info.ClientInfo.Version)
+			fields["client"] = mcpshare.ClientName(info.ClientInfo.Name, info.ClientInfo.Version)
 		}
 	}
 	session := server.ClientSessionFromContext(ctx)
@@ -212,24 +323,36 @@ func sessionFields(ctx context.Context) map[string]any {
 	}
 	if id := session.SessionID(); id != "" {
 		fields["session_id"] = id
+		fields["session"] = mcpshare.ShortHash(id)
+	}
+	if _, hasVersion := fields["protocol_version"]; !hasVersion {
+		if version := vers.get(ctx); version != "" {
+			fields["protocol_version"] = version
+		}
 	}
 	if _, hasClient := fields["client"]; !hasClient {
 		if withInfo, ok := session.(server.SessionWithClientInfo); ok {
 			if info := withInfo.GetClientInfo(); info.Name != "" {
-				fields["client"] = clientOf(info.Name, info.Version)
+				fields["client"] = mcpshare.ClientName(info.Name, info.Version)
 			}
 		}
 	}
 	return fields
 }
 
-// clientOf formats a client name and version as one string, so rpc.mcp.client stays a
-// single field like every other identity field on the event.
-func clientOf(name, version string) string {
-	if version == "" {
-		return name
+// visibleError hides a handler error that quotes its arguments, unless the
+// caller opted into content. A protocol error that does not quote them stays.
+func visibleError(err error, message any, content bool) error {
+	return mcpshare.HideQuoted(err, argumentValues(message), content)
+}
+
+// argumentValues lists the string values of a tool call's arguments.
+func argumentValues(message any) []string {
+	req, ok := message.(*mcp.CallToolRequest)
+	if !ok || req == nil {
+		return nil
 	}
-	return name + "/" + version
+	return mcpshare.StringsOf(req.Params.Arguments)
 }
 
 // addMessageFields reads the tool name, the resource URI, or the prompt name off the
@@ -279,7 +402,7 @@ func classify(result any, err error) (outcome, code string, level wlog.Level) {
 		if wireErr, ok := err.(jsonRPCErrorer); ok {
 			c := wireErr.ToJSONRPCError().Error.Code
 			code = strconv.Itoa(c)
-			if isClientCode(c) {
+			if mcpshare.ClientFault(int64(c)) {
 				return "protocol_error", code, wlog.LevelWarn
 			}
 			return "protocol_error", code, wlog.LevelError
@@ -295,16 +418,6 @@ func classify(result any, err error) (outcome, code string, level wlog.Level) {
 	return "ok", "", ""
 }
 
-// isClientCode reports whether a JSON-RPC code means the request itself was malformed,
-// which is the caller's fault and not the server's.
-func isClientCode(code int) bool {
-	switch code {
-	case mcp.PARSE_ERROR, mcp.INVALID_REQUEST, mcp.METHOD_NOT_FOUND, mcp.INVALID_PARAMS:
-		return true
-	}
-	return false
-}
-
 // needsInputResult is the shape every MCP result with an input-required state shares.
 type needsInputResult interface{ NeedsInput() bool }
 
@@ -315,30 +428,48 @@ func needsInput(result any) bool {
 	return ok && r.NeedsInput()
 }
 
-// isToolError reports whether a tool call result ended in an error. Only tools/call
-// carries IsError; every other method's error is a protocol error instead.
+// isToolError reports whether a tool call result ended in an error.
+// Only tools/call carries IsError.
+// Every other method's error is a protocol error.
 func isToolError(result any) bool {
 	r, ok := result.(*mcp.CallToolResult)
 	return ok && r != nil && r.IsError
 }
 
 // requestStateOf reads the opaque requestState a result carries when it needs input, so a
-// retry round trip can be linked to the result that asked for it.
-func requestStateOf(result any) string {
-	switch r := result.(type) {
-	case *mcp.CallToolResult:
-		return r.RequestState
-	case *mcp.ReadResourceResult:
-		return r.RequestState
-	case *mcp.GetPromptResult:
-		return r.RequestState
+// retry round trip can be linked to the result that asked for it. A nil result, which a
+// tool handler may return, has no state.
+// paramStateOf reads RequestState off a retry. The client echoes the state
+// the previous result asked it to send back.
+func paramStateOf(message any) string {
+	switch m := message.(type) {
+	case *mcp.CallToolRequest:
+		return m.Params.RequestState
+	case *mcp.ReadResourceRequest:
+		return m.Params.RequestState
+	case *mcp.GetPromptRequest:
+		return m.Params.RequestState
 	}
 	return ""
 }
 
-// hashState hashes an opaque requestState instead of storing it, because the MCP spec
-// requires an unauthenticated server to encrypt and sign that value.
-func hashState(state string) string {
-	sum := sha256.Sum256([]byte(state))
-	return hex.EncodeToString(sum[:8])
+func requestStateOf(result any) string {
+	switch r := result.(type) {
+	case *mcp.CallToolResult:
+		if r == nil {
+			return ""
+		}
+		return r.RequestState
+	case *mcp.ReadResourceResult:
+		if r == nil {
+			return ""
+		}
+		return r.RequestState
+	case *mcp.GetPromptResult:
+		if r == nil {
+			return ""
+		}
+		return r.RequestState
+	}
+	return ""
 }

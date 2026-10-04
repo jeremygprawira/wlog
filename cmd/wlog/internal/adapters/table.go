@@ -8,7 +8,7 @@ package adapters
 type Adapter struct {
 	Name  string   // the module id from CAPABILITIES.md, such as http-chi
 	Wlog  string   // the wlog import path, such as github.com/jeremygprawira/wlog/middleware/chi
-	Kind  string   // http, rpc, client, store, log, errors, flag, queue, job, faas, command, ai, trace, metrics
+	Kind  string   // http, rpc, client, store, log, errors, flag, queue, job, faas, command, ai, trace, metrics, drain
 	Libs  []string // the third-party module paths that imply this adapter, empty when it wraps the standard library
 	Setup string   // the one line a reader installs, empty when no source shows one
 }
@@ -48,6 +48,8 @@ var Table = []Adapter{
 	{Name: "command-urfave", Wlog: "github.com/jeremygprawira/wlog/command/urfave", Kind: "command",
 		Libs:  []string{"github.com/urfave/cli/v3"},
 		Setup: "wlogurfave.Run(context.Background(), logger, cmd, os.Args)"},
+	{Name: "drain-cloudwatch", Wlog: "github.com/jeremygprawira/wlog/drain/cloudwatch", Kind: "drain",
+		Libs: []string{"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"}, Setup: "wlogcloudwatch.New(client, group)"},
 	{Name: "errors-cockroach", Wlog: "github.com/jeremygprawira/wlog/errors/cockroach", Kind: "errors",
 		Libs:  []string{"github.com/cockroachdb/errors"},
 		Setup: "wlog.WithErrorExtractor(wlogcockroach.Extractor())"},
@@ -130,7 +132,7 @@ var Table = []Adapter{
 	{Name: "queue-franz", Wlog: "github.com/jeremygprawira/wlog/queue/franz", Kind: "queue",
 		Libs: []string{"github.com/twmb/franz-go"}, Setup: "kgo.WithHooks(wlogfranz.Hooks())"},
 	{Name: "queue-kafkago", Wlog: "github.com/jeremygprawira/wlog/queue/kafkago", Kind: "queue",
-		Libs: []string{"github.com/segmentio/kafka-go"}, Setup: "wlogkafka.Consume(ctx, log, r, handle)"},
+		Libs: []string{"github.com/segmentio/kafka-go"}, Setup: "wlogkafkago.Consume(ctx, log, r, handle)"},
 	{Name: "queue-nats", Wlog: "github.com/jeremygprawira/wlog/queue/nats", Kind: "queue",
 		Libs: []string{"github.com/nats-io/nats.go"}, Setup: "wlognats.Handler(logger, handler)"},
 	{Name: "queue-pubsub", Wlog: "github.com/jeremygprawira/wlog/queue/pubsub", Kind: "queue",
@@ -171,40 +173,4 @@ var Table = []Adapter{
 	{Name: "trace-otellog", Wlog: "github.com/jeremygprawira/wlog/trace/otellog", Kind: "trace",
 		Libs:  []string{"go.opentelemetry.io/otel/log"},
 		Setup: "wlog.WithDrains(wlogotellog.New(provider))"},
-}
-
-// ByWlog returns the adapter with this wlog import path.
-func ByWlog(path string) (Adapter, bool) {
-	for _, adapter := range Table {
-		if adapter.Wlog == path {
-			return adapter, true
-		}
-	}
-	return Adapter{}, false
-}
-
-// ByLib returns the adapters that wrap this third-party module. Several adapters can share one
-// library, such as fasthttp, so the result is a list.
-func ByLib(path string) []Adapter {
-	var found []Adapter
-	for _, adapter := range Table {
-		for _, lib := range adapter.Libs {
-			if lib == path {
-				found = append(found, adapter)
-			}
-		}
-	}
-	return found
-}
-
-// SetupLines returns the setup line of every adapter that has one, keyed by the wlog import
-// path. wlog doctor reads this to name the install line of an adapter a project imports.
-func SetupLines() map[string]string {
-	lines := map[string]string{}
-	for _, adapter := range Table {
-		if adapter.Setup != "" {
-			lines[adapter.Wlog] = adapter.Setup
-		}
-	}
-	return lines
 }

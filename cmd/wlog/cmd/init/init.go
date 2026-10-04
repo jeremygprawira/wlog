@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -24,9 +27,8 @@ type Options struct {
 	Dir       string
 	Framework string // auto, nethttp, mux, echo, echo5, gin, chi, fiber, fiber3
 	Drain     string // stdout, axiom, loki, file
-	DryRun    bool
-	Yes       bool // accept the whole plan and write it
-	JSON      bool // print the plan as JSON
+	Yes       bool   // accept the whole plan and write it
+	JSON      bool   // print the plan as JSON
 }
 
 // Run parses args and runs init, returning the process exit code. Exit 0 on success,
@@ -37,7 +39,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	opts := Options{}
 	flags.StringVar(&opts.Framework, "framework", "auto", "auto, nethttp, mux, echo, echo5, gin, chi, fiber, or fiber3")
 	flags.StringVar(&opts.Drain, "drain", "stdout", "stdout, axiom, loki, or file")
-	flags.BoolVar(&opts.DryRun, "dry-run", false, "print the plan and write nothing")
 	flags.BoolVar(&opts.Yes, "yes", false, "accept the whole plan and write it")
 	flags.BoolVar(&opts.JSON, "json", false, "print the plan as JSON")
 	flags.StringVar(&opts.Dir, "dir", ".", "the module directory")
@@ -46,10 +47,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	if !knownDrain(opts.Drain) {
 		_, _ = fmt.Fprintf(stderr, "wlog init: unknown drain %q: use stdout, axiom, loki, or file\n", opts.Drain)
-		return 2
-	}
-	if err := validateGlobs(opts); err != nil {
-		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 2
 	}
 	return run(opts, stdout, stderr)
@@ -62,6 +59,14 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
+	if !opts.JSON {
+		for _, adapter := range document.Adapters {
+			if adapter.Kind == "http" || adapter.Setup == "" {
+				continue
+			}
+			_, _ = fmt.Fprintf(stdout, "%s: %s\n", adapter.Name, adapter.Setup)
+		}
+	}
 	if opts.JSON {
 		data, err := json.MarshalIndent(document, "", "  ")
 		if err != nil {
@@ -70,7 +75,7 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		}
 		_, _ = fmt.Fprintln(stdout, string(data))
 	}
-	if opts.DryRun || !opts.Yes {
+	if !opts.Yes {
 		if !opts.JSON {
 			for _, write := range files {
 				_, _ = fmt.Fprint(stdout, unifiedDiff(write.path, write.content))
@@ -81,14 +86,28 @@ func run(opts Options, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	if err := apply(files); err != nil {
+	before, err := snapshot(files)
+	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
 		return 1
 	}
-	for _, write := range files {
-		_, _ = fmt.Fprintln(stdout, "wrote", write.path)
+	if err := apply(files); err != nil {
+		restore(before)
+		_, _ = fmt.Fprintln(stderr, "wlog init:", err)
+		return 1
 	}
-	return verify(opts.Dir, stdout, stderr)
+	progress := stdout
+	if opts.JSON {
+		progress = stderr
+	}
+	for _, write := range files {
+		_, _ = fmt.Fprintln(progress, "wrote", write.path)
+	}
+	if code := verify(opts.Dir, progress, stderr); code != 0 {
+		restore(before)
+		return code
+	}
+	return 0
 }
 
 // verify builds the module and runs doctor over it, and prints both results. A build failure
@@ -98,9 +117,9 @@ func verify(dir string, stdout, stderr io.Writer) int {
 	// waits forever.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "./...")
+	build := exec.CommandContext(ctx, "go", "build", "-o", os.DevNull, "./...")
 	build.Dir = dir
-	build.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	build.Env = os.Environ()
 	if output, err := build.CombinedOutput(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "wlog init: go build failed: %v\n%s", err, output)
 		return 1
@@ -127,11 +146,10 @@ type plan struct {
 
 // planAdapter is one adapter the module uses.
 type planAdapter struct {
-	Name      string `json:"name"`
-	Wlog      string `json:"wlog"`
-	Kind      string `json:"kind"`
-	Setup     string `json:"setup"`
-	Installed bool   `json:"installed"`
+	Name  string `json:"name"`
+	Wlog  string `json:"wlog"`
+	Kind  string `json:"kind"`
+	Setup string `json:"setup"`
 }
 
 // planFile is one file the run writes.
@@ -144,6 +162,135 @@ type planFile struct {
 type write struct {
 	path    string
 	content string
+}
+
+// saved is one file as it was before apply.
+type saved struct {
+	path    string
+	data    []byte
+	existed bool
+}
+
+// snapshot reads every file the plan will write, so a failed verify can put them back.
+func snapshot(files []write) ([]saved, error) {
+	out := make([]saved, 0, len(files))
+	for _, file := range files {
+		data, err := os.ReadFile(file.path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				out = append(out, saved{path: file.path})
+				continue
+			}
+			return nil, err
+		}
+		out = append(out, saved{path: file.path, data: data, existed: true})
+	}
+	return out, nil
+}
+
+// restore puts the tree back. A file the plan created is removed.
+func restore(files []saved) {
+	for i := len(files) - 1; i >= 0; i-- {
+		file := files[i]
+		if !file.existed {
+			_ = os.Remove(file.path)
+			continue
+		}
+		_ = os.WriteFile(file.path, file.data, 0o644)
+	}
+}
+
+// plannedModule is a go.mod or go.sum change the run will write.
+type plannedModule struct {
+	write write
+	plan  planFile
+}
+
+// requirementFiles runs go mod tidy on a copy, so the requirement change is a plan step
+// and the later build does not edit the module itself.
+func requirementFiles(modDir string, files []write) ([]plannedModule, error) {
+	tmp, err := os.MkdirTemp("", "wlog-init-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	if err := copyModule(modDir, tmp); err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		rel, err := filepath.Rel(modDir, file.path)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			continue
+		}
+		dest := filepath.Join(tmp, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(dest, []byte(file.content), 0o644); err != nil {
+			return nil, err
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	tidy := exec.CommandContext(ctx, "go", "mod", "tidy")
+	tidy.Dir = tmp
+	tidy.Env = os.Environ()
+	if output, err := tidy.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("go mod tidy: %w\n%s", err, output)
+	}
+	var extra []plannedModule
+	for _, name := range []string{"go.mod", "go.sum"} {
+		updated, err := os.ReadFile(filepath.Join(tmp, name))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		target := filepath.Join(modDir, name)
+		current, err := os.ReadFile(target)
+		action := "update"
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, err
+			}
+			action = "create"
+			current = nil
+		}
+		if string(current) == string(updated) {
+			continue
+		}
+		extra = append(extra, plannedModule{
+			write: write{path: target, content: string(updated)},
+			plan:  planFile{Path: target, Action: action},
+		})
+	}
+	return extra, nil
+}
+
+// copyModule copies the module tree. It skips directories the tidy does not read.
+func copyModule(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			base := entry.Name()
+			if base == ".git" || base == "vendor" {
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dst, rel), data, 0o644)
+	})
 }
 
 // apply writes every planned file. The plan is complete before this runs, and each file lands
@@ -161,6 +308,13 @@ func apply(plan []write) error {
 // writeAtomic writes one file through a temporary file in the same directory. A rename within one
 // directory is atomic on every platform this runs on.
 func writeAtomic(path string, content []byte) error {
+	mode := os.FileMode(0o644)
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return os.WriteFile(path, content, info.Mode().Perm())
+		}
+		mode = info.Mode().Perm()
+	}
 	dir := filepath.Dir(path)
 	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp")
 	if err != nil {
@@ -176,7 +330,7 @@ func writeAtomic(path string, content []byte) error {
 		_ = os.Remove(tempPath)
 		return err
 	}
-	if err := os.Chmod(tempPath, 0o644); err != nil {
+	if err := os.Chmod(tempPath, mode); err != nil {
 		_ = os.Remove(tempPath)
 		return err
 	}
@@ -194,6 +348,24 @@ func knownDrain(name string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// moduleDir walks up from dir until it finds a go.mod.
+func moduleDir(dir string) (string, error) {
+	current, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
+			return current, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("read go.mod: no go.mod at or above %s", dir)
+		}
+		current = parent
 	}
 }
 
@@ -243,15 +415,12 @@ func detectFramework(sources [][]byte) string {
 
 // packageName reads the package clause from the module's first Go file.
 func packageName(dir string) (string, error) {
-	entries, err := os.ReadDir(dir)
+	paths, err := listGoFiles(dir)
 	if err != nil {
 		return "", err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		source, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
 		if err != nil {
 			return "", err
 		}
@@ -264,18 +433,32 @@ func packageName(dir string) (string, error) {
 	return "", fmt.Errorf("no package clause found in %s", dir)
 }
 
-// goFiles returns the source of every .go file in dir.
-func goFiles(dir string) ([][]byte, error) {
+// listGoFiles returns the app's Go files. A _test.go file is not app source.
+func listGoFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	var sources [][]byte
+	var paths []string
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		source, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	return paths, nil
+}
+
+// goFiles returns the source of every app Go file in dir.
+func goFiles(dir string) ([][]byte, error) {
+	paths, err := listGoFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	var sources [][]byte
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
@@ -300,12 +483,20 @@ func buildPlan(opts Options) (plan, []write, error) {
 	if _, err := os.Stat(setupPath); err == nil {
 		return document, nil, fmt.Errorf("%s already exists", setupPath)
 	}
-	module, err := moduleName(dir)
+	legacy := filepath.Join(dir, "wlog.go")
+	if _, err := os.Stat(legacy); err == nil {
+		return document, nil, fmt.Errorf("%s already exists", legacy)
+	}
+	modDir, err := moduleDir(dir)
+	if err != nil {
+		return document, nil, err
+	}
+	module, err := moduleName(modDir)
 	if err != nil {
 		return document, nil, err
 	}
 	document.Module = module
-	goMod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	goMod, err := os.ReadFile(filepath.Join(modDir, "go.mod"))
 	if err != nil {
 		return document, nil, fmt.Errorf("read go.mod: %w", err)
 	}
@@ -321,6 +512,9 @@ func buildPlan(opts Options) (plan, []write, error) {
 	document.Framework = framework
 	pkg, err := packageName(dir)
 	if err != nil {
+		return document, nil, err
+	}
+	if err := namesTaken(dir, generatedNames(framework)); err != nil {
 		return document, nil, err
 	}
 	setup, err := setupFor(framework, opts.Drain, module, pkg)
@@ -347,6 +541,14 @@ func buildPlan(opts Options) (plan, []write, error) {
 			files = append(files, write{path: routerPath, content: patched})
 			document.Files = append(document.Files, planFile{Path: routerPath, Action: "update"})
 		}
+	}
+	extra, err := requirementFiles(modDir, files)
+	if err != nil {
+		return document, nil, err
+	}
+	for _, file := range extra {
+		files = append(files, file.write)
+		document.Files = append(document.Files, file.plan)
 	}
 	return document, files, nil
 }
@@ -377,23 +579,36 @@ func detectAdapters(goMod string, sources [][]byte) []planAdapter {
 		}
 		found = append(found, planAdapter{
 			Name: adapter.Name, Wlog: adapter.Wlog, Kind: adapter.Kind,
-			Setup: adapter.Setup, Installed: true,
+			Setup: adapter.Setup,
 		})
 	}
 	return found
 }
 
 // requiredModules reads the module paths a go.mod requires, with the comment and the version
-// removed. The wlog modules are skipped, because those are the adapters the tool writes, not
+// removed. An indirect line does not count, and neither does a replace or exclude block.
+// The wlog modules are skipped, because those are the adapters the tool writes, not
 // the libraries that imply one.
 func requiredModules(goMod string) map[string]bool {
 	required := map[string]bool{}
-	for _, line := range strings.Split(goMod, "\n") {
-		line = strings.TrimSpace(line)
+	skipBlock := false
+	for _, raw := range strings.Split(goMod, "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "replace (") || strings.HasPrefix(line, "exclude (") {
+			skipBlock = true
+			continue
+		}
+		if line == ")" {
+			skipBlock = false
+			continue
+		}
+		if skipBlock || strings.Contains(raw, "// indirect") {
+			continue
+		}
 		if rest, ok := strings.CutPrefix(line, "require "); ok {
 			line = strings.TrimSpace(rest)
 		}
-		if line == "" || strings.HasPrefix(line, "//") || line == ")" ||
+		if line == "" || strings.HasPrefix(line, "//") ||
 			strings.HasPrefix(line, "module ") || strings.HasPrefix(line, "go ") ||
 			strings.HasPrefix(line, "replace ") || strings.HasPrefix(line, "exclude ") ||
 			strings.HasPrefix(line, "retract ") || strings.HasPrefix(line, "toolchain ") {
@@ -414,15 +629,14 @@ func requiredModules(goMod string) map[string]bool {
 // patchRouter installs the middleware in the file that declares the server or the router. It
 // returns "" when no file needs a change.
 func patchRouter(dir, framework string) (string, string, error) {
-	entries, err := os.ReadDir(dir)
+	paths, err := listGoFiles(dir)
 	if err != nil {
 		return "", "", err
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || entry.Name() == "wlog_setup.go" {
+	for _, path := range paths {
+		if filepath.Base(path) == "wlog_setup.go" {
 			continue
 		}
-		path := filepath.Join(dir, entry.Name())
 		source, err := os.ReadFile(path)
 		if err != nil {
 			return "", "", err
@@ -434,8 +648,77 @@ func patchRouter(dir, framework string) (string, string, error) {
 		if changed {
 			return path, string(patched), nil
 		}
+		if routerAlreadyUsesWlog(path, source, framework) {
+			return "", "", nil
+		}
 	}
 	return "", "", fmt.Errorf("no router declaration found for %s", framework)
+}
+
+// routerAlreadyUsesWlog reports whether this file builds the router and already calls wlog.
+func routerAlreadyUsesWlog(filename string, source []byte, framework string) bool {
+	if framework == "nethttp" || framework == "mux" || framework == "" {
+		return false
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, source, parser.ParseComments)
+	if err != nil {
+		return false
+	}
+	found := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		for _, statement := range block.List {
+			router, ok := routerName(statement, framework)
+			if ok && hasWlogMiddleware(file, block.List, router) {
+				found = true
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// generatedNames lists the functions the setup file will declare.
+func generatedNames(framework string) []string {
+	names := []string{"NewLogger"}
+	switch framework {
+	case "nethttp", "mux":
+		names = append(names, "WrapHandler")
+	case "":
+	default:
+		names = append(names, "LoggerMiddleware")
+	}
+	return names
+}
+
+// namesTaken reports a function the app already declares that the setup would add.
+func namesTaken(dir string, names []string) error {
+	want := map[string]bool{}
+	for _, name := range names {
+		want[name] = true
+	}
+	paths, err := listGoFiles(dir)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Name == nil || !want[fn.Name.Name] {
+				continue
+			}
+			return fmt.Errorf("%s already declares %s", path, fn.Name.Name)
+		}
+	}
+	return nil
 }
 
 // unifiedDiff renders one planned file as a unified diff, the format a reader expects from a tool
@@ -471,9 +754,6 @@ func splitLines(text string) []string {
 	}
 	return lines
 }
-
-// validateGlobs checks the run's option values that can be wrong before anything is written.
-func validateGlobs(Options) error { return nil }
 
 // mergeEnvExample adds the keys the setup needs to the file that is already there.
 //

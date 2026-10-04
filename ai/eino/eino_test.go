@@ -47,8 +47,8 @@ func TestEino_Handler_OnEnd(t *testing.T) {
 	end()
 
 	group, _ := rec.Last()["llm"].(map[string]any)
-	if group["provider"] != "OpenAI" || group["request_model"] != "gpt-4o" {
-		t.Fatalf("llm group = %v, want provider OpenAI, request_model gpt-4o", group)
+	if group["provider"] != "openai" || group["request_model"] != "gpt-4o" {
+		t.Fatalf("llm group = %v, want provider openai, request_model gpt-4o", group)
 	}
 	if group["input_tokens"] != int64(1000) || group["output_tokens"] != int64(200) {
 		t.Errorf("tokens = %v, want input 1000, output 200", group)
@@ -137,14 +137,22 @@ func TestEino_Handler_Stream(t *testing.T) {
 
 	h := wlogeino.Handler()
 	h.OnEndWithStreamOutput(ctx, runInfo("OpenAI"), stream)
-
-	deadline := time.Now().Add(time.Second)
-	for rec.Count() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
 	end()
 
-	group, _ := rec.Last()["llm"].(map[string]any)
+	deadline := time.Now().Add(time.Second)
+	var group map[string]any
+	for time.Now().Before(deadline) {
+		for _, ev := range rec.Events() {
+			g, _ := ev["llm"].(map[string]any)
+			if g != nil {
+				group = g
+			}
+		}
+		if group != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if group["input_tokens"] != int64(1000) || group["output_tokens"] != int64(200) {
 		t.Fatalf("stream tokens = %v, want input 1000, output 200", group)
 	}
@@ -171,5 +179,99 @@ func TestEino_Handler_ProviderFallback(t *testing.T) {
 	group, _ := rec.Last()["llm"].(map[string]any)
 	if group["provider"] != "eino" {
 		t.Errorf("provider = %v, want eino", group["provider"])
+	}
+}
+
+// TestEino_A8_StreamSurvivesEarlyEnd proves a streamed call keeps its llm record
+// when the caller ends the event before the last chunk arrives.
+func TestEino_A8_StreamSurvivesEarlyEnd(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	reader, writer := schema.Pipe[callbacks.CallbackOutput](1)
+	h := wlogeino.Handler()
+	h.OnEndWithStreamOutput(ctx, runInfo("OpenAI"), reader)
+	end()
+	writer.Send(&model.CallbackOutput{
+		Message:    &schema.Message{Role: schema.Assistant, Content: "hi"},
+		TokenUsage: &model.TokenUsage{PromptTokens: 10, CompletionTokens: 4},
+	}, nil)
+	writer.Close()
+
+	deadline := time.Now().Add(time.Second)
+	var group map[string]any
+	for time.Now().Before(deadline) {
+		for _, ev := range rec.Events() {
+			g, _ := ev["llm"].(map[string]any)
+			if g != nil {
+				group = g
+			}
+		}
+		if group != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if group == nil {
+		t.Fatal("streamed call lost its llm record after the event ended")
+	}
+	if group["input_tokens"] != int64(10) || group["output_tokens"] != int64(4) {
+		t.Fatalf("llm = %v, want input 10 and output 4", group)
+	}
+}
+
+// TestEino_A9_StreamToolCallCountedOnce proves four deltas of one tool call count
+// once. schema.ConcatMessages merges deltas that share an index.
+func TestEino_A9_StreamToolCallCountedOnce(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	index := 0
+	parts := []string{`{"city":`, `"Jakarta"`, `}`, ``}
+	var chunks []callbacks.CallbackOutput
+	for i, part := range parts {
+		call := schema.ToolCall{Index: &index, Function: schema.FunctionCall{Arguments: part}}
+		if i == 0 {
+			call.ID = "call_1"
+			call.Function.Name = "get_weather"
+		}
+		chunks = append(chunks, &model.CallbackOutput{
+			Message: &schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{call}},
+		})
+	}
+	stream := schema.StreamReaderFromArray(chunks)
+	h := wlogeino.Handler()
+	h.OnEndWithStreamOutput(ctx, runInfo("OpenAI"), stream)
+	end()
+
+	deadline := time.Now().Add(time.Second)
+	var group map[string]any
+	for time.Now().Before(deadline) {
+		for _, ev := range rec.Events() {
+			g, _ := ev["llm"].(map[string]any)
+			if g != nil {
+				group = g
+			}
+		}
+		if group != nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if group["tool_call_count"] != int64(1) {
+		t.Fatalf("tool_call_count = %v, want 1", group["tool_call_count"])
+	}
+}
+
+// TestEino_A20_ProviderIsLowerCase proves the provider name is lower case,
+// matching the other modules.
+func TestEino_A20_ProviderIsLowerCase(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	wlogeino.Handler().OnEnd(ctx, runInfo("OpenAI"), &model.CallbackOutput{
+		Message: &schema.Message{Content: "hi"},
+	})
+	end()
+	group, _ := rec.Last()["llm"].(map[string]any)
+	if group["provider"] != "openai" {
+		t.Fatalf("provider = %v, want openai", group["provider"])
 	}
 }

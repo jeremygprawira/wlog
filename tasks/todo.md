@@ -250,7 +250,14 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Also fixed: a job id is never scanned by a value pattern, which was the asynq flake.
 - [ ] F, shared core, OTel, and Prometheus: O-1, O-2, O-3, then O-4 to O-20
 - [ ] G, llm and the LLM SDK modules: L-8, L-9, L-1, L-19, L-22, L-18, then L-2 to L-7, L-11 to L-17, L-21, L-23
-- [ ] H, agent frameworks and MCP: A-1 to A-9, A-11, then A-12 to A-24
+- [x] H, agent frameworks and MCP: A-1 to A-9, A-11, then A-12 to A-24
+  - Done locally, waiting on CI: A-1 `fa6401b`, A-2 `be797dd`, A-3 `86c1b4a`, A-4 `81ff5ea`, A-5 `a38936b`, A-6 `603f533`, A-7 `8c557e3`, A-8 `23f8609`, A-9 `606b390`, A-11 `3844dce`, A-12 `9a42e1f`, A-13 `310d2fb`, A-15 `6f65380`, A-16 `d70756b`, A-17 `8795564`, A-18 `653fadc`, A-19 `9ef26e8`, A-20 `14488aa`, A-22 `816ce72`, A-23 `280cbd3`, A-24 `c27a895`.
+  - A-14 is not its own commit. `paramStateOf` landed in `6f65380`, `d70756b`, and `8795564`.
+  - A-13 replaces the earlier blocked attempt. The denylist exception is the approved one.
+  - Gate follow-ups, not review ids: `8839fbb` typed context keys, `268f307` the content condition named first.
 - [ ] I, `wlog init`: I-1 to I-6, then I-7 to I-20
+  - Done locally, waiting on CI: I-1 `9e5bf3a`, I-2 `e08e1cd`, I-3 `188fdde`, I-4 `b60e49a`, I-5 `2fe2fb6`, I-6 `f5be788`, I-7 `bf68375`, I-8 `5ee30b4`, I-9 `e5fbb15`, I-10 `fd6e087`, I-11 `33abeea`, I-12 `93b157e`, I-13 `eeda5a7`, I-14 `06eb4b1`, I-15 `5153e10`, I-16 `27e3ca6`, I-17 `64b2b83`, I-18 `fa8c8f8`, I-19 `2b69a9c`.
+  - I-20 is a design choice. A run with no `--yes` exits 0. No code change.
+  - Gate follow-up, not a review id: `27da287` errcheck, noctx, and staticcheck.
 - [ ] J, documents and tools: X-7, X-8, T-4, T-6. Run `make docs` and commit the result
 - [ ] K, integration: X-4, D-5, D-23, P-21, T-3. This batch needs Docker

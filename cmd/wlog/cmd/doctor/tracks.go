@@ -12,30 +12,33 @@ import (
 	"github.com/jeremygprawira/wlog/cmd/wlog/internal/adapters"
 )
 
-// adapterSetups maps every adapter to the one line that installs it. The list lives in the
-// shared adapters table, so `wlog init` and doctor never disagree about an install line. The
-// elastic drain adds its own row, because a drain installs through the environment, not at an
-// entry point.
-var adapterSetups = func() map[string]string {
-	setups := adapters.SetupLines()
-	setups["github.com/jeremygprawira/wlog/drain/elastic"] = "PUT _index_template/logs-wlog with elastic.Template(elastic.Elasticsearch)"
-	return setups
-}()
+// elasticSetup is the install line for the Elastic drain. A drain installs through the
+// environment, so it is not a row in the adapter table.
+const elasticSetup = "PUT _index_template/logs-wlog with elastic.Template(elastic.Elasticsearch)"
 
-// adapterChecks returns one check per installed adapter, with its setup line.
+// adapterChecks returns one check per installed adapter, in table order, with its setup line.
 func adapterChecks(dir string) []Check {
 	sources := readSources(dir)
 	checks := []Check{}
-	for adapter, setup := range adapterSetups {
-		if !strings.Contains(sources, `"`+adapter+`"`) {
+	for _, adapter := range adapters.Table {
+		if adapter.Setup == "" || !strings.Contains(sources, `"`+adapter.Wlog+`"`) {
 			continue
 		}
-		checks = append(checks, passCheck("adapter", "WLOG_DOCTOR_ADAPTERS",
-			adapter+" is installed: "+setup,
-			"an installed adapter needs one line at the entry point",
-			"install it once, before any route or client call"))
+		checks = append(checks, adapterLine(adapter.Wlog, adapter.Setup))
+	}
+	const elastic = "github.com/jeremygprawira/wlog/drain/elastic"
+	if strings.Contains(sources, `"`+elastic+`"`) {
+		checks = append(checks, adapterLine(elastic, elasticSetup))
 	}
 	return checks
+}
+
+// adapterLine builds the doctor line for one installed adapter.
+func adapterLine(path, setup string) Check {
+	return passCheck("adapter", "WLOG_DOCTOR_ADAPTERS",
+		path+" is installed: "+setup,
+		"an installed adapter needs one line at the entry point",
+		"install it once, before any route or client call")
 }
 
 // checkGlobalLogger warns about a package-level log call inside a handler, because that

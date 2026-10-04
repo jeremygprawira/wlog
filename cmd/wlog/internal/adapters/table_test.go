@@ -14,7 +14,7 @@ func TestTable_WellFormed(t *testing.T) {
 	kinds := map[string]bool{
 		"http": true, "rpc": true, "client": true, "store": true, "log": true,
 		"errors": true, "flag": true, "queue": true, "job": true, "faas": true,
-		"command": true, "ai": true, "trace": true, "metrics": true,
+		"command": true, "ai": true, "trace": true, "metrics": true, "drain": true,
 	}
 	names := map[string]bool{}
 	paths := map[string]bool{}
@@ -55,23 +55,28 @@ func TestTable_Sorted(t *testing.T) {
 	}
 }
 
-// TestTable_Lookup proves the two lookups find the chi adapter by its import path and by the
-// chi library, because the same table serves detection and doctor.
+// TestTable_Lookup proves the chi row names its import path and its library.
 func TestTable_Lookup(t *testing.T) {
-	byPath, ok := adapters.ByWlog("github.com/jeremygprawira/wlog/middleware/chi")
-	if !ok || byPath.Name != "http-chi" {
-		t.Errorf("ByWlog(chi) = %+v, %v", byPath, ok)
-	}
 	found := false
-	for _, adapter := range adapters.ByLib("github.com/go-chi/chi/v5") {
-		if adapter.Name == "http-chi" {
-			found = true
+	for _, adapter := range adapters.Table {
+		if adapter.Wlog == "github.com/jeremygprawira/wlog/middleware/chi" && adapter.Name == "http-chi" {
+			for _, lib := range adapter.Libs {
+				if lib == "github.com/go-chi/chi/v5" {
+					found = true
+				}
+			}
 		}
 	}
 	if !found {
-		t.Error("ByLib(chi/v5) does not name http-chi")
+		t.Error("the chi row does not name http-chi and chi/v5")
 	}
-	if lines := adapters.SetupLines(); lines["github.com/jeremygprawira/wlog/middleware/chi"] != "wlogchi.Setup(r)" {
-		t.Errorf("SetupLines()[chi] = %q", lines["github.com/jeremygprawira/wlog/middleware/chi"])
+	var chi string
+	for _, adapter := range adapters.Table {
+		if adapter.Wlog == "github.com/jeremygprawira/wlog/middleware/chi" {
+			chi = adapter.Setup
+		}
+	}
+	if chi != "wlogchi.Setup(r)" {
+		t.Errorf("chi setup = %q", chi)
 	}
 }

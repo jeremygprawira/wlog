@@ -132,7 +132,7 @@ func TestLangchaingo_Handler_Tool(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
 
-	h := wloglangchaingo.Handler()
+	h := wloglangchaingo.Handler(log)
 	h.HandleToolStart(ctx, "input")
 	h.HandleToolEnd(ctx, "output")
 	end()
@@ -142,8 +142,8 @@ func TestLangchaingo_Handler_Tool(t *testing.T) {
 		t.Fatalf("calls = %v, want 1 entry", calls)
 	}
 	call, _ := calls[0].(map[string]any)
-	if call["kind"] != "agent" || call["operation"] != "tool" {
-		t.Errorf("call = %v, want kind agent, operation tool", call)
+	if call["kind"] != "other" || call["operation"] != "tool" {
+		t.Errorf("call = %v, want kind other, operation tool", call)
 	}
 	if _, hasErr := call["error"]; hasErr {
 		t.Errorf("call has an error, want none: %v", call)
@@ -156,7 +156,7 @@ func TestLangchaingo_Handler_ChainError(t *testing.T) {
 	log, rec := wlogtest.New(t)
 	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
 
-	h := wloglangchaingo.Handler()
+	h := wloglangchaingo.Handler(log)
 	h.HandleChainStart(ctx, map[string]any{})
 	h.HandleToolStart(ctx, "input")
 	h.HandleToolEnd(ctx, "output")
@@ -212,5 +212,86 @@ func check(t *testing.T, got, want llm.Record) {
 		if got.ToolCalls[i].Name != want.ToolCalls[i].Name {
 			t.Errorf("ToolCalls[%d].Name = %q, want %q", i, got.ToolCalls[i].Name, want.ToolCalls[i].Name)
 		}
+	}
+}
+
+// TestLangchaingo_A4_OpenAIToolCallCountedOnce proves the legacy FuncCall copy of
+// ToolCalls[0] is not counted again. A choice with only FuncCall still counts once.
+func TestLangchaingo_A4_OpenAIToolCallCountedOnce(t *testing.T) {
+	call := &llms.FunctionCall{Name: "get_weather", Arguments: `{"city":"Jakarta"}`}
+	resp := &llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{
+			FuncCall: call,
+			ToolCalls: []llms.ToolCall{
+				{ID: "call_1", FunctionCall: call},
+				{ID: "call_2", FunctionCall: &llms.FunctionCall{Name: "get_time", Arguments: "{}"}},
+			},
+		}},
+	}
+	got := wloglangchaingo.FromContentResponse(resp, "openai", "gpt-4o")
+	if len(got.ToolCalls) != 2 {
+		t.Fatalf("ToolCalls = %v, want get_weather and get_time once each", got.ToolCalls)
+	}
+
+	legacy := &llms.ContentResponse{Choices: []*llms.ContentChoice{{
+		FuncCall: &llms.FunctionCall{Name: "get_weather", Arguments: "{}"},
+	}}}
+	got = wloglangchaingo.FromContentResponse(legacy, "openai", "gpt-4o")
+	if len(got.ToolCalls) != 1 || got.ToolCalls[0].Name != "get_weather" {
+		t.Fatalf("legacy FuncCall = %v, want one get_weather", got.ToolCalls)
+	}
+
+	got = wloglangchaingo.FromContentResponse(resp, "openai", "gpt-4o", wloglangchaingo.WithContent())
+	parts := 0
+	for _, msg := range got.Content.OutputMessages {
+		for _, part := range msg.Parts {
+			if part.Type == "tool_call" {
+				parts++
+			}
+		}
+	}
+	if parts != 2 {
+		t.Fatalf("content tool_call parts = %d, want 2", parts)
+	}
+}
+
+// TestLangchaingo_A5_CallKindOther proves a tool call and a chain step use kind
+// other. The event schema rejects kind agent.
+func TestLangchaingo_A5_CallKindOther(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	h := wloglangchaingo.Handler(log)
+	h.HandleToolStart(ctx, "input")
+	h.HandleToolEnd(ctx, "output")
+	h.HandleChainStart(ctx, map[string]any{})
+	h.HandleChainEnd(ctx, map[string]any{})
+	end()
+
+	calls, _ := rec.Last()["calls"].([]any)
+	if len(calls) != 2 {
+		t.Fatalf("calls = %v, want 2", calls)
+	}
+	for _, c := range calls {
+		call, _ := c.(map[string]any)
+		if call["kind"] != "other" {
+			t.Errorf("call kind = %v, want other", call["kind"])
+		}
+	}
+}
+
+// TestLangchaingo_A20_UnmappedProviderOmitsTokens proves an unmapped provider
+// does not record zero tokens. Zero would read as a measured count.
+func TestLangchaingo_A20_UnmappedProviderOmitsTokens(t *testing.T) {
+	got := wloglangchaingo.FromContentResponse(openAIResponse(), "google", "gemini")
+	log, rec := wlogtest.New(t)
+	ctx, end := wlog.Start(log.WithContext(context.Background()), "op")
+	llm.Add(ctx, got)
+	end()
+	group, _ := rec.Last()["llm"].(map[string]any)
+	if _, ok := group["input_tokens"]; ok {
+		t.Fatalf("input_tokens = %v, want the field left off", group["input_tokens"])
+	}
+	if _, ok := group["output_tokens"]; ok {
+		t.Fatalf("output_tokens = %v, want the field left off", group["output_tokens"])
 	}
 }

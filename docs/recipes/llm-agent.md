@@ -94,7 +94,7 @@ example test normalizes them.
 
 ## 4. Explain ids
 
-- `wlog explain llm` for the token, the cost, and the finish reason fields.
-- `wlog explain kind` for what a work-kind event's fields mean.
+- `wlog explain llm` names the llm group. It does not list the token, cost, or finish reason fields. Those are in SPEC-track-g.md.
+- `wlog explain kind` names the kind field. It does not list what a work event holds.
 - `wlog explain WLOG_CAP_REACHED` for what happens past the 200 call cap on `llm.calls`.
 - When an event arrives after `Close`, `wlog explain WLOG_LOGGER_CLOSED`.

@@ -5,6 +5,24 @@ and the version numbers follow [Semantic Versioning](https://semver.org/spec/v2.
 
 The v1.0.0 release freezes the public API. A later change to that API waits for v2.
 
+## [Unreleased]
+
+### Added
+
+- Phase 14 adds the modules `ai/anthropic`, `ai/openai`, `ai/genai`, `ai/goopenai`,
+  `ai/langchaingo`, `ai/eino`, `ai/mcpsdk`, `ai/mcpgo`, `drain/cloudwatch`,
+  `metrics/prometheus`, and `trace/otellog`.
+
+### Changed
+
+- `wlog init` with no `--yes` writes nothing and exits 0. A script that expected the old
+  `wlog init` to write files now passes `--yes`.
+
+### Removed
+
+- `wlogotel.Enricher` is gone. `wlogotel.Plugin` fills the trace ids and copies the event
+  onto the active span.
+
 ## [0.8.0] - 2026-09-22
 
 ### Added

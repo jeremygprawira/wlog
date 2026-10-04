@@ -14,6 +14,10 @@ package wlogeino
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
@@ -58,7 +62,20 @@ func Handler(opts ...Option) callbacks.Handler {
 				return ctx
 			},
 			OnEndWithStreamOutput: func(ctx context.Context, info *callbacks.RunInfo, output *schema.StreamReader[*model.CallbackOutput]) context.Context {
-				go drain(ctx, output, providerOf(info), content)
+				// The caller may end the event before the stream does. The record
+				// lives on a detached child that this goroutine ends. Cancel still
+				// uses the caller's context, because Detach does not.
+				child, end := wlog.Detach(ctx, "eino")
+				go func() {
+					defer end()
+					drain(ctx, child, output, providerOf(info), content)
+				}()
+				return ctx
+			},
+			OnError: func(ctx context.Context, info *callbacks.RunInfo, err error) context.Context {
+				r := llm.Record{Provider: providerOf(info), Operation: "chat", FinishReason: "error"}
+				llm.Add(ctx, r)
+				wlog.Error(ctx, err)
 				return ctx
 			},
 		}).
@@ -71,33 +88,99 @@ func providerOf(info *callbacks.RunInfo) string {
 	if info == nil || info.Type == "" {
 		return "eino"
 	}
-	return info.Type
+	return strings.ToLower(info.Type)
 }
 
-// drain reads a streamed chat model call to the end on its own copy of the stream, so the
-// real consumer's copy is never blocked, and folds the result into ctx's event once done.
-//
-// ponytail: a panic here is only recovered, never reported to a Problem handler, because
-// an adapter outside the root module has no exported way to reach the Logger of ctx.
-// Upgrade if wlog ever exports one.
-func drain(ctx context.Context, stream *schema.StreamReader[*model.CallbackOutput], provider string, content bool) {
-	defer func() { _ = recover() }()
+// streamItem is one read from the model stream.
+type streamItem struct {
+	chunk *model.CallbackOutput
+	err   error
+	panic any
+}
+
+// drain reads a streamed chat model call on its own copy of the stream, so the real
+// consumer is never blocked, and folds the result into ctx once done. callCtx is the
+// caller's context. A cancel ends the read. A stream error or a recovered panic is
+// written on ctx.
+func drain(callCtx, ctx context.Context, stream *schema.StreamReader[*model.CallbackOutput], provider string, content bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			wlog.Error(ctx, fmt.Errorf("panic: %v", recovered))
+		}
+	}()
+	if stream == nil {
+		panic("nil stream")
+	}
 	defer stream.Close()
 
+	// Recv blocks until the source sends or closes. The read runs aside so this
+	// call can return when the caller cancels.
+	items := make(chan streamItem, 1)
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				items <- streamItem{panic: recovered}
+			}
+		}()
+		for {
+			chunk, err := stream.Recv()
+			items <- streamItem{chunk: chunk, err: err}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
 	r := llm.Record{Provider: provider, Operation: "chat", Streamed: true}
+	var messages []*schema.Message
+	var fail error
 	for {
-		chunk, err := stream.Recv()
-		if err != nil {
+		select {
+		case <-callCtx.Done():
+			fail = callCtx.Err()
+		case it := <-items:
+			if it.panic != nil {
+				panic(it.panic)
+			}
+			if it.chunk != nil {
+				if it.chunk.Config != nil && it.chunk.Config.Model != "" {
+					r.Model = it.chunk.Config.Model
+				}
+				applyUsage(&r, it.chunk)
+				if it.chunk.Message != nil {
+					messages = append(messages, it.chunk.Message)
+				}
+			}
+			if it.err == nil || errors.Is(it.err, io.EOF) {
+				if it.err != nil {
+					goto done
+				}
+				continue
+			}
+			fail = it.err
+		}
+		if fail != nil {
 			break
 		}
-		applyOutput(&r, chunk, content)
+	}
+done:
+	if len(messages) > 0 {
+		// Deltas of one tool call share an index. Concat merges them, and it merges
+		// the text too, so a streamed call counts each tool call once.
+		merged, err := schema.ConcatMessages(messages)
+		if err == nil {
+			applyMessage(&r, merged, content)
+		}
+	}
+	if fail != nil {
+		r.FinishReason = "error"
+		wlog.Error(ctx, fail)
 	}
 	llm.Add(ctx, r)
 }
 
-// applyOutput folds one CallbackOutput into r: the model name, the usage, the finish
-// reason, and the tool calls. A streamed call folds every chunk this way, so the last
-// non-empty value of each wins.
+// applyOutput folds one whole CallbackOutput into r: the model name, the usage, the
+// finish reason, and the tool calls.
 func applyOutput(r *llm.Record, output *model.CallbackOutput, content bool) {
 	if output == nil {
 		return
@@ -106,7 +189,11 @@ func applyOutput(r *llm.Record, output *model.CallbackOutput, content bool) {
 		r.Model = output.Config.Model
 	}
 	applyUsage(r, output)
-	message := output.Message
+	applyMessage(r, output.Message, content)
+}
+
+// applyMessage folds one message into r. A stream calls it once, on the merged message.
+func applyMessage(r *llm.Record, message *schema.Message, content bool) {
 	if message == nil {
 		return
 	}

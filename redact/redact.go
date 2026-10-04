@@ -27,11 +27,12 @@ type Redactor struct {
 	replaceFunc    func(string) string
 	maxDepth       int
 	maxStringScan  int
-	tokenCache     sync.Map     // key string -> []string; a real event reuses the same
-	cacheEntries   atomic.Int64 // field names on every call, so a fresh tokenize is waste
-	maxLeafTokens  int          // longest denylist entry in tokens, which bounds a run
-	customPatterns []Pattern    // the patterns a caller added, for a later With
-	builtins       []string     // the active built-in pattern names, for a later With
+	tokenCache     sync.Map        // key string -> []string; a real event reuses the same
+	cacheEntries   atomic.Int64    // field names on every call, so a fresh tokenize is waste
+	maxLeafTokens  int             // longest denylist entry in tokens, which bounds a run
+	customPatterns []Pattern       // the patterns a caller added, for a later With
+	builtins       []string        // the active built-in pattern names, for a later With
+	kept           map[string]bool // full paths the denylist must not mask
 }
 
 // cachedTokenize is tokenize(key), memoized per Redactor. Safe for concurrent use
@@ -263,6 +264,7 @@ func build(c *config, opts []Option) (*Redactor, error) {
 	r := &Redactor{
 		raw:           append([]string(nil), final...),
 		leafTokens:    map[string]bool{},
+		kept:          map[string]bool{"rpc.mcp.session": true},
 		maskClientIP:  c.maskClientIP,
 		patterns:      patterns,
 		transforms:    c.transforms,
@@ -383,7 +385,9 @@ func (r *Redactor) safeReplace(match string) (out string) {
 func (r *Redactor) applyMap(m map[string]any, path []string, depth int) {
 	for k, v := range m {
 		path = append(path, k)
-		if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(path) {
+		if r.keeps(strings.Join(path, ".")) {
+			m[k] = r.applyValue(v, path, depth)
+		} else if r.matchesKey(k) || r.matchesLeafGlob(k) || r.matchesPath(path) {
 			m[k] = r.maskValue(v)
 		} else {
 			m[k] = r.applyValue(v, path, depth)
@@ -485,6 +489,13 @@ func (r *Redactor) replacementText() string {
 	return r.replacement
 }
 
+// keeps reports whether path is a full key the denylist must not mask.
+// rpc.mcp.session is one. It holds a short hash, and the leaf name session
+// would otherwise match the session entry.
+func (r *Redactor) keeps(path string) bool {
+	return r.kept[path]
+}
+
 // matchesKey reports whether any contiguous run of key's tokens equals a leaf denylist
 // entry, e.g. "stripe_api_key" contains the run ["api","key"] and matches "api_key".
 // Unanchored: matches at any depth.
@@ -552,6 +563,9 @@ func (r *Redactor) Keys() []string {
 // pattern only applies after the event holds a value. A linter (cli-map) uses this to
 // flag a literal key that the redactor would already deny.
 func (r *Redactor) Denies(key string) bool {
+	if r.keeps(key) {
+		return false
+	}
 	return r.matchesKey(key) || r.matchesLeafGlob(key)
 }
 
@@ -562,6 +576,9 @@ func (r *Redactor) Denies(key string) bool {
 // audit.Patch, uses it.
 func (r *Redactor) DeniesPath(path ...string) bool {
 	full := strings.Join(path, ".")
+	if r.keeps(full) {
+		return false
+	}
 	if r.matchesKey(full) || r.matchesLeafGlob(full) {
 		return true
 	}
@@ -574,6 +591,12 @@ func (r *Redactor) DeniesPath(path ...string) bool {
 func (r *Redactor) Fingerprint() string {
 	var parts []string
 	parts = append(parts, "keys:"+strings.Join(r.Keys(), ","))
+	kept := make([]string, 0, len(r.kept))
+	for path := range r.kept {
+		kept = append(kept, path)
+	}
+	sort.Strings(kept)
+	parts = append(parts, "kept:"+strings.Join(kept, ","))
 	parts = append(parts, fmt.Sprintf("maskIP:%t", r.maskClientIP))
 	parts = append(parts, "replacement:"+r.replacement)
 	parts = append(parts, fmt.Sprintf("replaceFunc:%t", r.replaceFunc != nil))

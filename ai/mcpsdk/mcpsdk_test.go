@@ -200,3 +200,43 @@ func TestMCPSDK_LiveSession(t *testing.T) {
 type errFake string
 
 func (e errFake) Error() string { return string(e) }
+
+// TestMcpsdk_A14_RequestStateLinksRetry proves a retry that echoes RequestState
+// records the same hash, even when the result itself has no state.
+func TestMcpsdk_A14_RequestStateLinksRetry(t *testing.T) {
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "get_weather", RequestState: "secret-state"}}
+	next := mcp.MethodHandler(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "sunny"}}}, nil
+	})
+	rpc, _ := run(t, next, "tools/call", req)
+	mcpFields, _ := rpc["mcp"].(map[string]any)
+	sum := sha256.Sum256([]byte("secret-state"))
+	want := hex.EncodeToString(sum[:8])
+	if mcpFields["request_state"] != want {
+		t.Fatalf("rpc.mcp.request_state = %v, want %s", mcpFields["request_state"], want)
+	}
+}
+
+// TestMcpsdk_A16_PanicStillEmits proves a handler panic is recorded and then
+// raised again.
+func TestMcpsdk_A16_PanicStillEmits(t *testing.T) {
+	log, rec := wlogtest.New(t)
+	handler := wlogmcp.Middleware(log)(mcp.MethodHandler(func(context.Context, string, mcp.Request) (mcp.Result, error) {
+		panic("boom")
+	}))
+	panicked := false
+	func() {
+		defer func() {
+			if recover() != nil {
+				panicked = true
+			}
+		}()
+		_, _ = handler(context.Background(), "tools/call", toolCallRequest("get_weather"))
+	}()
+	if !panicked {
+		t.Fatal("the panic was not raised again")
+	}
+	if rec.Count() != 1 || rec.Last()["error"] == nil {
+		t.Fatalf("event = %v, want one event with an error", rec.Last())
+	}
+}

@@ -326,7 +326,7 @@ binds `0.0.0.0:4318`. Every Compose service has a health probe. (PIPE-9)
 2. `init` merges into an existing `.env.example`, and it never removes a line. To pick a package
    name, it skips `_test.go` files. It finds `go.mod` by walking up from `--dir`.
    An unknown `--drain` exits 2. (CLI-15)
-3. `init --dry-run` prints a unified diff. Writes go to temporary files first, then renames them
+3. `init` with no `--yes` prints a unified diff. Writes go to temporary files first, then renames them
    all, so a failure leaves no partial tree. The generated setup closes the Logger on shutdown.
    (CLI-15)
 4. The init test builds each generated app and serves one request that must return 200 and emit

@@ -11,9 +11,9 @@ package wlogmcp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -21,6 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/internal/mcpshare"
 	"github.com/jeremygprawira/wlog/work"
 )
 
@@ -66,17 +67,34 @@ func Middleware(log *wlog.Logger, opts ...Option) mcp.Middleware {
 			}
 			ctx, h := work.Start(ctx, log, work.Unit{Kind: work.KindRPC, Fields: fields})
 
-			result, err := next(ctx, method, req)
+			var recovered any
+			defer func() {
+				if recovered != nil {
+					panic(recovered)
+				}
+			}()
+			result, err := func() (mcp.Result, error) {
+				defer func() {
+					if r := recover(); r != nil {
+						recovered = r
+					}
+				}()
+				return next(ctx, method, req)
+			}()
+			if recovered != nil {
+				result = nil
+				err = fmt.Errorf("panic: %v", recovered)
+			}
 			record(ctx, h, req, result, err, cfg.content)
 			return result, err
 		}
 	}
 }
 
-// record folds one finished request into the rpc group and picks the event's level, per
-// the rules of SPEC-track-g.md: a tool error is the caller's fault, so it gives warn; the
-// four codes that mean a malformed request also give warn; every other protocol error
-// gives error.
+// record folds one finished request into the rpc group and picks the event's level.
+// SPEC-track-g gives warn for a tool error, because that error is the caller's fault.
+// The four codes that mean a malformed request also give warn.
+// Every other protocol error gives error.
 func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Result, err error, content bool) {
 	mcpFields := sessionFields(req)
 	addParamFields(mcpFields, req, content)
@@ -86,13 +104,18 @@ func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Res
 	// result is meaningless on a protocol error: the dispatcher's own concrete return
 	// type, boxed into the Result interface, is a typed nil here, and every accessor
 	// below panics on one.
+	state := ""
 	if err == nil {
-		if state := requestStateOf(result); state != "" {
-			mcpFields["request_state"] = hashState(state)
-		}
+		state = requestStateOf(result)
 		if content {
 			addResultContent(mcpFields, result)
 		}
+	}
+	if fromParams := paramStateOf(req); fromParams != "" {
+		state = fromParams
+	}
+	if state != "" {
+		mcpFields["request_state"] = mcpshare.ShortHash(state)
 	}
 	h.Set("mcp", mcpFields)
 	if code != "" {
@@ -101,7 +124,7 @@ func record(ctx context.Context, h *work.Handle, req mcp.Request, result mcp.Res
 	if level != "" {
 		wlog.SetLevel(ctx, level)
 	}
-	h.End(err)
+	h.End(visibleError(err, req, content))
 }
 
 // sessionFields reads the session id, the negotiated protocol version, and the client
@@ -115,6 +138,7 @@ func sessionFields(req mcp.Request) map[string]any {
 	}
 	if id := session.ID(); id != "" {
 		fields["session_id"] = id
+		fields["session"] = mcpshare.ShortHash(id)
 	}
 	params := session.InitializeParams()
 	if params == nil {
@@ -124,18 +148,28 @@ func sessionFields(req mcp.Request) map[string]any {
 		fields["protocol_version"] = params.ProtocolVersion
 	}
 	if params.ClientInfo != nil {
-		fields["client"] = clientOf(params.ClientInfo.Name, params.ClientInfo.Version)
+		fields["client"] = mcpshare.ClientName(params.ClientInfo.Name, params.ClientInfo.Version)
 	}
 	return fields
 }
 
-// clientOf formats a client name and version as one string, so rpc.mcp.client stays a
-// single field like every other identity field on the event.
-func clientOf(name, version string) string {
-	if version == "" {
-		return name
+// visibleError hides a handler error that quotes its arguments, unless the
+// caller opted into content. A protocol error that does not quote them stays.
+func visibleError(err error, req mcp.Request, content bool) error {
+	return mcpshare.HideQuoted(err, argumentValues(req), content)
+}
+
+// argumentValues lists the string values of a tool call's arguments.
+func argumentValues(req mcp.Request) []string {
+	params, ok := req.GetParams().(*mcp.CallToolParamsRaw)
+	if !ok || params == nil || len(params.Arguments) == 0 {
+		return nil
 	}
-	return name + "/" + version
+	var decoded any
+	if err := json.Unmarshal(params.Arguments, &decoded); err != nil {
+		return nil
+	}
+	return mcpshare.StringsOf(decoded)
 }
 
 // addParamFields reads the tool name, the resource URI, or the prompt name off the
@@ -178,7 +212,7 @@ func classify(result mcp.Result, err error) (outcome, code string, level wlog.Le
 		var wireErr *jsonrpc.Error
 		if errors.As(err, &wireErr) {
 			code = strconv.FormatInt(wireErr.Code, 10)
-			if isClientCode(wireErr.Code) {
+			if mcpshare.ClientFault(wireErr.Code) {
 				return "protocol_error", code, wlog.LevelWarn
 			}
 			return "protocol_error", code, wlog.LevelError
@@ -194,16 +228,6 @@ func classify(result mcp.Result, err error) (outcome, code string, level wlog.Le
 	return "ok", "", ""
 }
 
-// isClientCode reports whether a JSON-RPC code means the request itself was malformed,
-// which is the caller's fault and not the server's.
-func isClientCode(code int64) bool {
-	switch code {
-	case jsonrpc.CodeParseError, jsonrpc.CodeInvalidRequest, jsonrpc.CodeMethodNotFound, jsonrpc.CodeInvalidParams:
-		return true
-	}
-	return false
-}
-
 // needsInputResult is the shape every MCP result with an input-required state shares.
 type needsInputResult interface{ NeedsInput() bool }
 
@@ -214,8 +238,9 @@ func needsInput(result mcp.Result) bool {
 	return ok && r.NeedsInput()
 }
 
-// isToolError reports whether a tool call result ended in an error. Only tools/call
-// carries IsError; every other method's error is a protocol error instead.
+// isToolError reports whether a tool call result ended in an error.
+// Only tools/call carries IsError.
+// Every other method's error is a protocol error.
 func isToolError(result mcp.Result) bool {
 	r, ok := result.(*mcp.CallToolResult)
 	return ok && r != nil && r.IsError
@@ -223,6 +248,20 @@ func isToolError(result mcp.Result) bool {
 
 // requestStateOf reads the opaque requestState a result carries when it needs input, so a
 // retry round trip can be linked to the result that asked for it.
+// paramStateOf reads RequestState off a retry. The client echoes the state
+// the previous result asked it to send back.
+func paramStateOf(req mcp.Request) string {
+	switch params := req.GetParams().(type) {
+	case *mcp.CallToolParamsRaw:
+		return params.RequestState
+	case *mcp.ReadResourceParams:
+		return params.RequestState
+	case *mcp.GetPromptParams:
+		return params.RequestState
+	}
+	return ""
+}
+
 func requestStateOf(result mcp.Result) string {
 	switch r := result.(type) {
 	case *mcp.CallToolResult:
@@ -233,11 +272,4 @@ func requestStateOf(result mcp.Result) string {
 		return r.RequestState
 	}
 	return ""
-}
-
-// hashState hashes an opaque requestState instead of storing it, because the MCP spec
-// requires an unauthenticated server to encrypt and sign that value.
-func hashState(state string) string {
-	sum := sha256.Sum256([]byte(state))
-	return hex.EncodeToString(sum[:8])
 }

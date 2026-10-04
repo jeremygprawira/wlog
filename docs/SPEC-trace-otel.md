@@ -21,12 +21,13 @@ that already runs OTel tracing, without requiring OTel for everyone else. `http-
 
 <!-- snippet:sketch -->
 ```go
-func Enricher() wlog.Enricher
+func Plugin(opts ...Option) (wlog.Plugin, error)
 ```
 
-`Enricher()` reads `trace.SpanContextFromContext(ctx)`. When that span context is valid (checked
-with the OTel API's own `IsValid()`), it sets `trace.trace_id` and `trace.span_id` from it. If `http-std` set `traceparent`-derived values earlier, this call is the only thing that
-overrides them. It never writes an empty or invalid value over ones that are already there.
+`wlogotel.Enricher` is removed. `Plugin` is a Starter, a Finisher, and a Measurer. On start it
+copies the active recording span's trace id and span id onto the event. With no recording span
+it leaves the event alone. On finish it copies the redacted event onto that span. It never
+creates a span.
 
 ## Success Criteria
 
@@ -34,8 +35,8 @@ overrides them. It never writes an empty or invalid value over ones that are alr
    span's own IDs, whether or not `http-std` also set them from a header.
 2. With no span in `ctx` (or an invalid one), any `traceparent`-derived values from `http-std`
    pass through untouched.
-3. Zero imports outside the standard library plus `core`, `go.opentelemetry.io/otel`, and
-   `go.opentelemetry.io/otel/trace`.
+3. Imports stay inside the standard library, the root module, and the OpenTelemetry modules
+   named in this module's `go.mod`.
 
 ## Testing
 
@@ -45,7 +46,7 @@ to build a test span context directly, with no real tracer or exporter needed.
 ## Boundaries
 
 - **Always:** check `IsValid()` before using a span context's IDs.
-- **Ask first:** adding OTel metrics or log-bridge support beyond this one trace-id enricher.
+- **Ask first:** a new exported entry point besides `Plugin`.
 - **Never:** create a span. This module only reads one that already exists in `ctx`.
 
 ## Open Questions

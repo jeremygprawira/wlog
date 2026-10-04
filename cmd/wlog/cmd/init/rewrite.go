@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"strconv"
 	"strings"
 )
 
@@ -23,17 +24,17 @@ func rewrite(filename string, source []byte, framework string) ([]byte, bool, er
 		return nil, false, fmt.Errorf("parse %s: %w", filename, err)
 	}
 
-	var changed bool
 	switch framework {
 	case "nethttp", "mux":
 		// Both start a server with a handler: net/http's ListenAndServe, or an http.Server
 		// literal whose Handler field names one.
-		changed = wrapHandlers(file)
+		if !wrapHandlers(file) {
+			return nil, false, nil
+		}
 	default:
-		changed = installRouterMiddleware(file, framework)
-	}
-	if !changed {
-		return nil, false, nil
+		// Splice the call as text. An inserted syntax node has no position, so the printer
+		// pulls the next comment into the call.
+		return spliceRouterUse(fset, file, source, framework)
 	}
 
 	var out bytes.Buffer
@@ -46,6 +47,53 @@ func rewrite(filename string, source []byte, framework string) ([]byte, bool, er
 		return nil, false, fmt.Errorf("format %s: %w", filename, err)
 	}
 	return formatted, true, nil
+}
+
+// spliceRouterUse inserts router.Use(LoggerMiddleware()) at the end of the statement that
+// builds the router, then formats the file.
+func spliceRouterUse(fset *token.FileSet, file *ast.File, source []byte, framework string) ([]byte, bool, error) {
+	offset, router, ok := routerInsert(fset, file, framework)
+	if !ok {
+		return nil, false, nil
+	}
+	insertion := []byte("\n" + router + ".Use(LoggerMiddleware())")
+	spliced := make([]byte, 0, len(source)+len(insertion))
+	spliced = append(spliced, source[:offset]...)
+	spliced = append(spliced, insertion...)
+	spliced = append(spliced, source[offset:]...)
+	formatted, err := format.Source(spliced)
+	if err != nil {
+		return nil, false, fmt.Errorf("format spliced source: %w", err)
+	}
+	return formatted, true, nil
+}
+
+// routerInsert returns the byte offset just after the router is built.
+func routerInsert(fset *token.FileSet, file *ast.File, framework string) (int, string, bool) {
+	var offset int
+	var router string
+	found := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		if found {
+			return false
+		}
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		for _, statement := range block.List {
+			name, ok := routerName(statement, framework)
+			if !ok || hasWlogMiddleware(file, block.List, name) {
+				continue
+			}
+			offset = fset.Position(statement.End()).Offset
+			router = name
+			found = true
+			return false
+		}
+		return true
+	})
+	return offset, router, found
 }
 
 // wrapHandlers wraps every server handler in the file with WrapHandler.
@@ -95,34 +143,6 @@ func wrapHandlerArg(arg ast.Expr) ast.Expr {
 	return callExpr("WrapHandler", arg)
 }
 
-// installRouterMiddleware inserts router.Use(LoggerMiddleware()) after the router is built, so
-// every route the file registers is covered.
-func installRouterMiddleware(file *ast.File, framework string) bool {
-	changed := false
-	ast.Inspect(file, func(node ast.Node) bool {
-		block, ok := node.(*ast.BlockStmt)
-		if !ok {
-			return true
-		}
-		for i, statement := range block.List {
-			router, ok := routerName(statement, framework)
-			if !ok || hasMiddleware(block.List, router) {
-				continue
-			}
-			insert := i + 1
-			updated := make([]ast.Stmt, 0, len(block.List)+1)
-			updated = append(updated, block.List[:insert]...)
-			updated = append(updated, middlewareStatement(router))
-			updated = append(updated, block.List[insert:]...)
-			block.List = updated
-			changed = true
-			break
-		}
-		return true
-	})
-	return changed
-}
-
 // routerName returns the variable a statement assigns a router to, when the framework matches.
 func routerName(statement ast.Stmt, framework string) (string, bool) {
 	assign, ok := statement.(*ast.AssignStmt)
@@ -140,9 +160,10 @@ func routerName(statement ast.Stmt, framework string) (string, bool) {
 	return ident.Name, true
 }
 
-// hasMiddleware reports whether the block already calls Use on this router, so a second run of
-// the tool cannot add a second wrapper.
-func hasMiddleware(statements []ast.Stmt, router string) bool {
+// hasWlogMiddleware reports whether this router already calls wlog. Another Use, such as
+// a recoverer, is not wlog and does not count.
+func hasWlogMiddleware(file *ast.File, statements []ast.Stmt, router string) bool {
+	names := wlogImportNames(file)
 	for _, statement := range statements {
 		call, ok := statement.(*ast.ExprStmt)
 		if !ok {
@@ -156,16 +177,59 @@ func hasMiddleware(statements []ast.Stmt, router string) bool {
 		if !ok || sel.Sel.Name != "Use" {
 			continue
 		}
-		if receiver, ok := sel.X.(*ast.Ident); ok && receiver.Name == router {
+		receiver, ok := sel.X.(*ast.Ident)
+		if !ok || receiver.Name != router {
+			continue
+		}
+		if callUsesWlog(expr, names) {
 			return true
 		}
 	}
 	return false
 }
 
-// middlewareStatement builds router.Use(LoggerMiddleware()).
-func middlewareStatement(router string) ast.Stmt {
-	return &ast.ExprStmt{X: callExpr(router+".Use", callExpr("LoggerMiddleware"))}
+// wlogImportNames maps a local name to true when that import is a wlog package.
+func wlogImportNames(file *ast.File) map[string]bool {
+	names := map[string]bool{}
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || !strings.Contains(path, "jeremygprawira/wlog") {
+			continue
+		}
+		local := path[strings.LastIndex(path, "/")+1:]
+		if spec.Name != nil && spec.Name.Name != "_" && spec.Name.Name != "." {
+			local = spec.Name.Name
+		}
+		names[local] = true
+	}
+	return names
+}
+
+// callUsesWlog reports whether a Use call's arguments name wlog.
+func callUsesWlog(call *ast.CallExpr, names map[string]bool) bool {
+	for _, arg := range call.Args {
+		if exprUsesWlog(arg, names) {
+			return true
+		}
+	}
+	return false
+}
+
+// exprUsesWlog reports whether an expression is a wlog call or a generated wrapper.
+func exprUsesWlog(expr ast.Expr, names map[string]bool) bool {
+	switch node := expr.(type) {
+	case *ast.Ident:
+		return node.Name == "LoggerMiddleware" || node.Name == "WrapHandler"
+	case *ast.SelectorExpr:
+		if ident, ok := node.X.(*ast.Ident); ok && names[ident.Name] {
+			return true
+		}
+		return node.Sel.Name == "LoggerMiddleware" || node.Sel.Name == "WrapHandler"
+	case *ast.CallExpr:
+		return exprUsesWlog(node.Fun, names)
+	default:
+		return false
+	}
 }
 
 // isListenAndServe reports whether a call starts an http server.

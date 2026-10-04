@@ -45,6 +45,9 @@ func answer(ctx context.Context, logger *wlog.Logger, client anthropic.Client, q
 	llm.Add(ctx, wloganthropic.FromMessage(msg))
 
 	handle.End(nil)
+	if len(msg.Content) == 0 {
+		return "", nil
+	}
 	return msg.Content[0].Text, nil
 }
 

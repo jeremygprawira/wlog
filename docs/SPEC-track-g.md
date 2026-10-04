@@ -42,13 +42,13 @@ type Record struct {
 }
 ```
 
-- The event keys under `llm` are the snake_case field names, such as `request_model`,
-  `cache_read_input_tokens`, and `time_to_first_chunk_ms`. `Err` becomes an `error` object with
-  `code` and `message`. Phase 11 already renamed `model`, `cached_input_tokens`, and
-  `finish_reason`. This track adds the keys for the new fields.
-- `llm.Add(ctx, r)` appends to `llm.calls`, updates the totals, and records one `calls` entry
-  with kind `llm`, system `Provider`, operation `Operation`, target `ResponseModel`, and the
-  duration. So `wlog query` ranks model calls with every other call.
+The shape above is the `Record` in `llm/record.go` on this branch. It is not a second type.
+
+- The event keys under `llm` are the snake_case names in [SPEC-llm](SPEC-llm.md). `Model` is
+  `request_model`. `FinishReason` is one entry of `finish_reasons`. `TimeToFirstToken` is
+  `time_to_first_chunk_ms`.
+- `llm.Add(ctx, r)` appends one object to `llm.calls` and updates the totals. It does not
+  write a root `calls` entry.
 - These fields close PAR-27 and BET-23.
 - `Prices` gains `CacheWritePerMillion` and `CacheWrite1hPerMillion`. `Cost` prices uncached
   input, cache reads, both write kinds, and output, each at its own rate.
@@ -81,7 +81,7 @@ such as `Message.Accumulate` or `ChatCompletionAccumulator`.
 | `ai-openai` | `github.com/openai/openai-go/v3` v3.61.0, Go 1.25 | `FromChatCompletion`, `FromResponse` | `ObserveChat(stream)` reads usage chunks, finish reasons, and tool names. `ObserveResponses(stream)` reads terminal events | `Middleware()`, reads `x-request-id` |
 | `ai-genai` | `google.golang.org/genai` v1.71.0, Go 1.24 | `FromGenerateContent(resp, backend)` | `Observe(seq iter.Seq2[...])` re-yields each chunk, and the last non-nil usage wins | `Transport(next)` wraps the authenticated transport, never replaces it |
 | `ai-goopenai` | `github.com/sashabaranov/go-openai` v1.42.1, Go 1.21 (the SDK needs 1.18) | `FromChatCompletionResponse`, `FromResponse` | `ObserveChat(stream)` | `Doer(next)` implements `HTTPDoer` |
-| `ai-langchaingo` | `github.com/tmc/langchaingo` v0.1.14, Go 1.24.4 | `FromContentResponse(resp, provider, model)` | none | `Handler()` for `callbacks.Handler`. Tool and chain callbacks add `calls` |
+| `ai-langchaingo` | `github.com/tmc/langchaingo` v0.1.14, Go 1.24.4 | `FromContentResponse(resp, provider, model)` | none | `Handler(log)` for `callbacks.Handler`. Tool and chain callbacks add `calls` |
 | `ai-eino` | `github.com/cloudwego/eino` v0.9.19, Go 1.21 (the SDK needs 1.18) | none | the handler drains stream copies in a goroutine and closes them | `Handler()` built with `NewHandlerHelper`. It falls back to `Message.ResponseMeta.Usage` |
 
 Rules:
@@ -108,7 +108,10 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 | `rpc.service` | the server name |
 | `rpc.mcp.tool`, `rpc.mcp.resource_uri`, `rpc.mcp.prompt` | the tool name, resource URI, or prompt name |
 | `rpc.mcp.session_id`, `rpc.mcp.protocol_version`, `rpc.mcp.client` | the session and the client name and version |
+| `rpc.mcp.session` | a short hash of the session id. The redactor keeps this path. The raw id in `rpc.mcp.session_id` is still masked |
 | `rpc.mcp.result` | `ok`, `tool_error`, `protocol_error`, or `input_required` |
+| `rpc.mcp.request_state` | a short hash of the opaque request state, so a retry can be linked |
+| `rpc.mcp.arguments`, `rpc.mcp.result_content`, `rpc.mcp.structured_content` | When `WithContent` is set, the tool payload |
 | `rpc.status_code` | the JSON-RPC error code for a protocol error |
 
 - A tool result with `isError` sets status class client error, so it gives level `warn`. A protocol
@@ -116,12 +119,12 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
   so they give `warn`.
 - A result that asks for more input (MCP spec 2026-07-28) records `rpc.mcp.result` `input_required`,
   and holds a hash of `requestState` so round trips link up.
-- Tool arguments and results are never stored unless `WithContent()` is set.
+- Tool arguments and results are never stored unless `WithContent()` is set. A handler error that quotes those arguments is stored as `mcp handler error` unless content is on.
 
 | Module | Library and floor | Hook point |
 |---|---|---|
 | `ai-mcpsdk` | `github.com/modelcontextprotocol/go-sdk` v1.8.0, Go 1.25 | `server.AddReceivingMiddleware(wlogmcp.Middleware(log))`. Notifications are skipped. It reads client info from `InitializeParams()`, which can be nil |
-| `ai-mcpgo` | `github.com/mark3labs/mcp-go` v1.1.0, Go 1.25.5 | `server.WithHooks(wlogmcpgo.Hooks(log))`. It does not use tool middleware, which misses errors and runs twice on legacy round trips. It links before and after hooks by session and request id, in a map with a 5 minute expiry and 10,000 entries at most |
+| `ai-mcpgo` | `github.com/mark3labs/mcp-go` v1.1.0, Go 1.25.5 | `server.WithHooks(wlogmcpgo.Hooks(log))`. It does not record through tool middleware, which misses errors and runs twice on legacy round trips. Open also returns a middleware that only swaps the handler onto the event context. It links before and after hooks by session and request id, in a map with a 5 minute expiry and 10,000 entries at most |
 
 ## `wlog mcp` (in `cli-mcp`)
 
@@ -146,8 +149,9 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 - `wlog init` reads `go.mod` and matches each required module to the adapter table in
   CAPABILITIES.md. It covers routers, RPC, queues, jobs, stores, loggers, error libraries, and
   LLM SDKs.
-- It writes one `wlog_setup.go` that builds the Logger with `setup.FromEnv()` and installs each
-  plugin. It edits each entry point through `go/ast`.
+- It writes one `wlog_setup.go` that builds the Logger with `setup.FromEnv()`. It wires an HTTP
+  framework into the entry point through `go/ast`. For every other adapter, it prints the setup
+  line and writes no call.
 - `--yes` accepts the whole plan. `--json` prints the plan. After writing, it runs `go build` and
   `wlog doctor`, and prints both results. (PAR-33)
 

@@ -34,6 +34,10 @@ func cases() []caseDef {
 			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/echo5": "middleware/echo5"}},
 		{framework: "gin", requires: []string{"github.com/gin-gonic/gin v1.12.0"},
 			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/gin": "middleware/gin"}},
+		{framework: "fiber", requires: []string{"github.com/gofiber/fiber/v2 v2.20.0"},
+			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/fiber": "middleware/fiber"}},
+		{framework: "fiber3", requires: []string{"github.com/gofiber/fiber/v3 v3.5.0"},
+			replaces: map[string]string{"github.com/jeremygprawira/wlog/middleware/fiber3": "middleware/fiber3"}},
 	}
 }
 
@@ -125,7 +129,7 @@ func TestInit_DryRunWritesNothing(t *testing.T) {
 	dir := treeFor(t, caseDef{framework: "nethttp"}, root)
 
 	var stdout bytes.Buffer
-	if code := wloginit.Run([]string{"--dir", dir, "--dry-run"}, &stdout, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir}, &stdout, io.Discard); code != 0 {
 		t.Fatalf("dry run exit %d", code)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "wlog_setup.go")); !os.IsNotExist(err) {
@@ -180,7 +184,7 @@ func TestInit_CLI4_ServerLiteral(t *testing.T) {
 }
 
 // TestInit_CLI15_AtomicWrites proves the run leaves no partial file, merges .env.example instead
-// of replacing it, prints a unified diff on --dry-run, and refuses an unknown drain.
+// of replacing it, prints a unified diff on no --yes, and refuses an unknown drain.
 func TestInit_CLI15_AtomicWrites(t *testing.T) {
 	root := repoRoot(t)
 	dir := treeFor(t, caseDef{framework: "nethttp"}, root)
@@ -194,7 +198,7 @@ func TestInit_CLI15_AtomicWrites(t *testing.T) {
 
 	// A dry run prints a unified diff and writes nothing.
 	var stdout bytes.Buffer
-	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--drain", "file", "--dry-run"}, &stdout, io.Discard); code != 0 {
+	if code := wloginit.Run([]string{"--dir", dir, "--framework", "nethttp", "--drain", "file"}, &stdout, io.Discard); code != 0 {
 		t.Fatalf("dry run exit %d", code)
 	}
 	for _, marker := range []string{"---", "+++", "@@"} {
@@ -338,7 +342,7 @@ func assertNoTempFiles(t *testing.T, dir string) {
 		t.Fatalf("read dir: %v", err)
 	}
 	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".tmp") {
+		if strings.Contains(entry.Name(), ".tmp") {
 			t.Errorf("the run left %s behind", entry.Name())
 		}
 	}

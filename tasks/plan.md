@@ -927,10 +927,10 @@ Each drain task also moves the drain to `New`, `NewSender`, `MustNew`, and `With
 **Deps:** 10-CI-4. **Size:** M. **Closes:** CLI-4, CLI-15.
 **Files:**
 
-- `cmd/wlog/init.go`
-- `cmd/wlog/internal/initgen/rewrite.go`
-- `cmd/wlog/internal/initgen/write.go`
-- `cmd/wlog/init_test.go`
+- `cmd/wlog/cmd/init/init.go`
+- `cmd/wlog/cmd/init/rewrite.go`
+- `cmd/wlog/cmd/init/setup.go`
+- `cmd/wlog/cmd/init/init_test.go`
 
 #### 10-INIT-2 `wlog doctor` and `wlog agents`
 **Acceptance:**
@@ -1874,7 +1874,7 @@ Tracks E and G share no files. `cli-init` v2 comes last.
 #### 14-G-7 `wlog init` v2
 **Acceptance:** `init` matches every module in `go.mod` to the adapter table, writes one `wlog_setup.go`, and edits entry points through `go/ast`. `--yes` and `--json` work. It runs `go build` and `wlog doctor` at the end. On the `llm-agent` and `mcp-server` recipe apps, the result builds and passes doctor. Track G criterion 6. Closes PAR-33.
 **Verify:** `cd cmd/wlog && go test -race -run 'TestInitV2_' ./...`.
-**Deps:** 14-G-6, every phase 12 and 13 module. **Size:** L. **Files:** `cmd/wlog/init.go`, `cmd/wlog/internal/initgen/`, `cmd/wlog/internal/adapters/table.go`.
+**Deps:** 14-G-6, every phase 12 and 13 module. **Size:** L. **Files:** `cmd/wlog/cmd/init/`, `cmd/wlog/internal/adapters/table.go`.
 
 ### Review point 14, v0.9.0
 

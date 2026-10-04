@@ -1,0 +1,7 @@
+ts	phase	decision	why	evidence	result
+2026-10-03T17:39:23+07:00	start	tdd plus show the work for phase 14 leftovers	the amendment from tsukuru asks for a failing test first and this audit log	agent sand-subagent-cb144fed-a28b-1c51-261b-4dbd7d0ee1f2 agent aka no older rows	blocked
+2026-10-03T17:52:30+07:00	C	supersede the start row result	the start row said blocked but the log was only being created and the work went on	start row 2026-10-03T17:39:23+07:00	tests green
+2026-10-03T17:52:30+07:00	C	fix P-18 by sharing flatten firstEnv and chunkEnd and dropping the client cache	the test failed because the client was cached and the helpers were copied	TestHoneycomb_P18_DoesNotCacheTheClient fb7f84e	tests green
+2026-10-03T17:52:30+07:00	E	fix the open D-24 dedup parts	the test failed because Splunk encoded each event twice and the path and timestamp helpers were copied	TestSplunk_D24_EncodesEachEventOnce 93dd3ad	tests green
+2026-10-03T18:14:10+07:00	E	the CI on the batch E tick is not from these fixes	TestHTTPCore_HTTP14_SessionValuesNeverKept failed at Go 1.21 because a random event id held the letters c-1 and this batch did not change httpcore	run 37118406397	blocked
+2026-10-03T18:19:30+07:00	ci	stop the session test from matching c-1 inside an event id	the query value was already absent and the letters sat in the event id	TestHTTPCore_HTTP14_SessionValuesNeverKept a84424c	tests green
