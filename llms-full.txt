@@ -1120,18 +1120,16 @@ Everything here reads the phase 7 APIs, which is why it ships after them.
 ## cli-init (gap 6)
 
 ```
-wlog init [--framework auto|nethttp|mux|echo|echo5|gin] [--drain stdout|axiom|loki|file]
-          [--dry-run] [--dir .]
+wlog init [--framework auto|nethttp|mux|echo|echo5|gin|chi|fiber|fiber3]
+          [--drain stdout|axiom|loki|file] [--yes] [--json] [--dir .]
 ```
 
-`init` reads the target module and picks the framework by the imports it finds. It then
-writes three things. A `wlog.go` holds a `New` helper, with the service name taken from
-the module path. A middleware line goes in at the router it found. A `.env.example` holds
-the drain's variables. Nothing is written until the whole plan succeeds, so a failure halfway
-leaves the tree as it was.
+`init` reads the target module and picks the framework by the imports it finds. A run with
+no `--yes` prints the plan and writes nothing. It exits 0. `--yes` writes `wlog_setup.go`,
+merges `.env.example`, and edits the entry point. It then runs `go build` and `wlog doctor`.
+Nothing is written until the whole plan succeeds, so a failure halfway leaves the tree as it was.
 
-`--dry-run` prints a unified diff and writes nothing. An existing `wlog.go` is never
-overwritten. `init` reports it and exits 1.
+An existing `wlog_setup.go` or `wlog.go` is never overwritten. `init` reports it and exits 1.
 
 ## cli-doctor (gap 7)
 
@@ -1217,7 +1215,7 @@ included.
 
 1. `init` writes a compiling setup for each of the five frameworks, proven by building
    each generated tree in a temporary directory.
-2. `init --dry-run` writes nothing, and `init` over an existing `wlog.go` exits 1.
+2. `init` with no `--yes` writes nothing and exits 0. `init` over an existing `wlog.go` exits 1.
 3. `doctor` reports a fail for a missing middleware, a missing drain variable, and a
    disabled redactor, and passes on the repository's own `examples`.
 4. `doctor` exits 0 with warns and no fails.
@@ -1547,6 +1545,8 @@ type Finisher interface { // replaces RequestFinisher
   `zerolog.Ctx(ctx)` folds into the event with no app code.
 - `end` calls each `Finisher` with the read-only event after finalize and before drains. A
   `Finisher` sees `summary`, `outcome`, and the redacted fields.
+- The event view has `Fields`. It returns a copy of the redacted map, including nested maps
+  and slices. A write to that copy does not change the drained event.
 - Both run under recover. A panic reports `WLOG_HOOK_PANIC` and keeps the previous context.
   (PAR-25)
 - Go has no diagnostics channel like Node's. A `Finisher` or `drain-memory` `Subscribe` gives
@@ -1575,6 +1575,10 @@ type Measure struct {
 
 - `end` calls each `Measurer` for every event whose kind is not `log`. The call comes before head
   sampling and the level filter, so a sampler never changes a metric.
+- When the event sets `kind` or `operation`, `Measure` reads that field. Otherwise it reads the value
+  `Start` stored.
+- A kind other than `request`, `rpc`, `message`, `job`, `command`, `function`, or `work` records as
+  `_OTHER`.
 - `Measure` holds reserved fields only. It never holds user keys, paths, bodies, or ids. Each
   string passes through the redactor's value patterns first, so G1 holds.
 - A disabled or closed Logger calls no `Measurer`. A panic reports `WLOG_HOOK_PANIC`.
@@ -1633,7 +1637,12 @@ func (l *Logger) SetEnabled(on bool)
 func (l *Logger) Enabled() bool
 func (l *Logger) Flush(ctx context.Context) error
 func Log(ctx context.Context, level Level, msg string, kv ...any)
+func CurrentLevel(ctx context.Context) (Level, bool)
 ```
+
+- `CurrentLevel` returns the level of the event on `ctx`, and reports whether `SetLevel` named
+  it. A finisher reads the report, so a level the handler named wins over the level the error
+  asks for.
 
 - A package function uses the Logger on `ctx`. With none, it uses `Default()`. `SetEnabled` and
   `Enabled` at package level are removed.
@@ -1641,6 +1650,8 @@ func Log(ctx context.Context, level Level, msg string, kv ...any)
   of package-level state.
 - `Start` and `Detach` with no Logger on `ctx` use `Default()`.
 - `Set`, `SetGroup`, `Append`, `SetLevel`, and `AppendLog` with no event on `ctx` do nothing.
+- `UpdateGroup` runs a function on one group while the event lock is held. The function must not
+  call wlog. With no event, it does nothing.
   Each one reports `WLOG_NO_EVENT` with the key name.
 - `Error` with no event on `ctx` emits a `log` event at level `error`, with the `ErrorInfo`, so no
   error is lost. It also reports `WLOG_NO_EVENT`.
@@ -3307,7 +3318,7 @@ binds `0.0.0.0:4318`. Every Compose service has a health probe. (PIPE-9)
 2. `init` merges into an existing `.env.example`, and it never removes a line. To pick a package
    name, it skips `_test.go` files. It finds `go.mod` by walking up from `--dir`.
    An unknown `--drain` exits 2. (CLI-15)
-3. `init --dry-run` prints a unified diff. Writes go to temporary files first, then renames them
+3. `init` with no `--yes` prints a unified diff. Writes go to temporary files first, then renames them
    all, so a failure leaves no partial tree. The generated setup closes the Logger on shutdown.
    (CLI-15)
 4. The init test builds each generated app and serves one request that must return 200 and emit
@@ -3831,25 +3842,37 @@ which keeps this package in the root module and free of a vendor's release cycle
 // what its own client reports.
 type Record struct {
 	Provider string // "openai", "anthropic", "google", or any string
-	Model    string // the exact model id billed, such as "claude-sonnet-5"
-	Operation string // "chat", "embedding", "rerank", or any string
+	Model         string // the exact model id billed, such as "claude-sonnet-5"
+	ResponseModel string // the model the provider returned
+	Operation     string // "chat", "embedding", "rerank", or any string
+	Status        string
+	FinishReasons []string
+	Attempts      int
+	RequestIDs    []string
+	Err           error
 
-	InputTokens       int
-	OutputTokens      int
-	CachedInputTokens int // tokens served from a prompt cache, billed at a lower rate
-	ReasoningTokens   int
+	InputTokens             int // whole input count, cache reads and writes included
+	CachedInputTokens       int
+	CacheWriteInputTokens   int
+	CacheWrite1hInputTokens int
+	OutputTokens            int
+	ReasoningTokens         int // a subset of OutputTokens
 
 	ToolCalls []ToolCall
+	Content   *Content // nil unless a module's WithContent filled it
 
-	TimeToFirstToken time.Duration // stream only, zero for a whole-response call
-	Duration         time.Duration
-	Streamed         bool
+	TimeToFirstToken      time.Duration // stream only, zero for a whole-response call
+	Duration              time.Duration
+	Streamed              bool
+	OutputTokensPerSecond float64 // Add sets this when the caller leaves it zero
+	Steps                 int
 
 	FinishReason string // "stop", "length", "tool_calls", "content_filter", or any string
 	Cost         *Cost  // nil until Price fills it
 }
 
 type ToolCall struct {
+	ID       string
 	Name     string
 	Duration time.Duration
 	Failed   bool
@@ -3858,9 +3881,12 @@ type ToolCall struct {
 // Cost is money, in whole millionths of a US dollar, so no float rounding reaches the
 // event. USD() renders it for a human.
 type Cost struct {
-	InputMicros  int64
-	OutputMicros int64
-	TotalMicros  int64
+	InputMicros        int64 // uncached input only
+	CacheReadMicros    int64
+	CacheWriteMicros   int64
+	CacheWrite1hMicros int64
+	OutputMicros       int64
+	TotalMicros        int64
 }
 
 func (c Cost) USD() float64
@@ -3880,9 +3906,11 @@ func Add(ctx context.Context, r Record)
 ```go
 // Price is one model's rate, in micros per million tokens.
 type Price struct {
-	InputPerMillion       int64
-	OutputPerMillion      int64
-	CachedInputPerMillion int64
+	InputPerMillion        int64
+	OutputPerMillion       int64
+	CachedInputPerMillion  int64
+	CacheWritePerMillion   int64 // five minute writes
+	CacheWrite1hPerMillion int64
 }
 
 type Prices struct{ /* unexported */ }
@@ -3905,21 +3933,29 @@ func Enricher(p *Prices) wlog.Enricher
 ```
 
 The enricher reads the `llm` group the handler already set, prices every call whose model
-the table knows, and writes `llm.cost` and the per-call costs. An unknown model leaves the
+the table knows, and writes `llm.cost_micros` and the per-call costs. An unknown model leaves the
 cost off the event and sets `llm.cost_unknown` to true. A dashboard can then count what it
 failed to price, instead of reading a silent zero.
 
 ### Fields on the event
 
 ```
-llm.provider llm.request_model llm.operation
-llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.reasoning_tokens
-llm.total_tokens
+llm.provider llm.request_model llm.response_model llm.operation llm.status
+llm.attempts llm.request_ids
+llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.cache_write_input_tokens
+llm.cache_write_1h_input_tokens llm.reasoning_tokens llm.response_id
+llm.total_tokens llm.steps llm.output_tokens_per_second
+llm.input_messages llm.output_messages
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
-llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reasons
+llm.time_to_first_chunk_ms llm.duration_ms llm.streamed
+llm.steps llm.output_tokens_per_second llm.attempts llm.request_ids llm.finish_reasons
 llm.cost_micros llm.cost_unknown
-llm.calls[]  (one object per call, set by Add)
+llm.input_messages llm.output_messages
+llm.calls[]  (one object per call, set by Add, with no message text)
 ```
+
+`attempts` and `request_ids` are not `Record` fields. HTTP middleware in the AI modules
+writes them onto the group.
 
 The stream timing field avoids the word "token" on purpose. The default redactor
 denies any key whose tokens include "token", so a name such as `time_to_first_token_ms`
@@ -3931,17 +3967,20 @@ is masked before a drain sees it.
 2. `Add` folds token counts and costs into one total, and appends each call to `llm.calls[]`,
    capped at 200 entries each by llm itself, with every entry past the cap counted in
    wlog.dropped_fields (gate G4). Money stays in whole micros: an event never carries a
-   dollar float, because a float rounds.
+   dollar float, because a float rounds. `Add` also records one `calls` entry with kind `llm`,
+   system `Provider`, operation `Operation`, and target `ResponseModel`.
 3. `Cost` prices a record from the token counts, and prices a cached input token at the
-   cached rate.
+   cached rate. A prefix matches a date suffix or `-latest` only. Any other suffix is unknown.
 4. `Cost` reports false for a model the table does not hold, and the enricher then sets
    `llm.cost_unknown`.
 5. Money never passes through a float before it reaches the event. A test prices a call
    whose exact dollar value has no float representation and compares whole micros.
 6. `With` returns a new `Prices` and leaves the original unchanged, under `-race`.
 7. `Set` and `Add` outside a `wlog.Start` do nothing and do not panic.
-8. A redacted prompt or completion never reaches the event, since this module writes no
-   prompt text at all. A test asserts no field holds message content.
+8. A redacted prompt or completion never reaches the event by default, because this module
+   writes no prompt text. A test asserts no field holds message content. Phase 14 adds one
+   exception: a Track G module can set the opt-in `Record.Content`, and only then does the
+   content reach the event, through the redactor.
 9. Zero imports outside the standard library plus `core`.
 
 ## Cost guide
@@ -3959,8 +3998,8 @@ in the test, never `DefaultPrices`, so a later table update cannot break them.
 
 - **Always:** keep money in whole micros inside the record and the event.
 - **Ask first:** adding a model to the built-in price table, and changing the micros unit.
-- **Never:** write prompt or completion text onto the event. This module records the shape
-  of a call, never its content.
+- **Never:** write prompt or completion text onto the event without the phase 14 opt-in
+  `Record.Content`. By default this module records the shape of a call, never its content.
 
 ## Open Questions
 
@@ -4228,6 +4267,7 @@ user can add to and remove from**, with useful defaults. Replaces the boilerplat
 normalized it to a JSON tree (`map[string]any`, `[]any`, `string`, `float64`/`int64`, `bool`,
 `nil`). It masks
 **in place**. Structs are normalized by core via JSON tags first, so `json:"password"` is matched.
+A valid JSON object or array string stays one string until `JSONTree` expands it, so a denied key inside that text is masked.
 Key and path rules match **canonical** (default namespaced) key names. Core applies field
 renaming presets *after* redaction, so denylist entries do not change with the output names.
 
@@ -4741,12 +4781,13 @@ that already runs OTel tracing, without requiring OTel for everyone else. `http-
 
 <!-- snippet:sketch -->
 ```go
-func Enricher() wlog.Enricher
+func Plugin(opts ...Option) (wlog.Plugin, error)
 ```
 
-`Enricher()` reads `trace.SpanContextFromContext(ctx)`. When that span context is valid (checked
-with the OTel API's own `IsValid()`), it sets `trace.trace_id` and `trace.span_id` from it. If `http-std` set `traceparent`-derived values earlier, this call is the only thing that
-overrides them. It never writes an empty or invalid value over ones that are already there.
+`wlogotel.Enricher` is removed. `Plugin` is a Starter, a Finisher, and a Measurer. On start it
+copies the active recording span's trace id and span id onto the event. With no recording span
+it leaves the event alone. On finish it copies the redacted event onto that span. It never
+creates a span.
 
 ## Success Criteria
 
@@ -4754,8 +4795,8 @@ overrides them. It never writes an empty or invalid value over ones that are alr
    span's own IDs, whether or not `http-std` also set them from a header.
 2. With no span in `ctx` (or an invalid one), any `traceparent`-derived values from `http-std`
    pass through untouched.
-3. Zero imports outside the standard library plus `core`, `go.opentelemetry.io/otel`, and
-   `go.opentelemetry.io/otel/trace`.
+3. Imports stay inside the standard library, the root module, and the OpenTelemetry modules
+   named in this module's `go.mod`.
 
 ## Testing
 
@@ -4765,7 +4806,7 @@ to build a test span context directly, with no real tracer or exporter needed.
 ## Boundaries
 
 - **Always:** check `IsValid()` before using a span context's IDs.
-- **Ask first:** adding OTel metrics or log-bridge support beyond this one trace-id enricher.
+- **Ask first:** a new exported entry point besides `Plugin`.
 - **Never:** create a span. This module only reads one that already exists in `ctx`.
 
 ## Open Questions
@@ -5447,7 +5488,7 @@ message. Short-lived processes deliver their events before they exit.
 | `job-asynq` | `mux.Use(Middleware())`, and `Handler(h)` for `Server.Run` without a mux. Producer: `Enqueue(ctx, client, task)` builds the task with `NewTaskWithHeaders` | system `asynq`, name `Type()`, id, queue, attempt `GetRetryCount + 1`, max attempts. `SkipRetry` gives `discard`, `RevokeTask` gives `cancel` | asynq v0.26.0 (first with task headers), Go 1.24 |
 | `job-river` | `Config.Middleware` with a type that has both `Work` and `IsMiddleware`, so it also works as the older `WorkerMiddleware`. Producer: a `JobInsertMiddleware` writes `traceparent` into job metadata | system `river`, name `Kind`, id, queue, attempt, max attempts, `lag_ms` from `ScheduledAt`. `JobSnooze` gives `snooze`, `JobCancel` gives `cancel`, and a final failed attempt gives `discard` | river v0.14.1, Go 1.21. The package doc notes the MPL-2.0 license |
 | `job-temporal` | `worker.Options.Interceptors` with a `WorkerInterceptor` that embeds the base types and wraps activities only | system `temporal`, name activity type, id, queue, attempt, workflow type and id, `lag_ms` from `StartedTime - ScheduledTime`. `ErrResultPending` is not a failure. Workflow code emits nothing, because wlog uses goroutines, clocks, and random ids that break replay | temporal sdk v1.33.1, Go 1.21 |
-| `job-cron` | `cron.WithChain(Wrap(name, spec))`, placed inside `SkipIfStillRunning`. `Job(name, fn func(ctx) error)` gives a context and an error. `work.Ticker` covers a plain `time.Ticker` loop | system `cron`, name, schedule. `Stop()`'s context is the flush point | cron v3.0.1, Go 1.21 |
+| `job-cron` | `cron.WithChain(Wrap(name, spec))` for a plain `cron.Job`, placed inside `SkipIfStillRunning`, or `Job(name, spec, fn)` for one function with a context and an error. Use one of the two, never both. `work.Ticker` covers a plain `time.Ticker` loop | system `cron`, name, schedule. `Stop()`'s context is the flush point | cron v3.0.1, Go 1.21 |
 
 ## Functions
 
@@ -5532,6 +5573,42 @@ Lambda event fixtures. Kafka, RabbitMQ, SQS (LocalStack), and Pub/Sub (emulator)
 - **Always:** flush before a short-lived process returns or exits.
 - **Ask first:** capturing any message key, body, or command argument.
 - **Never:** call wlog core from Temporal workflow code, or set a library's package-level variable.
+
+## Shipped API notes (2026-09-22)
+
+The code follows the tables above, with these differences. Each one is deliberate.
+
+- Every entry takes a `*wlog.Logger`. The tables show the short form.
+- `queue-kafkago.Consume` takes a `Fetcher`, so a test drives it with a fake reader.
+  `queue-kafkago.Enqueue` does not exist. `Writer` and `Drain` take a `*kafka.Writer`.
+- `queue-sarama.AsyncProducer` takes the `*sarama.Config` and requires
+  `Producer.Return.Successes`, because a call ends at the broker report.
+- `queue-franz.Record` takes the logger and the client.
+- `job-asynq.Enqueue` builds the task from a type name and a payload, because asynq has no
+  header setter.
+- `job-river.New` returns the worker middleware, and `InsertMiddleware` returns the insert
+  middleware.
+- `job-cron.Job` takes the logger, the name, and the schedule. `Wrap` is a per-entry wrapper,
+  so a caller uses `Wrap` or `Job`, never both.
+- `command-kong.Run` takes a grammar and `kong.Option` values.
+- `queue-cloudevents.Recover` wraps one receiver function, because the observability hook
+  cannot recover a panic. The setup in the package doc shows it.
+- Each adapter holds its own carrier for its library, next to the shared carriers in
+  `propagate`. Rule 9 names the shared ones only.
+- `messaging.nats.subscription` records the pattern a core NATS subscription matched, under
+  rule 10.
+- `faas-lambda.ProcessSQS` and its siblings record `faas.batch_failures` on an open
+  invocation event.
+- `queue-sqs.SendMessage` records the queue call itself, and `client-aws` records the rpc
+  call of the same send. Both stay, because a reader of the queue side and a reader of the
+  transport side ask different questions.
+- `job-temporal` measures `lag_ms` from the scheduled time to the start of the handler, which
+  is `StartedTime` minus `ScheduledTime`.
+- `queue-pubsub` records the subscription id as `messaging.destination`, because the
+  subscription is the endpoint the receive loop reads.
+- A drain that fails one event of a batch reports the whole batch, so the events before the
+  failure can arrive twice. `pipeline.PartialError` (phase 14, task 14-E-1) owns the fix, and
+  the pipeline spec records the ceiling.
 
 ## Open questions
 
@@ -5632,6 +5709,8 @@ log := wlog.New(wlog.WithPlugins(p))
 
 ### Trace ids
 
+- `WithSpans(false)` writes no span attributes. It still copies the trace ids from a recording span.
+- When `WithMetrics(false)`, `WithStats(true)` still registers the counters.
 - `Enricher` is removed. The plugin is a `Starter`. If the unit context holds a recording span, it
   calls `propagate.ContextWith` with the span's trace id and span id. The event, head sampling,
   and every outbound call then use the OTel ids. (HTTP-21)
@@ -5640,9 +5719,12 @@ log := wlog.New(wlog.WithPlugins(p))
 
 - The plugin is a `Finisher`. It reads the span from the unit context with
   `trace.SpanFromContext`. If no span is recording, it does nothing.
+- Kind `log` writes nothing onto the span. A unit that starts under a span another unit already
+  claimed writes nothing onto that span. A failed inner unit cannot mark the outer span as Error.
 - The OTel HTTP or gRPC middleware must wrap outside wlog. Then the span already exists at
   the start of the unit. The package doc shows the order for net/http, chi, gin, echo, and gRPC.
   If `wlog doctor` finds the OTel middleware inside wlog, it reports a warning. (HTTP-21)
+  The check ignores comments and `otelgrpc.NewServerHandler`, and it compares each file on its own.
 - Attribute names are the `attributes` names of the `otel` output preset. A nested value becomes
   a dotted key.
 - The plugin sets preset-mapped reserved keys first, then other reserved keys, then groups, then
@@ -5652,8 +5734,9 @@ log := wlog.New(wlog.WithPlugins(p))
 - `logs`, `errors`, `audit`, and `calls` never become span attributes. `call_stats` does.
 - Outcome `error` sets status Error, with `error.message` as the description. Outcome `success`
   leaves the status unset.
-- `error.type` is `error.code`, else `error.kind`, else `error.type`. For a request with status
-  500 or higher and no error, it is the status as text.
+- `error.type` comes from the otel preset: `error.code`, else `error.kind`, else `error.type`.
+  The span does not write that attribute again. For a request with status 500 or higher and no
+  error, it is the status as text.
 - For an event with an `error` object, the plugin adds one span event named `exception`. It holds
   `exception.type`, `exception.message`, and `exception.stacktrace`. The plugin never calls
   `RecordError`.
@@ -5668,7 +5751,8 @@ log := wlog.New(wlog.WithPlugins(p))
   with the semconv buckets `0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5,
   10`.
 - Its attributes are `http.request.method`, `url.scheme`, and `http.response.status_code`. For each
-  of `http.route` and `error.type` that is set, it adds that attribute. A method outside the nine standard methods is
+  of `http.route` and `error.type` that is set, it adds that attribute. A request with status 500 or
+  higher and no error uses the status text as `error.type`. A method outside the nine standard methods is
   `_OTHER`.
 - Each other kind except `log` records `wlog.work.duration` in seconds, with the same buckets. Its
   attributes are `wlog.kind`, `wlog.operation`, and `wlog.outcome`. For each of
@@ -5676,9 +5760,10 @@ log := wlog.New(wlog.WithPlugins(p))
 - After `WithMaxOperations` distinct operations in one kind, a new operation records as `_OTHER`.
   The plugin reports `WLOG_CAP_REACHED` once per kind.
 - `url.path`, user ids, and client addresses never become metric attributes.
-- With `WithStats(true)`, observable counters report the Logger's `Stats`. The counters are
-  `wlog.events.emitted`, `wlog.events.dropped` with `wlog.reason`, `wlog.writer.dropped`, and
-  `wlog.drain.events` with `wlog.drain` and `wlog.state`.
+- With `WithStats(true)`, `Plugin` builds the observable counters that report the Logger's `Stats`.
+  `Setup` only registers their callback. The counters are `wlog.events.emitted`,
+  `wlog.events.dropped` with `wlog.reason`, and `wlog.writer.dropped`.
+  Drain counters are not exported. A queue depth is not a counter, and two drains can share a name.
 - If an instrument fails to build, `Plugin` returns the error. Nothing panics.
 
 Floor: otel, otel/trace, and otel/metric v1.20.0, the first release with
@@ -5695,13 +5780,13 @@ func WithServiceAttributes(on bool) Option                        // default fal
 
 - `Send` maps the redacted event to one `log.Record` and calls `Logger.Emit`. The app's provider
   owns batching, export, and the resource.
-- Before it builds a record, `Send` calls `Enabled` with the severity and the event name. It skips
-  a disabled record.
+- `Send` builds the event span context first. It then calls `Enabled` with that context, the severity,
+  and the event name. It skips a disabled record.
 - The logger name is `github.com/jeremygprawira/wlog`, with the wlog version as the
   instrumentation version.
 - The record gets its timestamp from `timestamp` and its observed timestamp from the clock at
-  `Send`. It gets severity and severity text from `level`, the body from `summary`, and the event
-  name `wlog.<kind>`.
+  `Send`. Severity text is the lowercase wlog level. The body is `summary`. The event name is
+  `wlog.<kind>`.
 - Attributes are the `attributes` object of the `otel` preset. An array of objects becomes an
   `attribute.Slice` of map values.
 - If `ctx` holds no valid span, `Send` builds a span context from `trace.trace_id` and
@@ -5725,13 +5810,17 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 
 - The recorder has one histogram, `wlog_duration_seconds`, with labels `kind`, `operation`,
   `outcome`, and `status`. For a kind with no status, `status` is empty.
+- When the bucket bounds are not strictly increasing, `New` returns an error.
+- `New(nil)` returns an error. `StatsCollector(nil)` exports nothing, so a scrape does not panic.
 - `New` calls `Register`, never `MustRegister`. If the registry already holds the same histogram,
   `New` reuses it. Any other `AlreadyRegisteredError` returns an error.
+- When the buckets or the operation cap differ, a second `New` on that histogram returns an error.
+  Recorders of one histogram share one cap.
 - The recorder calls `GetMetricWithLabelValues`, never `WithLabelValues`. On a label error, it
   reports a problem and records nothing.
 - The operation cap and the `_OTHER` rule match `trace-otel`.
 - `StatsCollector` exports `wlog_events_emitted_total`, `wlog_events_dropped_total{reason}`,
-  `wlog_writer_dropped_total`, and `wlog_drain_events_total{drain,state}`. It reads `Stats` on
+  and `wlog_writer_dropped_total`. It does not export drain counters. It reads `Stats` on
   each scrape.
 - The module serves no HTTP handler. The app exposes its registry with `promhttp`.
 - Floor: client_golang v1.11.1, the first release free of GO-2022-0322. Go 1.21.
@@ -5739,7 +5828,8 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 ## drain-honeycomb (package `honeycomb`, root)
 
 - `POST {api}/1/batch/{dataset}` with `X-Honeycomb-Team: <key>` and `Content-Type:
-  application/json`. The API URL defaults to `https://api.honeycomb.io`. EU teams set
+  application/json`. `WithAPIURL`, `HONEYCOMB_API_URL`, or `HONEYCOMB_API_ENDPOINT` sets the
+  API URL, which defaults to `https://api.honeycomb.io`. EU teams set
   `https://api.eu1.honeycomb.io`.
 - `WithDataset` or `HONEYCOMB_DATASET` names the dataset. Without one, each event goes to the
   dataset named by its `service.name`, and the batch splits per dataset. The path segment uses
@@ -6206,12 +6296,12 @@ type Record struct {
 	ResponseID             string
 	FinishReasons          []string // the provider's own values
 	Status                 string   // Responses-style status, when the provider has one
-	InputTokens            int64    // every input token, cached ones included
-	CacheReadInputTokens   int64    // part of InputTokens
-	CacheWriteInputTokens  int64    // part of InputTokens, 5 minute or unspecified writes
-	CacheWrite1hInputTokens int64   // part of InputTokens, 1 hour writes
-	OutputTokens           int64
-	ReasoningTokens        int64    // part of OutputTokens
+	InputTokens            int    // every input token, cached ones included
+	CacheReadInputTokens   int    // part of InputTokens
+	CacheWriteInputTokens  int    // part of InputTokens, 5 minute or unspecified writes
+	CacheWrite1hInputTokens int   // part of InputTokens, 1 hour writes
+	OutputTokens           int
+	ReasoningTokens        int    // part of OutputTokens
 	Streamed               bool
 	Steps                  int      // agent or chain steps, when the framework reports them
 	OutputTokensPerSecond  float64  // set by llm.Add from OutputTokens and the call duration
@@ -6223,13 +6313,13 @@ type Record struct {
 }
 ```
 
-- The event keys under `llm` are the snake_case field names, such as `request_model`,
-  `cache_read_input_tokens`, and `time_to_first_chunk_ms`. `Err` becomes an `error` object with
-  `code` and `message`. Phase 11 already renamed `model`, `cached_input_tokens`, and
-  `finish_reason`. This track adds the keys for the new fields.
-- `llm.Add(ctx, r)` appends to `llm.calls`, updates the totals, and records one `calls` entry
-  with kind `llm`, system `Provider`, operation `Operation`, target `ResponseModel`, and the
-  duration. So `wlog query` ranks model calls with every other call.
+The shape above is the `Record` in `llm/record.go` on this branch. It is not a second type.
+
+- The event keys under `llm` are the snake_case names in [SPEC-llm](SPEC-llm.md). `Model` is
+  `request_model`. `FinishReason` is one entry of `finish_reasons`. `TimeToFirstToken` is
+  `time_to_first_chunk_ms`.
+- `llm.Add(ctx, r)` appends one object to `llm.calls` and updates the totals. It does not
+  write a root `calls` entry.
 - These fields close PAR-27 and BET-23.
 - `Prices` gains `CacheWritePerMillion` and `CacheWrite1hPerMillion`. `Cost` prices uncached
   input, cache reads, both write kinds, and output, each at its own rate.
@@ -6262,13 +6352,13 @@ such as `Message.Accumulate` or `ChatCompletionAccumulator`.
 | `ai-openai` | `github.com/openai/openai-go/v3` v3.61.0, Go 1.25 | `FromChatCompletion`, `FromResponse` | `ObserveChat(stream)` reads usage chunks, finish reasons, and tool names. `ObserveResponses(stream)` reads terminal events | `Middleware()`, reads `x-request-id` |
 | `ai-genai` | `google.golang.org/genai` v1.71.0, Go 1.24 | `FromGenerateContent(resp, backend)` | `Observe(seq iter.Seq2[...])` re-yields each chunk, and the last non-nil usage wins | `Transport(next)` wraps the authenticated transport, never replaces it |
 | `ai-goopenai` | `github.com/sashabaranov/go-openai` v1.42.1, Go 1.21 (the SDK needs 1.18) | `FromChatCompletionResponse`, `FromResponse` | `ObserveChat(stream)` | `Doer(next)` implements `HTTPDoer` |
-| `ai-langchaingo` | `github.com/tmc/langchaingo` v0.1.14, Go 1.24.4 | `FromContentResponse(resp, provider, model)` | none | `Handler()` for `callbacks.Handler`. Tool and chain callbacks add `calls` |
+| `ai-langchaingo` | `github.com/tmc/langchaingo` v0.1.14, Go 1.24.4 | `FromContentResponse(resp, provider, model)` | none | `Handler(log)` for `callbacks.Handler`. Tool and chain callbacks add `calls` |
 | `ai-eino` | `github.com/cloudwego/eino` v0.9.19, Go 1.21 (the SDK needs 1.18) | none | the handler drains stream copies in a goroutine and closes them | `Handler()` built with `NewHandlerHelper`. It falls back to `Message.ResponseMeta.Usage` |
 
 Rules:
 
 - The OpenAI stream observer never adds `stream_options.include_usage`. `WithIncludeUsage(params)`
-  sets it, as an explicit opt-in.
+  sets it, as an explicit opt-in. A chat stream that ends with no usage sets `usage_unknown`.
 - The langchaingo Anthropic provider never calls the end callback in v0.1.14. So the package doc
   says to call `FromContentResponse` on the result.
 - A middleware body tee has a 1 MiB cap. Past the cap it records `usage_unknown` and passes the
@@ -6289,7 +6379,10 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 | `rpc.service` | the server name |
 | `rpc.mcp.tool`, `rpc.mcp.resource_uri`, `rpc.mcp.prompt` | the tool name, resource URI, or prompt name |
 | `rpc.mcp.session_id`, `rpc.mcp.protocol_version`, `rpc.mcp.client` | the session and the client name and version |
+| `rpc.mcp.session` | a short hash of the session id. The redactor keeps this path. The raw id in `rpc.mcp.session_id` is still masked |
 | `rpc.mcp.result` | `ok`, `tool_error`, `protocol_error`, or `input_required` |
+| `rpc.mcp.request_state` | a short hash of the opaque request state, so a retry can be linked |
+| `rpc.mcp.arguments`, `rpc.mcp.result_content`, `rpc.mcp.structured_content` | When `WithContent` is set, the tool payload |
 | `rpc.status_code` | the JSON-RPC error code for a protocol error |
 
 - A tool result with `isError` sets status class client error, so it gives level `warn`. A protocol
@@ -6297,12 +6390,12 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
   so they give `warn`.
 - A result that asks for more input (MCP spec 2026-07-28) records `rpc.mcp.result` `input_required`,
   and holds a hash of `requestState` so round trips link up.
-- Tool arguments and results are never stored unless `WithContent()` is set.
+- Tool arguments and results are never stored unless `WithContent()` is set. A handler error that quotes those arguments is stored as `mcp handler error` unless content is on.
 
 | Module | Library and floor | Hook point |
 |---|---|---|
 | `ai-mcpsdk` | `github.com/modelcontextprotocol/go-sdk` v1.8.0, Go 1.25 | `server.AddReceivingMiddleware(wlogmcp.Middleware(log))`. Notifications are skipped. It reads client info from `InitializeParams()`, which can be nil |
-| `ai-mcpgo` | `github.com/mark3labs/mcp-go` v1.1.0, Go 1.25.5 | `server.WithHooks(wlogmcpgo.Hooks(log))`. It does not use tool middleware, which misses errors and runs twice on legacy round trips. It links before and after hooks by session and request id, in a map with a 5 minute expiry and 10,000 entries at most |
+| `ai-mcpgo` | `github.com/mark3labs/mcp-go` v1.1.0, Go 1.25.5 | `server.WithHooks(wlogmcpgo.Hooks(log))`. It does not record through tool middleware, which misses errors and runs twice on legacy round trips. Open also returns a middleware that only swaps the handler onto the event context. It links before and after hooks by session and request id, in a map with a 5 minute expiry and 10,000 entries at most |
 
 ## `wlog mcp` (in `cli-mcp`)
 
@@ -6327,8 +6420,9 @@ One event per MCP request, of kind `rpc`, with `rpc.system` `mcp`.
 - `wlog init` reads `go.mod` and matches each required module to the adapter table in
   CAPABILITIES.md. It covers routers, RPC, queues, jobs, stores, loggers, error libraries, and
   LLM SDKs.
-- It writes one `wlog_setup.go` that builds the Logger with `setup.FromEnv()` and installs each
-  plugin. It edits each entry point through `go/ast`.
+- It writes one `wlog_setup.go` that builds the Logger with `setup.FromEnv()`. It wires an HTTP
+  framework into the entry point through `go/ast`. For every other adapter, it prints the setup
+  line and writes no call.
 - `--yes` accepts the whole plan. `--json` prints the plan. After writing, it runs `go build` and
   `wlog doctor`, and prints both results. (PAR-33)
 
@@ -6709,6 +6803,10 @@ func WithXRay() Option  // also read X-Amzn-Trace-Id and AWSTraceHeader
 - `Extract` reads `traceparent` and `tracestate` by W3C rules. It rejects version `ff`, all-zero
   ids, and bad lengths. It accepts a future version with extra fields. With no valid parent, it
   generates a trace id. It always generates a new span id for this unit.
+- With no trace id on the carrier, `Extract` keeps the trace id, the span id, and the sampled flag
+  already on the context. A trace id from the carrier replaces those three. A request id copied from
+  the trace id `Extract` was about to discard follows the kept trace id. A request id from the
+  carrier, and the parent span, stay.
 - `X-Request-ID` counts only at 128 characters or fewer from `[A-Za-z0-9._:-]`. Otherwise,
   `RequestID` equals the trace id.
 - B3 and X-Ray formats are read-only fallbacks, and only with their option. An X-Ray root
@@ -7218,6 +7316,401 @@ func Middleware(log *wlog.Logger, opts ...httpcore.Option) func(http.Handler) ht
 
 None block this spec. Detail choices belong to each module spec and get reviewed there. The
 capability map lists them under "Open questions for the module specs".
+
+---
+
+# Async adapter setup (docs/async-adapters.md)
+
+# Async adapter setup
+
+One setup line per Track D adapter. `make snippets` compiles every block, so a copy of one
+block builds. Each block needs a broker, a queue, or a function service to run.
+
+## Kafka: sarama
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/IBM/sarama"
+
+	"github.com/jeremygprawira/wlog"
+	wlogsarama "github.com/jeremygprawira/wlog/queue/sarama"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	group, _ := sarama.NewConsumerGroup([]string{"localhost:9092"}, "workers", sarama.NewConfig())
+	handler := wlogsarama.Handler(logger, func(ctx context.Context, msg *sarama.ConsumerMessage) error {
+		wlog.Set(ctx, "order_id", string(msg.Key))
+		return nil
+	})
+	for {
+		_ = group.Consume(context.Background(), []string{"orders"}, handler)
+	}
+}
+```
+
+## Kafka: confluent
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+
+	"github.com/jeremygprawira/wlog"
+	wlogconfluent "github.com/jeremygprawira/wlog/queue/confluent"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	consumer, _ := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers":  "localhost:9092",
+		"group.id":           "workers",
+		"auto.offset.reset":  "earliest",
+		"enable.auto.commit": false,
+	})
+	_ = wlogconfluent.Consume(context.Background(), logger, consumer, func(ctx context.Context, msg *kafka.Message) error {
+		wlog.Set(ctx, "order_id", string(msg.Key))
+		return nil
+	})
+}
+```
+
+## AWS SQS
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
+
+	"github.com/jeremygprawira/wlog"
+	wlogsqs "github.com/jeremygprawira/wlog/queue/sqs"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	ctx := context.Background()
+	awsConfig, _ := config.LoadDefaultConfig(ctx)
+	client := sqs.NewFromConfig(awsConfig)
+	input := &sqs.ReceiveMessageInput{QueueUrl: aws.String("https://sqs.us-east-1.amazonaws.com/123456789012/orders")}
+	_ = wlogsqs.Receive(ctx, logger, client, input, func(ctx context.Context, msg sqstypes.Message) error {
+		wlog.Set(ctx, "order_id", msg.MessageId)
+		return nil
+	})
+}
+```
+
+## NATS
+
+`JetStreamHandler` covers a JetStream consumer, with the same shape.
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/nats-io/nats.go"
+
+	"github.com/jeremygprawira/wlog"
+	wlognats "github.com/jeremygprawira/wlog/queue/nats"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	conn, _ := nats.Connect("nats://localhost:4222")
+	_, _ = conn.Subscribe("orders", wlognats.Handler(logger, func(ctx context.Context, msg *nats.Msg) error {
+		wlog.Set(ctx, "order_id", msg.Subject)
+		return nil
+	}))
+}
+```
+
+## RabbitMQ
+
+```go
+package main
+
+import (
+	"context"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/jeremygprawira/wlog"
+	wlogamqp "github.com/jeremygprawira/wlog/queue/amqp"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	conn, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	channel, _ := conn.Channel()
+	deliveries, _ := channel.Consume("orders", "", false, false, false, false, nil)
+	_ = wlogamqp.Consume(context.Background(), logger, deliveries, "orders", func(ctx context.Context, delivery amqp.Delivery) error {
+		wlog.Set(ctx, "order_id", delivery.MessageId)
+		return nil
+	})
+}
+```
+
+## Google Cloud Pub/Sub
+
+```go
+package main
+
+import (
+	"context"
+
+	"cloud.google.com/go/pubsub/v2"
+
+	"github.com/jeremygprawira/wlog"
+	wlogpubsub "github.com/jeremygprawira/wlog/queue/pubsub"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	ctx := context.Background()
+	client, _ := pubsub.NewClient(ctx, "my-project")
+	subscription := client.Subscriber("orders-sub")
+	_ = wlogpubsub.Receive(ctx, logger, subscription, func(ctx context.Context, msg *pubsub.Message) error {
+		wlog.Set(ctx, "order_id", msg.ID)
+		return nil
+	})
+}
+```
+
+## asynq
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/hibiken/asynq"
+
+	"github.com/jeremygprawira/wlog"
+	wlogasynq "github.com/jeremygprawira/wlog/job/asynq"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	mux := asynq.NewServeMux()
+	mux.Use(wlogasynq.Middleware(logger))
+	mux.HandleFunc("reindex", func(ctx context.Context, task *asynq.Task) error {
+		wlog.Set(ctx, "order_id", task.Type())
+		return nil
+	})
+	_ = mux
+}
+```
+
+## River
+
+```go
+package main
+
+import (
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
+
+	"github.com/jeremygprawira/wlog"
+	wlogriver "github.com/jeremygprawira/wlog/job/river"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	config := &river.Config{
+		WorkerMiddleware:    []rivertype.WorkerMiddleware{wlogriver.New(logger)},
+		JobInsertMiddleware: []rivertype.JobInsertMiddleware{wlogriver.InsertMiddleware()},
+	}
+	_ = config
+}
+```
+
+## Temporal
+
+```go
+package main
+
+import (
+	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/interceptor"
+	"go.temporal.io/sdk/worker"
+
+	"github.com/jeremygprawira/wlog"
+	wlogtemporal "github.com/jeremygprawira/wlog/job/temporal"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	var temporalClient client.Client
+	options := worker.Options{Interceptors: []interceptor.WorkerInterceptor{wlogtemporal.Interceptor(logger)}}
+	_ = worker.New(temporalClient, "orders", options)
+}
+```
+
+## cron
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/robfig/cron/v3"
+
+	"github.com/jeremygprawira/wlog"
+	wlogcron "github.com/jeremygprawira/wlog/job/cron"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	scheduler := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
+	_, _ = scheduler.AddJob("@every 5m", wlogcron.Job(logger, "reindex", "@every 5m", func(ctx context.Context) error {
+		wlog.Set(ctx, "order_id", "ord-1")
+		return nil
+	}))
+	scheduler.Start()
+}
+```
+
+## AWS Lambda
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+
+	"github.com/jeremygprawira/wlog"
+	wloglambda "github.com/jeremygprawira/wlog/faas/lambda"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	lambda.StartWithOptions(
+		wloglambda.Wrap(logger, func(ctx context.Context, in events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+			wlog.Set(ctx, "order_id", in.PathParameters["id"])
+			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+		}),
+		wloglambda.SIGTERMFlush(logger),
+	)
+}
+```
+
+## Google Cloud Functions
+
+```go
+package main
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/GoogleCloudPlatform/functions-framework-go/funcframework"
+
+	"github.com/jeremygprawira/wlog"
+	wloggcf "github.com/jeremygprawira/wlog/faas/gcf"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	ctx := context.Background()
+	_ = funcframework.RegisterHTTPFunctionContext(ctx, "/", wloggcf.HTTP(logger, func(w http.ResponseWriter, r *http.Request) {
+		wlog.Set(r.Context(), "order_id", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+}
+```
+
+## cobra
+
+```go
+package main
+
+import (
+	"context"
+	"os"
+
+	"github.com/spf13/cobra"
+
+	"github.com/jeremygprawira/wlog"
+	wlogcobra "github.com/jeremygprawira/wlog/command/cobra"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	root := &cobra.Command{Use: "app", RunE: func(cmd *cobra.Command, args []string) error {
+		wlog.Set(cmd.Context(), "order_id", "ord-1")
+		return nil
+	}}
+	os.Exit(wlogcobra.Execute(context.Background(), logger, root))
+}
+```
+
+## urfave/cli
+
+```go
+package main
+
+import (
+	"context"
+	"os"
+
+	"github.com/urfave/cli/v3"
+
+	"github.com/jeremygprawira/wlog"
+	wlogurfave "github.com/jeremygprawira/wlog/command/urfave"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	cmd := &cli.Command{Name: "app", Action: func(ctx context.Context, cmd *cli.Command) error {
+		wlog.Set(ctx, "order_id", "ord-1")
+		return nil
+	}}
+	os.Exit(wlogurfave.Run(context.Background(), logger, cmd, os.Args))
+}
+```
+
+## kong
+
+```go
+package main
+
+import (
+	"context"
+	"os"
+
+	"github.com/jeremygprawira/wlog"
+	wlogkong "github.com/jeremygprawira/wlog/command/kong"
+)
+
+// grammar is the command line of the tool.
+var grammar struct {
+	Verbose bool `help:"noisy"`
+}
+
+func main() {
+	logger := wlog.New(wlog.WithService("orders", "0.0.1", "prod"))
+	os.Exit(wlogkong.Run(context.Background(), logger, &grammar, os.Args[1:]))
+}
+```
 
 ---
 
@@ -7891,7 +8384,7 @@ A test proves every row that says built. A row that says partial names what is m
 | overview | built | `middleware/nethttp`, `middleware/echo`, `middleware/echo5`, `middleware/gin` |
 | Nuxt, Next.js, SvelteKit, Nitro, TanStack Start, NestJS, Express, Hono, Fastify, Elysia, React Router, Cloudflare Workers, Astro, oRPC | not adopted | TypeScript frameworks |
 | Standalone TypeScript | built | `wlog.Start` works in any Go program, job, or worker |
-| AWS Lambda | built | `examples/lambda` with a handler wrapper and a flush before return |
+| AWS Lambda | built | `faas/lambda` with a handler wrapper and a flush before return |
 
 ## extend
 
@@ -8133,6 +8626,166 @@ or the sample rate.
 
 ---
 
+# Recipe: CLI tool (docs/recipes/cli-tool.md)
+
+# Recipe: CLI tool
+
+A small command line tool where one run is one wide event. The runnable example lives in
+[examples/cli-tool](../../examples/cli-tool), and its test compares the event with the
+golden in `testdata/event.json`. `command-cobra` in phase 13 wraps the same unit of work
+around a cobra command.
+
+## 1. Setup
+
+```go
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/jeremygprawira/wlog"
+	"github.com/jeremygprawira/wlog/work"
+)
+
+func run(ctx context.Context, logger *wlog.Logger, args []string, stdout io.Writer) int {
+	flags := flag.NewFlagSet("orders", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	limit := flags.Int("limit", 10, "how many orders to read")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+
+	ctx, handle := work.Start(ctx, logger, work.Unit{
+		Kind: work.KindCommand,
+		Fields: map[string]any{
+			"path":  "orders list",
+			"flags": []string{"limit"},
+		},
+	})
+	wlog.Set(ctx, "orders_read", *limit)
+	_, _ = fmt.Fprintf(stdout, "read %d orders\n", *limit)
+	handle.Status("0", work.ClassOf(work.KindCommand, "0"))
+	handle.End(nil)
+	return 0
+}
+
+func main() {
+	logger := wlog.New(wlog.WithService("cli-tool", "0.0.1", "local"))
+	os.Exit(run(context.Background(), logger, os.Args[1:], os.Stdout))
+}
+```
+
+## 2. The event
+
+One `orders list --limit 5` run gives this event. The duration and the id change between
+runs, so the example test normalizes them.
+
+```json
+{"cli":{"exit_code":"0","flags":["limit"],"path":"orders list"},"duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","kind":"command","level":"info","operation":"orders list","orders_read":5,"outcome":"success","summary":"orders list exit 0 in {d}","timestamp":"2026-01-01T00:00:00Z","trace":{},"wlog":{"schema_version":2}}
+```
+
+## 3. Five questions
+
+| Question | wlog query | jq | Backend |
+|---|---|---|---|
+| Which runs failed | `wlog query --where cli.exit_code? --level error --group-by cli.path --count ./logs` | `jq -r 'select(.cli.exit_code != "0") \| .cli.path' logs.ndjson \| sort \| uniq -c` | Grafana: count by cli.path where cli.exit_code is not 0 |
+| How long does a run take | `wlog query --group-by cli.path --stats duration_ms ./logs` | `jq -s 'group_by(.cli.path) \| map({path: .[0].cli.path, count: length})' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="cli-tool"} \| json \| unwrap duration_ms [1d])` |
+| Which flags are used | `wlog query --where cli.flags? --group-by cli.path --count ./logs` | `jq -r '.cli.flags[]?' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `cli.flags: limit` |
+| How much did a run read | `wlog query --stats orders_read ./logs` | `jq -s 'map(.orders_read // 0) \| add' logs.ndjson` | ClickHouse: `SELECT sum(orders_read) FROM events WHERE kind = 'command'` |
+| One run from a cron host | `wlog query --where host.name? --text orders --format summary ./logs` | `jq -r 'select(.cli.path == "orders list") \| [.timestamp, .cli.exit_code] \| @tsv' logs.ndjson` | Datadog: `service:cli-tool cli.path:"orders list"` |
+
+## 4. Explain ids
+
+- `wlog explain cli.exit_code` for the exit code field and its levels.
+- `wlog explain work` for the unit-of-work kinds and their groups.
+- `wlog explain WLOG_NO_EVENT` for a write that lands outside a unit of work.
+- `wlog explain WLOG_LATE_WRITE` for a write that lands after the event emitted.
+
+---
+
+# Recipe: cron job (docs/recipes/cron-job.md)
+
+# Recipe: cron job
+
+A scheduled job where every run is one wide event. The runnable example lives in
+[examples/cron-job](../../examples/cron-job), and its test runs one job and compares the
+event with the golden in `testdata/event.json`.
+
+## 1. Setup
+
+```go
+package main
+
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/robfig/cron/v3"
+
+	"github.com/jeremygprawira/wlog"
+	wlogcron "github.com/jeremygprawira/wlog/job/cron"
+)
+
+const spec = "@every 5m"
+
+func main() {
+	logger := wlog.New(wlog.WithService("cron-job", "0.0.1", "prod"))
+	scheduler := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
+	_, _ = scheduler.AddJob(spec, wlogcron.Job(logger, "reindex", spec, reindex))
+	scheduler.Start()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	<-signals
+	<-scheduler.Stop().Done()
+	_ = logger.Flush(context.Background())
+}
+
+func reindex(ctx context.Context) error {
+	wlog.Set(ctx, "rows", 128)
+	return nil
+}
+```
+
+`Job` opens one event per run, and `SkipIfStillRunning` sits outside it, so a skipped run
+records nothing. `Wrap` covers a plain `cron.Job`. Use one of the two, never both. `Stop` returns a
+context. The context is done after the running jobs finish. Flush the Logger there in a
+short-lived process. `work.Ticker` covers a plain `time.Ticker` loop.
+
+## 2. The event
+
+One run of `reindex` gives this event. The duration, the event id, and the trace ids change
+between runs, so the example test normalizes them.
+
+```json
+{"timestamp":"2026-01-01T00:00:00Z","level":"info","summary":"job reindex success in {d}","operation":"job reindex","kind":"job","outcome":"success","duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","trace":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7"},"job":{"system":"cron","name":"reindex","schedule":"@every 5m"},"rows":128,"wlog":{"schema_version":2}}
+```
+
+## 3. Five questions
+
+| Question | wlog query | jq | Backend |
+|---|---|---|---|
+| Which jobs fail most | `wlog query --level error --group-by job.name --count ./logs` | `jq -r 'select(.level=="error") \| .job.name' logs.ndjson \| sort \| uniq -c \| sort -rn` | Grafana: count by job.name where level is error |
+| Which runs are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="cron-job"} \| json \| unwrap duration_ms [5m])` |
+| Which schedules fire | `wlog query --group-by job.schedule --count ./logs` | `jq -r '.job.schedule' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `job.schedule: "@every 5m"` |
+| One trace across services | `wlog query --trace 4bf92f3577b34da6a3ce929d0e0e4736 ./logs` | `jq -r 'select(.trace.trace_id=="4bf92f3577b34da6a3ce929d0e0e4736")' logs.ndjson` | Tempo: search by trace id |
+| How much one run moved | `wlog query --where 'rows?' --format summary ./logs` | `jq -r '[.job.name, .rows] \| @tsv' logs.ndjson` | ClickHouse: `SELECT job.name, sum(rows) FROM events GROUP BY 1` |
+
+## 4. Explain ids
+
+- `wlog explain job` for the job fields, the schedule, and the attempt.
+- `wlog explain trace` for the trace group of one run.
+- When a drain cannot send an event, `wlog explain WLOG_DRAIN_FAILED`.
+- When an event passes the size cap, `wlog explain WLOG_EVENT_TOO_LARGE`.
+
+---
+
 # Recipe: gRPC service (docs/recipes/grpc-service.md)
 
 # Recipe: gRPC service
@@ -8198,6 +8851,339 @@ id, and the span id change between runs, so the example test normalizes them.
 - `wlog explain work` for the unit-of-work kinds and their groups.
 - `wlog explain error.code` for the code a failed call carries.
 - When a call lands after `Close`, `wlog explain WLOG_LOGGER_CLOSED`.
+
+---
+
+# Recipe: Kafka consumer (docs/recipes/kafka-consumer.md)
+
+# Recipe: Kafka consumer
+
+A Kafka consumer where every message is one wide event. The runnable example lives in
+[examples/kafka-consumer](../../examples/kafka-consumer). Its test consumes one message
+through a fake reader. Then it compares the event with the golden in `testdata/event.json`.
+
+## 1. Setup
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	"github.com/segmentio/kafka-go"
+
+	"github.com/jeremygprawira/wlog"
+	wlogkafkago "github.com/jeremygprawira/wlog/queue/kafkago"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("kafka-consumer", "0.0.1", "prod"))
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{"localhost:9092"},
+		GroupID: "orders",
+		Topic:   "orders",
+	})
+	for {
+		if err := wlogkafkago.Consume(context.Background(), logger, reader, handle); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func handle(ctx context.Context, msg kafka.Message) error {
+	wlog.Set(ctx, "order_id", string(msg.Key))
+	return nil
+}
+```
+
+`Consume` fetches with `FetchMessage` and commits with `CommitMessages` after the handler
+returns nil. A failed handler leaves the message uncommitted, so the group delivers it again.
+The module also gives `Drain`, which ships finished events to a topic.
+
+## 2. The event
+
+One message from topic `orders` gives this event. The duration, the event id, and the times
+change between runs, so the example test normalizes them.
+
+```json
+{"timestamp":"2026-01-01T00:00:00Z","level":"info","summary":"process orders success in {d} (order_id=ord-1)","operation":"process orders","kind":"message","outcome":"success","duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","trace":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","parent_span_id":"00f067aa0ba902b7","request_id":"4bf92f3577b34da6a3ce929d0e0e4736"},"messaging":{"system":"kafka","operation":"process","destination":"orders","consumer_group":"orders","partition":2,"offset":41,"lag_ms":2000,"kafka":{"offset_lag":1}},"order_id":"ord-1","wlog":{"schema_version":2}}
+```
+
+## 3. Five questions
+
+| Question | wlog query | jq | Backend |
+|---|---|---|---|
+| Which topics fail most | `wlog query --level error --group-by messaging.destination --count ./logs` | `jq -r 'select(.level=="error") \| .messaging.destination' logs.ndjson \| sort \| uniq -c \| sort -rn` | Grafana: count by messaging.destination where level is error |
+| Which handlers are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="kafka-consumer"} \| json \| unwrap duration_ms [5m])` |
+| How far behind the group is | `wlog query --stats messaging.kafka.offset_lag ./logs` | `jq -r '.messaging.kafka.offset_lag' logs.ndjson \| sort -n \| tail -1` | ClickHouse: `SELECT max(messaging.kafka.offset_lag) FROM events` |
+| One trace across services | `wlog query --trace 4bf92f3577b34da6a3ce929d0e0e4736 ./logs` | `jq -r 'select(.trace.trace_id=="4bf92f3577b34da6a3ce929d0e0e4736")' logs.ndjson` | Tempo: search by trace id |
+| Which consumer groups run | `wlog query --group-by messaging.consumer_group --count ./logs` | `jq -r '.messaging.consumer_group' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `messaging.consumer_group: "orders"` |
+
+## 4. Explain ids
+
+- `wlog explain messaging` for the message fields, the offset lag, and the delivery count.
+- `wlog explain trace` for the trace group of a consumed message.
+- When a drain cannot send an event, `wlog explain WLOG_DRAIN_FAILED`.
+- When an event passes the size cap, `wlog explain WLOG_EVENT_TOO_LARGE`.
+
+---
+
+# Recipe: Lambda function (docs/recipes/lambda.md)
+
+# Recipe: Lambda function
+
+A Lambda function where every invocation is one wide event. The runnable example lives in
+[examples/lambda](../../examples/lambda), and its test invokes one API Gateway request and
+compares the event with the golden in `testdata/event.json`.
+
+## 1. Setup
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+
+	"github.com/jeremygprawira/wlog"
+	wloglambda "github.com/jeremygprawira/wlog/faas/lambda"
+)
+
+func main() {
+	logger := wlog.New(wlog.WithService("lambda-orders", "0.0.1", "prod"))
+	lambda.StartWithOptions(
+		wloglambda.Wrap(logger, handle),
+		wloglambda.SIGTERMFlush(logger),
+	)
+}
+
+func handle(ctx context.Context, in events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	wlog.Set(ctx, "order_id", in.PathParameters["id"])
+	return events.APIGatewayProxyResponse{StatusCode: 200, Body: `{"id":"` + in.PathParameters["id"] + `"}`}, nil
+}
+```
+
+## 2. The event
+
+One `GET /orders/42` through API Gateway gives this event. The duration, the event id, and
+the trace ids change between runs, so the example test normalizes them.
+
+```json
+{"timestamp":"2026-01-01T00:00:00Z","level":"info","summary":"function lambda-orders http success in {d} cold start (order_id=42)","operation":"function lambda-orders","kind":"function","outcome":"success","duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","trace":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7"},"http":{"method":"GET","route":"/orders/{id}","path":"/orders/42","status":200,"protocol":"HTTP/1.1"},"faas":{"system":"aws_lambda","name":"lambda-orders","trigger":"http","invocation_id":"recipe-1","cold_start":true,"remaining_ms":4999},"order_id":"42","wlog":{"schema_version":2}}
+```
+
+## 3. Five questions
+
+| Question | wlog query | jq | Backend |
+|---|---|---|---|
+| Which functions fail most | `wlog query --level error --group-by operation --count ./logs` | `jq -r 'select(.level=="error") \| .operation' logs.ndjson \| sort \| uniq -c \| sort -rn` | Grafana: count by operation where level is error |
+| Which invocations are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="lambda-orders"} \| json \| unwrap duration_ms [5m])` |
+| Which trigger started the work | `wlog query --group-by faas.trigger --count ./logs` | `jq -r '.faas.trigger' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `faas.trigger: "sqs"` |
+| Which runs were cold | `wlog query --where faas.cold_start=true --count ./logs` | `jq -r 'select(.faas.cold_start==true) \| .operation' logs.ndjson` | ClickHouse: `SELECT operation, count() FROM events WHERE faas.cold_start GROUP BY 1` |
+| One trace across services | `wlog query --trace 4bf92f3577b34da6a3ce929d0e0e4736 ./logs` | `jq -r 'select(.trace.trace_id=="4bf92f3577b34da6a3ce929d0e0e4736")' logs.ndjson` | Tempo: search by trace id |
+
+## 4. Explain ids
+
+- `wlog explain faas` for the function fields, the trigger, and the cold start flag.
+- `wlog explain error` for the error block of a failed invocation.
+- When a drain cannot send an event, `wlog explain WLOG_DRAIN_FAILED`.
+- When an event passes the size cap, `wlog explain WLOG_EVENT_TOO_LARGE`.
+
+---
+
+# Recipe: LLM agent (docs/recipes/llm-agent.md)
+
+# Recipe: LLM agent
+
+An agent that answers one question with Claude, where one call is one wide event. The
+runnable example lives in [examples/llm-agent](../../examples/llm-agent). Its test answers
+one question through a fake Messages API. Then it compares the event with the golden in
+`testdata/event.json`.
+
+## 1. Setup
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
+
+	"github.com/jeremygprawira/wlog"
+	wloganthropic "github.com/jeremygprawira/wlog/ai/anthropic"
+	"github.com/jeremygprawira/wlog/llm"
+	"github.com/jeremygprawira/wlog/work"
+)
+
+var prices = llm.NewPrices(map[string]llm.Price{
+	string(anthropic.ModelClaudeSonnet4_6): {
+		InputPerMillion:       3_000_000,
+		OutputPerMillion:      15_000_000,
+		CachedInputPerMillion: 300_000,
+	},
+})
+
+func answer(ctx context.Context, logger *wlog.Logger, client anthropic.Client, question string) (string, error) {
+	ctx, handle := work.Start(ctx, logger, work.Unit{Kind: work.KindWork, Operation: "answer question"})
+
+	msg, err := client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeSonnet4_6,
+		MaxTokens: 1024,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(question))},
+	})
+	if err != nil {
+		handle.End(err)
+		return "", err
+	}
+	llm.Add(ctx, wloganthropic.FromMessage(msg))
+
+	handle.End(nil)
+	return msg.Content[0].Text, nil
+}
+
+func main() {
+	logger := wlog.New(
+		wlog.WithService("llm-agent", "0.0.1", "local"),
+		wlog.WithEnrichers(llm.Enricher(prices)),
+	)
+	client := anthropic.NewClient(option.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
+
+	text, err := answer(context.Background(), logger, client, "What is the capital of France?")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println(text)
+	_ = logger.Flush(context.Background())
+}
+```
+
+`FromMessage` maps the response to an `llm.Record`, and `llm.Add` folds its token counts and
+its finish reason into the `llm` group. `llm.Enricher` reads the price table and fills
+`llm.cost_micros` once the event settles, so `answer` never computes a price itself. A model
+the table does not hold sets `llm.cost_unknown` instead of a wrong number.
+
+## 2. The event
+
+One question, answered by a fake response of 1000 input tokens and 200 output tokens, gives
+this event. The duration, the event id, and the trace ids change between runs, so the
+example test normalizes them.
+
+```json
+{"duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","kind":"work","level":"info","llm":{"calls":[{"cost_micros":6000,"finish_reasons":["end_turn"],"input_tokens":1000,"operation":"chat","output_tokens":200,"provider":"anthropic","request_model":"claude-sonnet-4-6","response_id":"msg_01ABC123","total_tokens":1200}],"cost_micros":6000,"finish_reasons":["end_turn"],"input_tokens":1000,"operation":"chat","output_tokens":200,"provider":"anthropic","request_model":"claude-sonnet-4-6","response_id":"msg_01ABC123","tool_call_count":0,"total_tokens":1200},"operation":"answer question","outcome":"success","summary":"answer question success in {d}","timestamp":"2026-01-01T00:00:00Z","trace":{},"wlog":{"schema_version":2}}
+```
+
+## 3. Five questions
+
+| Question | wlog query | jq | Backend |
+|---|---|---|---|
+| Which calls cost the most | `wlog query --stats llm.cost_micros ./logs` | `jq -s 'map(.llm.cost_micros) \| sort' logs.ndjson` | ClickHouse: `SELECT operation, sum(llm.cost_micros) FROM events GROUP BY operation ORDER BY 2 DESC` |
+| Which models are in use | `wlog query --group-by llm.request_model --count ./logs` | `jq -r '.llm.request_model' logs.ndjson \| sort \| uniq -c` | Grafana: count by llm.request_model |
+| Which calls fail most | `wlog query --level error --group-by operation --count ./logs` | `jq -r 'select(.level=="error") \| .operation' logs.ndjson \| sort \| uniq -c` | Loki: `sum by (operation) (count_over_time({service="llm-agent"} \| json \| level="error" [1h]))` |
+| Which calls are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Honeycomb: p95 of duration_ms, grouped by operation |
+| How many tokens one call used | `wlog query --stats llm.total_tokens ./logs` | `jq -r '.llm.total_tokens' logs.ndjson \| sort -n \| tail -1` | Elasticsearch: `SELECT max(llm.total_tokens) FROM events` |
+
+## 4. Explain ids
+
+- `wlog explain llm` names the llm group. It does not list the token, cost, or finish reason fields. Those are in SPEC-track-g.md.
+- `wlog explain kind` names the kind field. It does not list what a work event holds.
+- `wlog explain WLOG_CAP_REACHED` for what happens past the 200 call cap on `llm.calls`.
+- When an event arrives after `Close`, `wlog explain WLOG_LOGGER_CLOSED`.
+
+---
+
+# Recipe: MCP server (docs/recipes/mcp-server.md)
+
+# Recipe: MCP server
+
+An MCP server with one tool, where every request is one wide event. The runnable example
+lives in [examples/mcp-server](../../examples/mcp-server). Its test calls the tool over an
+in-memory transport. Then it compares the event with the golden in `testdata/event.json`.
+
+## 1. Setup
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jeremygprawira/wlog"
+	wlogmcp "github.com/jeremygprawira/wlog/ai/mcpsdk"
+)
+
+type weatherInput struct {
+	City string `json:"city" jsonschema:"the city to report"`
+}
+
+type weatherOutput struct {
+	Weather string `json:"weather"`
+}
+
+func newServer(logger *wlog.Logger) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{Name: "weather-mcp", Version: "0.0.1"}, nil)
+	server.AddReceivingMiddleware(wlogmcp.Middleware(logger, wlogmcp.WithService("weather-mcp")))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_weather",
+		Description: "Reports the weather of one city.",
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in weatherInput) (*mcp.CallToolResult, weatherOutput, error) {
+		return nil, weatherOutput{Weather: "sunny"}, nil
+	})
+	return server
+}
+
+func main() {
+	logger := wlog.New(wlog.WithService("weather-mcp", "0.0.1", "local"))
+	server := newServer(logger)
+	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+		log.Fatal(err)
+	}
+	_ = logger.Flush(context.Background())
+}
+```
+
+`Middleware` wraps the server's receiving method handler, so every request, the initialize
+handshake included, gives one event of kind `rpc` with `rpc.system` `mcp`. A notification
+gets no event, because the MCP spec gives it no result to report. `WithService` names the
+server in `rpc.service` and in the operation, because a server carries no exported way to
+read its own name back.
+
+## 2. The event
+
+One `tools/call` for `get_weather` gives this event. The duration, the event id, and the
+trace ids change between runs, so the example test normalizes them.
+
+```json
+{"duration_ms":8.25,"event_id":"0191f0b9-1c2f-7a3d-8e4f-0a1b2c3d4e5f","kind":"rpc","level":"info","operation":"weather-mcp/tools/call","outcome":"success","rpc":{"mcp":{"client":"weather-cli/2.0.0","protocol_version":"2026-07-28","result":"ok","tool":"get_weather"},"method":"tools/call","service":"weather-mcp","system":"mcp"},"summary":"mcp weather-mcp/tools/call in {d}","timestamp":"2026-01-01T00:00:00Z","trace":{},"wlog":{"schema_version":2}}
+```
+
+## 3. Five questions
+
+| Question | wlog query | jq | Backend |
+|---|---|---|---|
+| Which tools run most | `wlog query --group-by rpc.mcp.tool --count ./logs` | `jq -r '.rpc.mcp.tool' logs.ndjson \| sort \| uniq -c` | Grafana: count by rpc.mcp.tool |
+| Which tools fail most | `wlog query --level warn --group-by rpc.mcp.tool --count ./logs` | `jq -r 'select(.level=="warn") \| .rpc.mcp.tool' logs.ndjson \| sort \| uniq -c` | ClickHouse: `SELECT rpc.mcp.tool, count() FROM events WHERE level='warn' GROUP BY 1 ORDER BY 2 DESC` |
+| Which calls are slowest | `wlog query --stats duration_ms ./logs` | `jq -s 'map(.duration_ms) \| sort' logs.ndjson` | Loki: `quantile_over_time(0.95, {service="weather-mcp"} \| json \| unwrap duration_ms [5m])` |
+| Which clients call the server | `wlog query --group-by rpc.mcp.client --count ./logs` | `jq -r '.rpc.mcp.client' logs.ndjson \| sort \| uniq -c` | Elasticsearch: `rpc.mcp.client: "weather-cli/2.0.0"` |
+| How many calls ask for more input | `wlog query --where 'rpc.mcp.result=input_required' --count ./logs` | `jq -r 'select(.rpc.mcp.result=="input_required")' logs.ndjson \| wc -l` | ClickHouse: `SELECT count() FROM events WHERE rpc.mcp.result='input_required'` |
+
+## 4. Explain ids
+
+- `wlog explain rpc` for the rpc fields every kind-rpc event carries, `mcp` included.
+- `wlog explain kind` for what a kind-rpc event's fields mean.
+- When a drain cannot send an event, `wlog explain WLOG_DRAIN_FAILED`.
+- When an event passes the size cap, `wlog explain WLOG_EVENT_TOO_LARGE`.
 
 ---
 

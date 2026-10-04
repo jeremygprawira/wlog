@@ -42,11 +42,18 @@
 - [Spec: wlogtest](docs/SPEC-wlogtest.md): Let a user assert on what their own code logged, in their own tests, without parsing JSON off
 - [Spec: propagate and work](docs/SPEC-work.md): Give every non-HTTP adapter the same two tools. `propagate` carries trace context across process
 - [Spec: wlog (project-wide, v4)](docs/SPEC.md): **wlog** ("wide log") is a Go library for wide-event logging. Each unit of work produces one
+- [Async adapter setup](docs/async-adapters.md): One setup line per Track D adapter. `make snippets` compiles every block, so a copy of one
 - [Best practices](docs/best-practices.md): Five rules for a wide event that earns its keep. Each rule points at the test that
 - [Cost](docs/cost.md): The `llm` package records what a model call cost on the same wide event as the request.
 - [Customization](docs/customization.md): Every default can change through an option. An option always wins over an environment
 - [Event shape](docs/event-shape.md): One unit of work produces one event. The event is a JSON object with a fixed core and
 - [evlog parity](docs/evlog-parity.md): evlog is the TypeScript logger wlog follows: one wide event per unit of work, enriched as
 - [Problem codes](docs/problems.md): wlog reports its own failures as a `wlog.Problem`. A problem carries a stable code, the
+- [Recipe: CLI tool](docs/recipes/cli-tool.md): A small command line tool where one run is one wide event. The runnable example lives in
+- [Recipe: cron job](docs/recipes/cron-job.md): A scheduled job where every run is one wide event. The runnable example lives in
 - [Recipe: gRPC service](docs/recipes/grpc-service.md): A gRPC server where every call is one wide event. The runnable example lives in
+- [Recipe: Kafka consumer](docs/recipes/kafka-consumer.md): A Kafka consumer where every message is one wide event. The runnable example lives in
+- [Recipe: Lambda function](docs/recipes/lambda.md): A Lambda function where every invocation is one wide event. The runnable example lives in
+- [Recipe: LLM agent](docs/recipes/llm-agent.md): An agent that answers one question with Claude, where one call is one wide event. The
+- [Recipe: MCP server](docs/recipes/mcp-server.md): An MCP server with one tool, where every request is one wide event. The runnable example
 - [Recipe: REST API](docs/recipes/rest-api.md): A small chi API where every request is one wide event. The runnable example lives in

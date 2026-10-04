@@ -145,6 +145,8 @@ jobs:
         with:
           go-version: stable
       - run: make snippets
+      # The two language-model documents are built, so a stale one fails here.
+      - run: make docs-check
 
   # verifyplan runs the Verify command of every task in the plan, and fails a
   # command whose -run pattern matches no test. It only runs when the plan

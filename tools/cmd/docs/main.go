@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,6 +25,7 @@ const (
 // main builds both files under the workspace root.
 func main() {
 	dir := flag.String("dir", "", "the workspace root, which defaults to the directory above tools")
+	check := flag.Bool("check", false, "report a file that differs and write nothing")
 	flag.Parse()
 
 	root := *dir
@@ -37,9 +39,38 @@ func main() {
 			fail(err)
 		}
 	}
+	if *check {
+		if err := checkBuild(root, os.Stdout); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if err := build(root); err != nil {
 		fail(err)
 	}
+}
+
+// checkBuild compares each file the build writes with the file on disk, and reports every
+// difference. It writes nothing, so a gate can run it.
+func checkBuild(root string, out io.Writer) error {
+	pages, err := collect(root)
+	if err != nil {
+		return err
+	}
+	stale := 0
+	for name, want := range map[string]string{indexName: index(pages), fullName: full(pages)} {
+		got, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || string(got) != want {
+			stale++
+			if _, err := fmt.Fprintf(out, "%s: DOCS1: %s is stale, run make docs\n", name, name); err != nil {
+				return err
+			}
+		}
+	}
+	if stale > 0 {
+		return fmt.Errorf("%d file(s) are stale", stale)
+	}
+	return nil
 }
 
 // fail prints one error and exits 1.

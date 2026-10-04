@@ -6,7 +6,7 @@
 MODULES := $(shell go work edit -json | grep '"DiskPath"' | sed -E 's/.*"DiskPath": "(.*)"/\1/')
 FUZZTIME ?= 30s
 
-.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor release-check compat cover vuln map integration
+.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor release-check compat cover vuln map integration docs docs-check
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test -count=1 ./...) || exit 1; done
@@ -51,6 +51,10 @@ ste:
 # docs builds the two language-model documents from the repository pages.
 docs:
 	go run ./tools/cmd/docs
+
+# docs-check reports a stale llms.txt or llms-full.txt, which is what CI runs.
+docs-check:
+	go run ./tools/cmd/docs -check
 
 # snippets compiles every fenced Go block in the documentation, and runs the
 # blocks that ask to run.
