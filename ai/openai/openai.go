@@ -6,11 +6,13 @@
 // same Record. Middleware records the request id.
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
-// WithContent. Core redacts those values like any other.
+// WithContent. Only output is recorded. Core redacts those values like any other.
 package wlogopenai
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -35,6 +37,15 @@ type config struct {
 // WithContent opts into the prompt, the completion, and the tool payload. Without it, the
 // record holds the shape of the call and no text. Core redacts the values.
 func WithContent() Option { return func(c *config) { c.content = true } }
+
+// WithIncludeUsage asks a chat stream to send a usage chunk. The caller still has to
+// set stream to true.
+func WithIncludeUsage(params *openai.ChatCompletionNewParams) {
+	if params == nil {
+		return
+	}
+	params.StreamOptions.IncludeUsage = openai.Bool(true)
+}
 
 // resolve applies the options.
 func resolve(opts ...Option) config {
@@ -64,8 +75,10 @@ func FromChatCompletion(r *openai.ChatCompletion, opts ...Option) llm.Record {
 	}
 	if len(r.Choices) > 0 {
 		record.FinishReason = r.Choices[0].FinishReason
-		for _, call := range r.Choices[0].Message.ToolCalls {
-			record.ToolCalls = append(record.ToolCalls, llm.ToolCall{Name: call.Function.Name})
+		for _, choice := range r.Choices {
+			for _, call := range choice.Message.ToolCalls {
+				record.ToolCalls = append(record.ToolCalls, llm.ToolCall{Name: call.Function.Name})
+			}
 		}
 	}
 	if resolve(opts...).content {
@@ -80,14 +93,15 @@ func FromResponse(r *responses.Response, opts ...Option) llm.Record {
 		return llm.Record{}
 	}
 	record := llm.Record{
-		Provider:          provider,
-		Model:             r.Model,
-		Operation:         "responses",
-		ResponseID:        r.ID,
-		InputTokens:       int(r.Usage.InputTokens),
-		CachedInputTokens: int(r.Usage.InputTokensDetails.CachedTokens),
-		OutputTokens:      int(r.Usage.OutputTokens),
-		ReasoningTokens:   int(r.Usage.OutputTokensDetails.ReasoningTokens),
+		Provider:              provider,
+		Model:                 r.Model,
+		Operation:             "responses",
+		ResponseID:            r.ID,
+		InputTokens:           int(r.Usage.InputTokens),
+		CachedInputTokens:     int(r.Usage.InputTokensDetails.CachedTokens),
+		CacheWriteInputTokens: int(r.Usage.InputTokensDetails.CacheWriteTokens),
+		OutputTokens:          int(r.Usage.OutputTokens),
+		ReasoningTokens:       int(r.Usage.OutputTokensDetails.ReasoningTokens),
 	}
 	for _, item := range r.Output {
 		if item.Type == "function_call" && item.Name != "" {
@@ -113,7 +127,7 @@ func chatContentOf(r *openai.ChatCompletion) *llm.Content {
 		for _, call := range choice.Message.ToolCalls {
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments}},
+				Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.Function.Name, Arguments: wlog.JSONTree(call.Function.Arguments)}},
 			})
 		}
 	}
@@ -148,21 +162,39 @@ func responseContentOf(r *responses.Response) *llm.Content {
 // ChatObserver wraps a Chat Completions stream and builds a Record as the caller reads it.
 // It never reads ahead, so the caller keeps every chunk.
 type ChatObserver struct {
-	stream *ssestream.Stream[openai.ChatCompletionChunk]
-	record llm.Record
+	stream   *ssestream.Stream[openai.ChatCompletionChunk]
+	record   llm.Record
+	sawUsage bool
+	started  time.Time
+	sawChunk bool
+	content  bool
 }
 
 // ObserveChat wraps stream. The caller drives it with Next and Current, and reads Record
 // once Next reports false.
 func ObserveChat(stream *ssestream.Stream[openai.ChatCompletionChunk], opts ...Option) *ChatObserver {
-	_ = resolve(opts...)
-	return &ChatObserver{stream: stream, record: llm.Record{Provider: provider, Operation: "chat"}}
+	return &ChatObserver{
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: "chat", Streamed: true},
+		started: time.Now(),
+		content: resolve(opts...).content,
+	}
 }
 
 // Next reads the next chunk and folds it into the record.
-func (o *ChatObserver) Next() bool {
+func (o *ChatObserver) Next() (ok bool) {
+	defer reportPanic("openai.ObserveChat")
 	if !o.stream.Next() {
+		if !o.sawUsage {
+			o.record.UsageUnknown = true
+		}
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
+	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
 	}
 	o.consume(o.stream.Current())
 	return true
@@ -186,6 +218,10 @@ func (o *ChatObserver) consume(chunk openai.ChatCompletionChunk) {
 	if chunk.Model != "" {
 		o.record.Model = chunk.Model
 	}
+	if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
+		o.sawUsage = true
+		o.record.UsageUnknown = false
+	}
 	if chunk.Usage.PromptTokens > 0 {
 		o.record.InputTokens = int(chunk.Usage.PromptTokens)
 		o.record.CachedInputTokens = int(chunk.Usage.PromptTokensDetails.CachedTokens)
@@ -199,6 +235,9 @@ func (o *ChatObserver) consume(chunk openai.ChatCompletionChunk) {
 		if choice.FinishReason != "" {
 			o.record.FinishReason = choice.FinishReason
 		}
+		if o.content && choice.Delta.Content != "" {
+			addOutputText(&o.record, choice.Delta.Content)
+		}
 		for _, call := range choice.Delta.ToolCalls {
 			if call.Function.Name != "" {
 				o.record.ToolCalls = append(o.record.ToolCalls, llm.ToolCall{Name: call.Function.Name})
@@ -207,33 +246,58 @@ func (o *ChatObserver) consume(chunk openai.ChatCompletionChunk) {
 	}
 }
 
+// addOutputText appends one output text part. Input is never recorded.
+func addOutputText(record *llm.Record, text string) {
+	if record.Content == nil {
+		record.Content = &llm.Content{}
+	}
+	record.Content.OutputMessages = append(record.Content.OutputMessages, llm.Message{
+		Role:  "assistant",
+		Parts: []llm.Part{{Type: "text", Content: text}},
+	})
+}
+
 // ResponsesObserver wraps a Responses stream. The terminal response.completed event carries
 // the whole response, so the observer maps that event.
 type ResponsesObserver struct {
-	stream *ssestream.Stream[responses.ResponseStreamEventUnion]
-	record llm.Record
-	opts   []Option
+	stream   *ssestream.Stream[responses.ResponseStreamEventUnion]
+	record   llm.Record
+	opts     []Option
+	started  time.Time
+	sawChunk bool
 }
 
 // ObserveResponses wraps stream. The caller drives it with Next and Current, and reads
 // Record once Next reports false.
 func ObserveResponses(stream *ssestream.Stream[responses.ResponseStreamEventUnion], opts ...Option) *ResponsesObserver {
 	return &ResponsesObserver{
-		stream: stream,
-		record: llm.Record{Provider: provider, Operation: "responses"},
-		opts:   opts,
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: "responses", Streamed: true},
+		opts:    opts,
+		started: time.Now(),
 	}
 }
 
 // Next reads the next event. The terminal event fills the record.
-func (o *ResponsesObserver) Next() bool {
+func (o *ResponsesObserver) Next() (ok bool) {
+	defer reportPanic("openai.ObserveResponses")
 	if !o.stream.Next() {
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
 	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
+	}
 	event := o.stream.Current()
-	if event.Type == "response.completed" {
+	switch event.Type {
+	case "response.completed", "response.incomplete", "response.failed":
+		first := o.record.TimeToFirstToken
 		response := event.Response
 		o.record = FromResponse(&response, o.opts...)
+		o.record.Streamed = true
+		o.record.TimeToFirstToken = first
 	}
 	return true
 }
@@ -254,9 +318,43 @@ func Middleware() option.Middleware {
 		resp, err := next(req)
 		if resp != nil {
 			if id := resp.Header.Get("x-request-id"); id != "" {
-				wlog.SetGroup(req.Context(), "llm", map[string]any{"request_ids": []any{id}})
+				appendRequestID(req.Context(), id)
 			}
 		}
 		return resp, err
 	}
+}
+
+// appendRequestID keeps every id. SetGroup would replace the list with the last one.
+func appendRequestID(ctx context.Context, id string) {
+	wlog.UpdateGroup(ctx, "llm", func(fields map[string]any) {
+		ids, _ := fields["request_ids"].([]any)
+		next := make([]any, len(ids)+1)
+		copy(next, ids)
+		next[len(ids)] = id
+		fields["request_ids"] = next
+	})
+}
+
+// positiveSince reports the time since started. A clock that has not moved still
+// counts as one nanosecond, so a first chunk is never stored as zero.
+func positiveSince(started time.Time) time.Duration {
+	d := time.Since(started)
+	if d <= 0 {
+		return time.Nanosecond
+	}
+	return d
+}
+
+// reportPanic turns a panic in an observer into a problem. The caller does not see it.
+func reportPanic(source string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	wlog.Default().Report(wlog.Problem{
+		Code:    "WLOG_OBSERVER_PANIC",
+		Source:  source,
+		Message: "the observer panicked",
+	})
 }

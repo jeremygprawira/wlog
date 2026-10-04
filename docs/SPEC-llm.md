@@ -23,8 +23,14 @@ which keeps this package in the root module and free of a vendor's release cycle
 // what its own client reports.
 type Record struct {
 	Provider string // "openai", "anthropic", "google", or any string
-	Model    string // the exact model id billed, such as "claude-sonnet-5"
-	Operation string // "chat", "embedding", "rerank", or any string
+	Model         string // the exact model id billed, such as "claude-sonnet-5"
+	ResponseModel string // the model the provider returned
+	Operation     string // "chat", "embedding", "rerank", or any string
+	Status        string
+	FinishReasons []string
+	Attempts      int
+	RequestIDs    []string
+	Err           error
 
 	InputTokens       int
 	OutputTokens      int
@@ -42,6 +48,7 @@ type Record struct {
 }
 
 type ToolCall struct {
+	ID       string
 	Name     string
 	Duration time.Duration
 	Failed   bool
@@ -97,16 +104,19 @@ func Enricher(p *Prices) wlog.Enricher
 ```
 
 The enricher reads the `llm` group the handler already set, prices every call whose model
-the table knows, and writes `llm.cost` and the per-call costs. An unknown model leaves the
+the table knows, and writes `llm.cost_micros` and the per-call costs. An unknown model leaves the
 cost off the event and sets `llm.cost_unknown` to true. A dashboard can then count what it
 failed to price, instead of reading a silent zero.
 
 ### Fields on the event
 
 ```
-llm.provider llm.request_model llm.operation
-llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.reasoning_tokens
-llm.total_tokens
+llm.provider llm.request_model llm.response_model llm.operation llm.status
+llm.attempts llm.request_ids
+llm.input_tokens llm.output_tokens llm.cache_read_input_tokens llm.cache_write_input_tokens
+llm.cache_write_1h_input_tokens llm.reasoning_tokens llm.response_id
+llm.total_tokens llm.steps llm.output_tokens_per_second
+llm.input_messages llm.output_messages
 llm.tool_calls llm.tool_call_count llm.tool_call_failures
 llm.time_to_first_chunk_ms llm.duration_ms llm.streamed llm.finish_reasons
 llm.cost_micros llm.cost_unknown
@@ -123,9 +133,10 @@ is masked before a drain sees it.
 2. `Add` folds token counts and costs into one total, and appends each call to `llm.calls[]`,
    capped at 200 entries each by llm itself, with every entry past the cap counted in
    wlog.dropped_fields (gate G4). Money stays in whole micros: an event never carries a
-   dollar float, because a float rounds.
+   dollar float, because a float rounds. `Add` also records one `calls` entry with kind `llm`,
+   system `Provider`, operation `Operation`, and target `ResponseModel`.
 3. `Cost` prices a record from the token counts, and prices a cached input token at the
-   cached rate.
+   cached rate. A prefix matches a date suffix or `-latest` only. Any other suffix is unknown.
 4. `Cost` reports false for a model the table does not hold, and the enricher then sets
    `llm.cost_unknown`.
 5. Money never passes through a float before it reaches the event. A test prices a call

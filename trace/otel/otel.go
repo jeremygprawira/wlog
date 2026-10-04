@@ -11,23 +11,23 @@
 // starts. Register it first, then wlog:
 //
 //	// net/http
-//	handler := otelhttp.NewHandler(wlogNetHTTP.Setup(mux), "server")
+//	handler := otelhttp.NewHandler(wlogstd.Middleware(log)(mux), "server")
 //
 //	// chi
 //	r.Use(otelhttp.NewMiddleware("server"))
-//	r.Use(wlogchi.Middleware())
+//	r.Use(wlogchi.Middleware(log))
 //
 //	// gin
 //	r.Use(otelgin.Middleware("server"))
-//	r.Use(wloggin.Middleware())
+//	r.Use(wloggin.Middleware(log))
 //
 //	// echo
 //	e.Use(otelecho.Middleware("server"))
-//	e.Use(wlogecho.Middleware())
+//	e.Use(wlogecho.Middleware(log))
 //
 //	// gRPC
 //	grpc.NewServer(
-//		grpc.ChainUnaryInterceptor(otelgrpc.UnaryServerInterceptor(), wloggrpc.UnaryServerInterceptor()),
+//		grpc.ChainUnaryInterceptor(otelgrpc.UnaryServerInterceptor(), wloggrpc.UnaryServerInterceptor(log)),
 //	)
 //
 // The plugin never creates a span. With no recording span on the unit context it does
@@ -81,14 +81,14 @@ func WithMeterProvider(mp metric.MeterProvider) Option {
 }
 
 // WithSpans turns the span attributes, the status, and the exception event on or off.
-// The default is on.
+// It does not stop the trace id copy. The default is on.
 func WithSpans(on bool) Option { return func(c *config) { c.spans = on } }
 
 // WithMetrics turns the two duration histograms on or off. The default is on.
 func WithMetrics(on bool) Option { return func(c *config) { c.metrics = on } }
 
-// WithStats turns the observable counters that read the Logger's Stats on or off. The
-// default is on.
+// WithStats turns the observable counters that read the Logger's Stats on or off.
+// The counters do not need the duration histograms. The default is on.
 func WithStats(on bool) Option { return func(c *config) { c.stats = on } }
 
 // WithExceptionEvent turns the one span event named exception on or off. Turn it off
@@ -107,11 +107,14 @@ func WithMaxOperations(n int) Option {
 
 // plugin holds the instruments and the per-kind operation cap of one Logger.
 type plugin struct {
-	cfg    config
-	tracer oteltrace.Tracer
+	cfg config
 
 	request metric.Float64Histogram
 	work    metric.Float64Histogram
+
+	emitted       metric.Int64ObservableCounter
+	dropped       metric.Int64ObservableCounter
+	writerDropped metric.Int64ObservableCounter
 
 	mu     sync.Mutex
 	ops    map[string]map[string]struct{}
@@ -135,9 +138,6 @@ func Plugin(opts ...Option) (wlog.Plugin, error) {
 		ops:    map[string]map[string]struct{}{},
 		capped: map[string]bool{},
 	}
-	if c.spans {
-		p.tracer = otel.GetTracerProvider().Tracer(instrumentationName)
-	}
 	if c.metrics {
 		meter := c.mp.Meter(instrumentationName)
 		var err error
@@ -154,6 +154,22 @@ func Plugin(opts ...Option) (wlog.Plugin, error) {
 			return nil, err
 		}
 	}
+	if c.stats {
+		meter := c.mp.Meter(instrumentationName)
+		var err error
+		p.emitted, err = meter.Int64ObservableCounter("wlog.events.emitted")
+		if err != nil {
+			return nil, err
+		}
+		p.dropped, err = meter.Int64ObservableCounter("wlog.events.dropped")
+		if err != nil {
+			return nil, err
+		}
+		p.writerDropped, err = meter.Int64ObservableCounter("wlog.writer.dropped")
+		if err != nil {
+			return nil, err
+		}
+	}
 	return p, nil
 }
 
@@ -164,7 +180,7 @@ func (p *plugin) Name() string { return "trace-otel" }
 // through it, and it registers the observable counters.
 func (p *plugin) Setup(l *wlog.Logger) error {
 	p.logger = l
-	if !p.cfg.stats || !p.cfg.metrics || l == nil {
+	if !p.cfg.stats || l == nil {
 		return nil
 	}
 	return p.registerStats(l)
@@ -173,17 +189,40 @@ func (p *plugin) Setup(l *wlog.Logger) error {
 // OnStart copies the ids of the active span onto the event, so head sampling and every
 // outbound call use the OTel trace. With no recording span it leaves the context alone.
 func (p *plugin) OnStart(ctx context.Context, _ string) context.Context {
-	if !p.cfg.spans {
-		return ctx
-	}
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.IsRecording() {
 		return ctx
 	}
 	sc := span.SpanContext()
-	return propagate.ContextWith(ctx, propagate.TraceContext{
+	ctx = propagate.ContextWith(ctx, propagate.TraceContext{
 		TraceID: sc.TraceID().String(),
 		SpanID:  sc.SpanID().String(),
 		Sampled: sc.IsSampled(),
 	})
+	// The first unit under this span claims it. A unit that starts later sees the
+	// claim and does not write on the span at the end.
+	return markSpan(ctx, sc.SpanID())
+}
+
+// spanMark records whether this unit claimed the span on its context.
+type spanMark struct {
+	id   oteltrace.SpanID
+	mine bool
+}
+
+// spanMarkKey is the private key a span claim travels under.
+type spanMarkKey struct{}
+
+// markSpan claims id for this unit, or records that an outer unit already claimed it.
+func markSpan(ctx context.Context, id oteltrace.SpanID) context.Context {
+	if cur, ok := ctx.Value(spanMarkKey{}).(spanMark); ok && cur.mine && cur.id == id {
+		return context.WithValue(ctx, spanMarkKey{}, spanMark{id: id, mine: false})
+	}
+	return context.WithValue(ctx, spanMarkKey{}, spanMark{id: id, mine: true})
+}
+
+// spanIsMine reports whether this unit claimed the span.
+func spanIsMine(ctx context.Context, id oteltrace.SpanID) bool {
+	cur, ok := ctx.Value(spanMarkKey{}).(spanMark)
+	return ok && cur.mine && cur.id == id
 }

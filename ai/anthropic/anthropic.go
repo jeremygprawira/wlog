@@ -5,12 +5,14 @@
 // request id and the retry count from the response headers.
 //
 // No helper keeps the prompt, the completion, or the tool payload unless the caller passes
-// WithContent. Core redacts those values like any other.
+// WithContent. Only output is recorded. Core redacts those values like any other.
 package wloganthropic
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -168,7 +170,7 @@ func betaContentOf(blocks []anthropic.BetaContentBlockUnion) *llm.Content {
 		case toolUse:
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", ID: block.ID, Name: block.Name}},
+				Parts: []llm.Part{{Type: "tool_call", ID: block.ID, Name: block.Name, Arguments: block.Input}},
 			})
 		}
 	}
@@ -181,24 +183,36 @@ func betaContentOf(blocks []anthropic.BetaContentBlockUnion) *llm.Content {
 // Observer wraps a message stream and builds a Record as the caller reads it. Observe
 // never reads ahead, so the caller keeps every chunk and no text reaches the record.
 type Observer struct {
-	stream *ssestream.Stream[anthropic.MessageStreamEventUnion]
-	record llm.Record
+	stream   *ssestream.Stream[anthropic.MessageStreamEventUnion]
+	record   llm.Record
+	rawInput int
+	started  time.Time
+	sawChunk bool
+	content  bool
 }
 
 // Observe wraps stream. The caller drives it with Next and Current, and reads Record once
 // Next reports false.
 func Observe(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], opts ...Option) *Observer {
-	_ = resolve(opts...)
 	return &Observer{
-		stream: stream,
-		record: llm.Record{Provider: provider, Operation: operation},
+		stream:  stream,
+		record:  llm.Record{Provider: provider, Operation: operation, Streamed: true},
+		started: time.Now(),
+		content: resolve(opts...).content,
 	}
 }
 
 // Next reads the next event and folds it into the record. It reports false at the end.
-func (o *Observer) Next() bool {
+func (o *Observer) Next() (ok bool) {
+	defer reportPanic("anthropic.Observe")
 	if !o.stream.Next() {
+		o.record.Streamed = true
+		o.record.Duration = time.Since(o.started)
 		return false
+	}
+	if !o.sawChunk {
+		o.sawChunk = true
+		o.record.TimeToFirstToken = positiveSince(o.started)
 	}
 	o.consume(o.stream.Current())
 	return true
@@ -221,6 +235,7 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 		usage := event.Message.Usage
 		o.record.Model = event.Message.Model
 		o.record.ResponseID = event.Message.ID
+		o.rawInput = int(usage.InputTokens)
 		o.record.InputTokens = int(usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens)
 		o.record.CachedInputTokens = int(usage.CacheReadInputTokens)
 		write5m, write1h := usage.CacheCreation.Ephemeral5mInputTokens, usage.CacheCreation.Ephemeral1hInputTokens
@@ -236,8 +251,30 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 			}
 		}
 	case "message_delta":
-		o.record.OutputTokens = int(event.Usage.OutputTokens)
-		o.record.ReasoningTokens = int(event.Usage.OutputTokensDetails.ThinkingTokens)
+		usage := event.Usage
+		changed := false
+		if usage.JSON.InputTokens.Valid() {
+			o.rawInput = int(usage.InputTokens)
+			changed = true
+		}
+		if usage.JSON.CacheReadInputTokens.Valid() {
+			o.record.CachedInputTokens = int(usage.CacheReadInputTokens)
+			changed = true
+		}
+		if usage.JSON.CacheCreationInputTokens.Valid() {
+			o.record.CacheWriteInputTokens = int(usage.CacheCreationInputTokens)
+			o.record.CacheWrite1hInputTokens = 0
+			changed = true
+		}
+		if changed {
+			o.record.InputTokens = o.rawInput + o.record.CachedInputTokens + o.record.CacheWriteInputTokens + o.record.CacheWrite1hInputTokens
+		}
+		if usage.JSON.OutputTokens.Valid() {
+			o.record.OutputTokens = int(usage.OutputTokens)
+		}
+		if usage.JSON.OutputTokensDetails.Valid() {
+			o.record.ReasoningTokens = int(usage.OutputTokensDetails.ThinkingTokens)
+		}
 		if reason := string(event.Delta.StopReason); reason != "" {
 			o.record.FinishReason = reason
 		}
@@ -245,11 +282,26 @@ func (o *Observer) consume(event anthropic.MessageStreamEventUnion) {
 		if event.ContentBlock.Type == toolUse {
 			o.record.ToolCalls = append(o.record.ToolCalls, llm.ToolCall{Name: event.ContentBlock.Name})
 		}
+	case "content_block_delta":
+		if o.content && event.Delta.Text != "" {
+			addOutputText(&o.record, event.Delta.Text)
+		}
 	}
 }
 
-// Middleware returns an option.Middleware that records the request id and the retry count
-// from the response headers onto the current event. Pass it with
+// addOutputText appends one output text part. Input is never recorded.
+func addOutputText(record *llm.Record, text string) {
+	if record.Content == nil {
+		record.Content = &llm.Content{}
+	}
+	record.Content.OutputMessages = append(record.Content.OutputMessages, llm.Message{
+		Role:  "assistant",
+		Parts: []llm.Part{{Type: "text", Content: text}},
+	})
+}
+
+// Middleware returns an option.Middleware that records the request id from the response
+// and the retry count from the request. Pass it with
 // option.WithMiddleware(Middleware()).
 func Middleware() option.Middleware {
 	return func(req *http.Request, next option.MiddlewareNext) (*http.Response, error) {
@@ -263,16 +315,47 @@ func Middleware() option.Middleware {
 
 // recordHeaders writes the request id and the attempt count onto the event of req.
 func recordHeaders(req *http.Request, resp *http.Response) {
-	fields := map[string]any{}
+	ctx := req.Context()
 	if id := resp.Header.Get("request-id"); id != "" {
-		fields["request_ids"] = []any{id}
+		appendRequestID(ctx, id)
 	}
-	if count := resp.Header.Get("X-Stainless-Retry-Count"); count != "" {
+	if count := req.Header.Get("X-Stainless-Retry-Count"); count != "" {
 		if n, err := strconv.Atoi(count); err == nil {
-			fields["attempts"] = n + 1
+			wlog.SetGroup(ctx, "llm", map[string]any{"attempts": n + 1})
 		}
 	}
-	if len(fields) > 0 {
-		wlog.SetGroup(req.Context(), "llm", fields)
+}
+
+// appendRequestID keeps every id. SetGroup would replace the list with the last one.
+func appendRequestID(ctx context.Context, id string) {
+	wlog.UpdateGroup(ctx, "llm", func(fields map[string]any) {
+		ids, _ := fields["request_ids"].([]any)
+		next := make([]any, len(ids)+1)
+		copy(next, ids)
+		next[len(ids)] = id
+		fields["request_ids"] = next
+	})
+}
+
+// positiveSince reports the time since started. A clock that has not moved still
+// counts as one nanosecond, so a first chunk is never stored as zero.
+func positiveSince(started time.Time) time.Duration {
+	d := time.Since(started)
+	if d <= 0 {
+		return time.Nanosecond
 	}
+	return d
+}
+
+// reportPanic turns a panic in an observer into a problem. The caller does not see it.
+func reportPanic(source string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	wlog.Default().Report(wlog.Problem{
+		Code:    "WLOG_OBSERVER_PANIC",
+		Source:  source,
+		Message: "the observer panicked",
+	})
 }

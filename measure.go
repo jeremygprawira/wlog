@@ -37,7 +37,7 @@ type Measurer interface {
 // filter and before head sampling, so a filter or a sampler never changes a metric. A
 // disabled or closed Logger calls no Measurer, and neither does a log line.
 func (l *Logger) measureEvent(ctx context.Context, e *event, level Level) {
-	if len(l.measurers) == 0 || e.kind == kindLog || !l.Enabled() {
+	if len(l.measurers) == 0 || !l.Enabled() || measureKind(e) == kindLog {
 		return
 	}
 	m := measureOf(e, level)
@@ -48,10 +48,13 @@ func (l *Logger) measureEvent(ctx context.Context, e *event, level Level) {
 }
 
 // measureOf builds the Measure of one event, reading reserved fields only.
+// Kind and operation come from the event fields when an adapter set them, because
+// Set writes the map and not the values Start stored. An unknown kind becomes
+// _OTHER, so an app cannot grow the metric label set.
 func measureOf(e *event, level Level) Measure {
 	return Measure{
-		Kind:       e.kind,
-		Operation:  e.operation,
+		Kind:       cappedKind(measureKind(e)),
+		Operation:  measureOperation(e),
 		Level:      level,
 		Outcome:    outcomeOf(level),
 		DurationMS: float64(time.Since(e.start).Microseconds()) / 1000,
@@ -62,6 +65,40 @@ func measureOf(e *event, level Level) Measure {
 		System:     textAt(e.fields, "rpc.system", "messaging.system", "job.system", "faas.system"),
 		ErrorType:  errorTypeOf(e.errInfo),
 	}
+}
+
+// knownKinds are the kinds a metric may use as a label. Kind log is measured by no
+// one, so it is not in this set.
+var knownKinds = map[string]struct{}{
+	"request": {}, "rpc": {}, "message": {}, "job": {},
+	"command": {}, "function": {}, kindWork: {},
+}
+
+// measureKind returns the kind an adapter wrote, or the kind Start stored.
+func measureKind(e *event) string {
+	if text, ok := e.fields["kind"].(string); ok && text != "" {
+		return text
+	}
+	if e.kind != "" {
+		return e.kind
+	}
+	return kindWork
+}
+
+// measureOperation returns the operation an adapter wrote, or the name Start stored.
+func measureOperation(e *event) string {
+	if text, ok := e.fields["operation"].(string); ok && text != "" {
+		return text
+	}
+	return e.operation
+}
+
+// cappedKind keeps a known kind and replaces any other kind with _OTHER.
+func cappedKind(kind string) string {
+	if _, ok := knownKinds[kind]; ok {
+		return kind
+	}
+	return "_OTHER"
 }
 
 // errorTypeOf names the error of an event for a metric: its code first, then its kind,

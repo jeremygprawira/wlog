@@ -20,6 +20,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	template "github.com/cloudwego/eino/utils/callbacks"
 
+	"github.com/jeremygprawira/wlog"
 	"github.com/jeremygprawira/wlog/llm"
 )
 
@@ -153,7 +154,7 @@ func mergeContent(content *llm.Content, message *schema.Message) *llm.Content {
 	for _, call := range message.ToolCalls {
 		added = append(added, llm.Message{
 			Role:  "assistant",
-			Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments}},
+			Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.Function.Name, Arguments: wlog.JSONTree(call.Function.Arguments)}},
 		})
 	}
 	if len(added) == 0 {

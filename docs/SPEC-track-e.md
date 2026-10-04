@@ -89,6 +89,8 @@ log := wlog.New(wlog.WithPlugins(p))
 
 ### Trace ids
 
+- `WithSpans(false)` writes no span attributes. It still copies the trace ids from a recording span.
+- When `WithMetrics(false)`, `WithStats(true)` still registers the counters.
 - `Enricher` is removed. The plugin is a `Starter`. If the unit context holds a recording span, it
   calls `propagate.ContextWith` with the span's trace id and span id. The event, head sampling,
   and every outbound call then use the OTel ids. (HTTP-21)
@@ -97,9 +99,12 @@ log := wlog.New(wlog.WithPlugins(p))
 
 - The plugin is a `Finisher`. It reads the span from the unit context with
   `trace.SpanFromContext`. If no span is recording, it does nothing.
+- Kind `log` writes nothing onto the span. A unit that starts under a span another unit already
+  claimed writes nothing onto that span. A failed inner unit cannot mark the outer span as Error.
 - The OTel HTTP or gRPC middleware must wrap outside wlog. Then the span already exists at
   the start of the unit. The package doc shows the order for net/http, chi, gin, echo, and gRPC.
   If `wlog doctor` finds the OTel middleware inside wlog, it reports a warning. (HTTP-21)
+  The check ignores comments and `otelgrpc.NewServerHandler`, and it compares each file on its own.
 - Attribute names are the `attributes` names of the `otel` output preset. A nested value becomes
   a dotted key.
 - The plugin sets preset-mapped reserved keys first, then other reserved keys, then groups, then
@@ -109,8 +114,9 @@ log := wlog.New(wlog.WithPlugins(p))
 - `logs`, `errors`, `audit`, and `calls` never become span attributes. `call_stats` does.
 - Outcome `error` sets status Error, with `error.message` as the description. Outcome `success`
   leaves the status unset.
-- `error.type` is `error.code`, else `error.kind`, else `error.type`. For a request with status
-  500 or higher and no error, it is the status as text.
+- `error.type` comes from the otel preset: `error.code`, else `error.kind`, else `error.type`.
+  The span does not write that attribute again. For a request with status 500 or higher and no
+  error, it is the status as text.
 - For an event with an `error` object, the plugin adds one span event named `exception`. It holds
   `exception.type`, `exception.message`, and `exception.stacktrace`. The plugin never calls
   `RecordError`.
@@ -125,7 +131,8 @@ log := wlog.New(wlog.WithPlugins(p))
   with the semconv buckets `0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5,
   10`.
 - Its attributes are `http.request.method`, `url.scheme`, and `http.response.status_code`. For each
-  of `http.route` and `error.type` that is set, it adds that attribute. A method outside the nine standard methods is
+  of `http.route` and `error.type` that is set, it adds that attribute. A request with status 500 or
+  higher and no error uses the status text as `error.type`. A method outside the nine standard methods is
   `_OTHER`.
 - Each other kind except `log` records `wlog.work.duration` in seconds, with the same buckets. Its
   attributes are `wlog.kind`, `wlog.operation`, and `wlog.outcome`. For each of
@@ -133,9 +140,10 @@ log := wlog.New(wlog.WithPlugins(p))
 - After `WithMaxOperations` distinct operations in one kind, a new operation records as `_OTHER`.
   The plugin reports `WLOG_CAP_REACHED` once per kind.
 - `url.path`, user ids, and client addresses never become metric attributes.
-- With `WithStats(true)`, observable counters report the Logger's `Stats`. The counters are
-  `wlog.events.emitted`, `wlog.events.dropped` with `wlog.reason`, `wlog.writer.dropped`, and
-  `wlog.drain.events` with `wlog.drain` and `wlog.state`.
+- With `WithStats(true)`, `Plugin` builds the observable counters that report the Logger's `Stats`.
+  `Setup` only registers their callback. The counters are `wlog.events.emitted`,
+  `wlog.events.dropped` with `wlog.reason`, and `wlog.writer.dropped`.
+  Drain counters are not exported. A queue depth is not a counter, and two drains can share a name.
 - If an instrument fails to build, `Plugin` returns the error. Nothing panics.
 
 Floor: otel, otel/trace, and otel/metric v1.20.0, the first release with
@@ -152,13 +160,13 @@ func WithServiceAttributes(on bool) Option                        // default fal
 
 - `Send` maps the redacted event to one `log.Record` and calls `Logger.Emit`. The app's provider
   owns batching, export, and the resource.
-- Before it builds a record, `Send` calls `Enabled` with the severity and the event name. It skips
-  a disabled record.
+- `Send` builds the event span context first. It then calls `Enabled` with that context, the severity,
+  and the event name. It skips a disabled record.
 - The logger name is `github.com/jeremygprawira/wlog`, with the wlog version as the
   instrumentation version.
 - The record gets its timestamp from `timestamp` and its observed timestamp from the clock at
-  `Send`. It gets severity and severity text from `level`, the body from `summary`, and the event
-  name `wlog.<kind>`.
+  `Send`. Severity text is the lowercase wlog level. The body is `summary`. The event name is
+  `wlog.<kind>`.
 - Attributes are the `attributes` object of the `otel` preset. An array of objects becomes an
   `attribute.Slice` of map values.
 - If `ctx` holds no valid span, `Send` builds a span context from `trace.trace_id` and
@@ -182,13 +190,17 @@ func StatsCollector(l *wlog.Logger) prometheus.Collector
 
 - The recorder has one histogram, `wlog_duration_seconds`, with labels `kind`, `operation`,
   `outcome`, and `status`. For a kind with no status, `status` is empty.
+- When the bucket bounds are not strictly increasing, `New` returns an error.
+- `New(nil)` returns an error. `StatsCollector(nil)` exports nothing, so a scrape does not panic.
 - `New` calls `Register`, never `MustRegister`. If the registry already holds the same histogram,
   `New` reuses it. Any other `AlreadyRegisteredError` returns an error.
+- When the buckets or the operation cap differ, a second `New` on that histogram returns an error.
+  Recorders of one histogram share one cap.
 - The recorder calls `GetMetricWithLabelValues`, never `WithLabelValues`. On a label error, it
   reports a problem and records nothing.
 - The operation cap and the `_OTHER` rule match `trace-otel`.
 - `StatsCollector` exports `wlog_events_emitted_total`, `wlog_events_dropped_total{reason}`,
-  `wlog_writer_dropped_total`, and `wlog_drain_events_total{drain,state}`. It reads `Stats` on
+  and `wlog_writer_dropped_total`. It does not export drain counters. It reads `Stats` on
   each scrape.
 - The module serves no HTTP handler. The app exposes its registry with `promhttp`.
 - Floor: client_golang v1.11.1, the first release free of GO-2022-0322. Go 1.21.

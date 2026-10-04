@@ -50,6 +50,8 @@ func requestAttributes(m wlog.Measure) []attribute.KeyValue {
 	}
 	if m.ErrorType != "" {
 		out = append(out, attribute.String("error.type", m.ErrorType))
+	} else if code, ok := statusCode(m.Status); ok && code >= 500 {
+		out = append(out, attribute.String("error.type", m.Status))
 	}
 	return out
 }
@@ -130,43 +132,14 @@ func (p *plugin) reportCap(kind string) {
 // scrape, so a scrape sees the numbers at that moment.
 func (p *plugin) registerStats(l *wlog.Logger) error {
 	meter := p.cfg.mp.Meter(instrumentationName)
-	emitted, err := meter.Int64ObservableCounter("wlog.events.emitted")
-	if err != nil {
-		return err
-	}
-	dropped, err := meter.Int64ObservableCounter("wlog.events.dropped")
-	if err != nil {
-		return err
-	}
-	writerDropped, err := meter.Int64ObservableCounter("wlog.writer.dropped")
-	if err != nil {
-		return err
-	}
-	drainEvents, err := meter.Int64ObservableCounter("wlog.drain.events")
-	if err != nil {
-		return err
-	}
-	_, err = meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+	_, err := meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
 		stats := l.Stats()
-		o.ObserveInt64(emitted, stats.Emitted)
+		o.ObserveInt64(p.emitted, stats.Emitted)
 		for reason, count := range stats.Dropped {
-			o.ObserveInt64(dropped, count, metric.WithAttributes(attribute.String("wlog.reason", reason)))
+			o.ObserveInt64(p.dropped, count, metric.WithAttributes(attribute.String("wlog.reason", reason)))
 		}
-		o.ObserveInt64(writerDropped, stats.WriterDropped)
-		for _, d := range stats.Drains {
-			o.ObserveInt64(drainEvents, d.Queued, drainOption(d.Name, "queued"))
-			o.ObserveInt64(drainEvents, d.Sent, drainOption(d.Name, "sent"))
-			o.ObserveInt64(drainEvents, d.Dropped, drainOption(d.Name, "dropped"))
-			o.ObserveInt64(drainEvents, d.Retried, drainOption(d.Name, "retried"))
-		}
+		o.ObserveInt64(p.writerDropped, stats.WriterDropped)
 		return nil
-	}, emitted, dropped, writerDropped, drainEvents)
+	}, p.emitted, p.dropped, p.writerDropped)
 	return err
-}
-
-// drainOption names one drain and one of its states.
-func drainOption(drain, state string) metric.ObserveOption {
-	return metric.WithAttributes(
-		attribute.String("wlog.drain", drain),
-		attribute.String("wlog.state", state))
 }

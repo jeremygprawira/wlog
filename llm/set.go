@@ -23,22 +23,49 @@ func Set(ctx context.Context, r Record) {
 // Add folds r into the current event's llm totals and appends it to llm.calls[]. Use it
 // when one request makes several model calls. It is a no-op outside a wlog.Start.
 //
-// Add is not safe to call concurrently on one event, because it reads and writes the
-// group. A request's model calls are sequential in practice.
+// Add updates the group under the event lock, so two calls on one event do not race.
 func Add(ctx context.Context, r Record) {
 	// The decode speed follows from the output count and the call duration, so a caller
 	// does not compute it.
 	if r.OutputTokensPerSecond == 0 && r.OutputTokens > 0 && r.Duration > 0 {
 		r.OutputTokensPerSecond = float64(r.OutputTokens) / r.Duration.Seconds()
 	}
-	current, _ := wlog.Field(ctx, group)
-	existing, _ := current.(map[string]any)
+	dropped := 0
+	wlog.UpdateGroup(ctx, group, func(existing map[string]any) {
+		applyAdd(existing, r, &dropped)
+	})
+	// One calls entry, so a query ranks this model call with every other call.
+	_, endCall := wlog.StartCall(ctx, wlog.Call{
+		Kind:      "llm",
+		System:    r.Provider,
+		Operation: r.Operation,
+		Target:    r.ResponseModel,
+	})
+	endCall(wlog.CallResult{Status: r.Status, Err: r.Err, Duration: r.Duration})
+	// The count goes through core, so an entry that hit llm's own cap appears in
+	// wlog.dropped_fields beside every other capped write.
+	wlog.CountDropped(ctx, dropped)
+}
 
+// applyAdd folds r into existing. The caller holds the event lock.
+func applyAdd(existing map[string]any, r Record, dropped *int) {
 	fields := fieldsFor(r)
-	fields["input_tokens"] = intOf(existing["input_tokens"]) + r.InputTokens
-	fields["output_tokens"] = intOf(existing["output_tokens"]) + r.OutputTokens
-	if total := fields["input_tokens"].(int) + fields["output_tokens"].(int); total > 0 {
+	input := intOf(existing["input_tokens"]) + r.InputTokens
+	output := intOf(existing["output_tokens"]) + r.OutputTokens
+	if input > 0 {
+		fields["input_tokens"] = input
+	} else {
+		delete(fields, "input_tokens")
+	}
+	if output > 0 {
+		fields["output_tokens"] = output
+	} else {
+		delete(fields, "output_tokens")
+	}
+	if total := input + output; total > 0 {
 		fields["total_tokens"] = total
+	} else {
+		delete(fields, "total_tokens")
 	}
 	if cached := intOf(existing["cache_read_input_tokens"]) + r.CachedInputTokens; cached > 0 {
 		fields["cache_read_input_tokens"] = cached
@@ -58,16 +85,15 @@ func Add(ctx context.Context, r Record) {
 
 	calls, _ := existing["calls"].([]any)
 	toolCalls, _ := existing["tool_calls"].([]any)
-	dropped := 0
 
 	if len(calls) < maxCalls {
 		fields["calls"] = append(calls, callMap(r))
 	} else {
-		dropped++
+		*dropped++
 	}
 	for _, call := range toolCallMaps(r.ToolCalls) {
 		if len(toolCalls) >= maxCalls {
-			dropped++
+			*dropped++
 			continue
 		}
 		toolCalls = append(toolCalls, call)
@@ -92,10 +118,36 @@ func Add(ctx context.Context, r Record) {
 		fields["finish_reasons"] = append(reasons, r.FinishReason)
 	}
 
-	wlog.SetGroup(ctx, group, fields)
-	// The count goes through core, so an entry that hit llm's own cap appears in
-	// wlog.dropped_fields beside every other capped write.
-	wlog.CountDropped(ctx, dropped)
+	appendMessages(existing, fields, "input_messages")
+	appendMessages(existing, fields, "output_messages")
+	for key, value := range fields {
+		if _, exists := existing[key]; exists && keepFirst(key) {
+			continue
+		}
+		existing[key] = value
+	}
+}
+
+// appendMessages keeps every call's messages. A later Add must not replace the earlier text.
+func appendMessages(existing, fields map[string]any, key string) {
+	next, ok := fields[key].([]any)
+	if !ok {
+		return
+	}
+	delete(fields, key)
+	prev, _ := existing[key].([]any)
+	existing[key] = append(prev, next...)
+}
+
+// keepFirst names the top-level fields that belong to the first call. Later calls
+// still land in llm.calls.
+func keepFirst(key string) bool {
+	switch key {
+	case "provider", "request_model", "response_model", "operation", "response_id":
+		return true
+	default:
+		return false
+	}
 }
 
 // fieldsFor maps one record to the group fields. Zero values stay off.
@@ -107,8 +159,34 @@ func fieldsFor(r Record) map[string]any {
 	if r.Model != "" {
 		fields["request_model"] = r.Model
 	}
+	if r.ResponseModel != "" {
+		fields["response_model"] = r.ResponseModel
+	}
 	if r.Operation != "" {
 		fields["operation"] = r.Operation
+	}
+	if r.Status != "" {
+		fields["status"] = r.Status
+	}
+	if r.Attempts > 0 {
+		fields["attempts"] = r.Attempts
+	}
+	if len(r.RequestIDs) > 0 {
+		ids := make([]any, len(r.RequestIDs))
+		for i, id := range r.RequestIDs {
+			ids[i] = id
+		}
+		fields["request_ids"] = ids
+	}
+	if r.UsageUnknown {
+		fields["usage_unknown"] = true
+	}
+	if r.Err != nil {
+		errObj := map[string]any{"message": r.Err.Error()}
+		if coded, ok := r.Err.(interface{ Code() string }); ok && coded.Code() != "" {
+			errObj["code"] = coded.Code()
+		}
+		fields["error"] = errObj
 	}
 	if r.ResponseID != "" {
 		fields["response_id"] = r.ResponseID
@@ -156,7 +234,13 @@ func fieldsFor(r Record) map[string]any {
 	if r.OutputTokensPerSecond > 0 {
 		fields["output_tokens_per_second"] = r.OutputTokensPerSecond
 	}
-	if r.FinishReason != "" {
+	if len(r.FinishReasons) > 0 {
+		reasons := make([]any, len(r.FinishReasons))
+		for i, reason := range r.FinishReasons {
+			reasons[i] = reason
+		}
+		fields["finish_reasons"] = reasons
+	} else if r.FinishReason != "" {
 		// finish_reasons is an array, because a request may finish more than one way.
 		fields["finish_reasons"] = []any{r.FinishReason}
 	}
@@ -169,10 +253,10 @@ func fieldsFor(r Record) map[string]any {
 		// The content is written only when a module's WithContent() filled it. Core redacts
 		// the values, so a masked prompt text stays masked.
 		if len(r.Content.InputMessages) > 0 {
-			fields["input_messages"] = r.Content.InputMessages
+			fields["input_messages"] = wlog.JSONTree(r.Content.InputMessages)
 		}
 		if len(r.Content.OutputMessages) > 0 {
-			fields["output_messages"] = r.Content.OutputMessages
+			fields["output_messages"] = wlog.JSONTree(r.Content.OutputMessages)
 		}
 	}
 	return fields
@@ -192,6 +276,9 @@ func toolCallMaps(calls []ToolCall) []any {
 	out := make([]any, 0, len(calls))
 	for _, call := range calls {
 		entry := map[string]any{"name": call.Name}
+		if call.ID != "" {
+			entry["id"] = call.ID
+		}
 		if call.Duration > 0 {
 			entry["duration_ms"] = call.Duration.Milliseconds()
 		}

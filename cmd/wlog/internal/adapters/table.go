@@ -24,7 +24,7 @@ var Table = []Adapter{
 		Libs: []string{"google.golang.org/genai"}, Setup: "wlogenai.FromGenerateContent(resp, backend)"},
 	{Name: "ai-goopenai", Wlog: "github.com/jeremygprawira/wlog/ai/goopenai", Kind: "ai",
 		Libs:  []string{"github.com/sashabaranov/go-openai"},
-		Setup: "wlogopenai.FromChatCompletionResponse(resp)"},
+		Setup: "wloggoopenai.FromChatCompletionResponse(resp)"},
 	{Name: "ai-langchaingo", Wlog: "github.com/jeremygprawira/wlog/ai/langchaingo", Kind: "ai",
 		Libs: []string{"github.com/tmc/langchaingo"}, Setup: "wloglangchaingo.Handler()"},
 	{Name: "ai-mcpgo", Wlog: "github.com/jeremygprawira/wlog/ai/mcpgo", Kind: "ai",

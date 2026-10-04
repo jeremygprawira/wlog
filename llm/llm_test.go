@@ -239,14 +239,13 @@ func TestLLM_CAT2_CostParts(t *testing.T) {
 		t.Errorf("TotalMicros = %d, want %d", cost.TotalMicros, want)
 	}
 
-	// The Anthropic example from the research: 50 fresh tokens and 100,000 cache reads, at
-	// the old $3 input and $0.30 cache-hit rates, is 30,150 micros and not 15.
-	old := llm.NewPrices(map[string]llm.Price{
-		"claude": {InputPerMillion: 3_000_000, OutputPerMillion: 15_000_000, CachedInputPerMillion: 300_000},
+	// 50 fresh tokens and 100,000 cache reads on the claude-sonnet-4-6 row is 30,150
+	// micros. That row is $3 per million input and $0.30 per million cache reads.
+	cost, ok = llm.DefaultPrices().Cost(llm.Record{
+		Model: "claude-sonnet-4-6", InputTokens: 100_050, CachedInputTokens: 100_000,
 	})
-	cost, ok = old.Cost(llm.Record{Model: "claude", InputTokens: 100_050, CachedInputTokens: 100_000})
 	if !ok {
-		t.Fatal("Cost refused the prefix model")
+		t.Fatal("Cost refused claude-sonnet-4-6")
 	}
 	if cost.TotalMicros != 30_150 {
 		t.Errorf("TotalMicros = %d, want 30150", cost.TotalMicros)
@@ -269,9 +268,9 @@ func TestLLM_CAT3_SnapshotPrefix(t *testing.T) {
 		{"gpt-4o-mini-2024-07-18", 150_000, true},
 		// An exact row wins over any prefix.
 		{"gpt-4o", 2_500_000, true},
-		// A suffix prices as its base model, which is how a dated snapshot is priced. A model
-		// that is not even a suffix of a row is unknown instead.
-		{"gpt-4o-omni", 2_500_000, true},
+		// A name that is not a date or -latest is unknown.
+		{"gpt-4o-omni", 0, false},
+		{"gpt-4o-latest", 2_500_000, true},
 		{"text-embedding-3", 0, false},
 		{"llama-3-70b", 0, false},
 	}

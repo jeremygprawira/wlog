@@ -111,19 +111,19 @@ func TestGenAI_Observe(t *testing.T) {
 			},
 		},
 	}
-	observer := wlogenai.Observe(seqOf(chunks...), genai.BackendGeminiAPI)
+	seq, record := wlogenai.Observe(seqOf(chunks...), genai.BackendGeminiAPI)
 	read := 0
-	for observer.Next() {
+	for resp, err := range seq {
+		if err != nil {
+			t.Fatalf("stream error: %v", err)
+		}
 		read++
-		_ = observer.Current()
-	}
-	if err := observer.Err(); err != nil {
-		t.Fatalf("stream error: %v", err)
+		_ = resp
 	}
 	if read != len(chunks) {
 		t.Errorf("the caller read %d chunks, want %d", read, len(chunks))
 	}
-	check(t, observer.Record(), want())
+	check(t, record(), want())
 }
 
 // TestGenAI_ObserveErr proves a stream error stops the observer and Err reports it.
@@ -135,16 +135,21 @@ func TestGenAI_ObserveErr(t *testing.T) {
 		}
 		yield(nil, wantErr)
 	}
-	observer := wlogenai.Observe(seq, genai.BackendGeminiAPI)
+	out, _ := wlogenai.Observe(seq, genai.BackendGeminiAPI)
 	read := 0
-	for observer.Next() {
+	var got error
+	for _, err := range out {
+		if err != nil {
+			got = err
+			break
+		}
 		read++
 	}
 	if read != 1 {
 		t.Errorf("the caller read %d chunks, want 1", read)
 	}
-	if !errors.Is(observer.Err(), wantErr) {
-		t.Errorf("Err() = %v, want %v", observer.Err(), wantErr)
+	if !errors.Is(got, wantErr) {
+		t.Errorf("stream error = %v, want %v", got, wantErr)
 	}
 }
 

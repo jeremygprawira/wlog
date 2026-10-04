@@ -62,9 +62,38 @@ func (v eventView) Get(path string) (any, bool) {
 // Kind returns the kind of the event.
 func (v eventView) Kind() string { return v.kind }
 
-// Fields returns the whole redacted event map, so a hook that needs every key can read
-// it. The map belongs to core, and the hook must not change it.
-func (v eventView) Fields() map[string]any { return v.fields }
+// Fields returns a copy of the redacted event map, so a hook that needs every key can
+// read it. The copy shares no map or slice with the event, and a write to it does not
+// change what the drains receive.
+func (v eventView) Fields() map[string]any { return cloneEventMap(v.fields) }
+
+// cloneEventMap copies an event at every depth.
+func cloneEventMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for key, value := range m {
+		out[key] = cloneEventValue(value)
+	}
+	return out
+}
+
+// cloneEventValue copies one value of an event tree.
+func cloneEventValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return cloneEventMap(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = cloneEventValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
 
 // Level returns the level of the event.
 func (v eventView) Level() Level { return v.level }

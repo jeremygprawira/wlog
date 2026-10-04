@@ -140,6 +140,8 @@ type Finisher interface { // replaces RequestFinisher
   `zerolog.Ctx(ctx)` folds into the event with no app code.
 - `end` calls each `Finisher` with the read-only event after finalize and before drains. A
   `Finisher` sees `summary`, `outcome`, and the redacted fields.
+- The event view has `Fields`. It returns a copy of the redacted map, including nested maps
+  and slices. A write to that copy does not change the drained event.
 - Both run under recover. A panic reports `WLOG_HOOK_PANIC` and keeps the previous context.
   (PAR-25)
 - Go has no diagnostics channel like Node's. A `Finisher` or `drain-memory` `Subscribe` gives
@@ -168,6 +170,10 @@ type Measure struct {
 
 - `end` calls each `Measurer` for every event whose kind is not `log`. The call comes before head
   sampling and the level filter, so a sampler never changes a metric.
+- When the event sets `kind` or `operation`, `Measure` reads that field. Otherwise it reads the value
+  `Start` stored.
+- A kind other than `request`, `rpc`, `message`, `job`, `command`, `function`, or `work` records as
+  `_OTHER`.
 - `Measure` holds reserved fields only. It never holds user keys, paths, bodies, or ids. Each
   string passes through the redactor's value patterns first, so G1 holds.
 - A disabled or closed Logger calls no `Measurer`. A panic reports `WLOG_HOOK_PANIC`.
@@ -239,6 +245,8 @@ func CurrentLevel(ctx context.Context) (Level, bool)
   of package-level state.
 - `Start` and `Detach` with no Logger on `ctx` use `Default()`.
 - `Set`, `SetGroup`, `Append`, `SetLevel`, and `AppendLog` with no event on `ctx` do nothing.
+- `UpdateGroup` runs a function on one group while the event lock is held. The function must not
+  call wlog. With no event, it does nothing.
   Each one reports `WLOG_NO_EVENT` with the key name.
 - `Error` with no event on `ctx` emits a `log` event at level `error`, with the `ErrorInfo`, so no
   error is lost. It also reports `WLOG_NO_EVENT`.

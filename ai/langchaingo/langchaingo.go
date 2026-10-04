@@ -129,7 +129,7 @@ func contentOf(choices []*llms.ContentChoice) *llm.Content {
 		if choice.FuncCall != nil {
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", Name: choice.FuncCall.Name, Arguments: choice.FuncCall.Arguments}},
+				Parts: []llm.Part{{Type: "tool_call", Name: choice.FuncCall.Name, Arguments: wlog.JSONTree(choice.FuncCall.Arguments)}},
 			})
 		}
 		for _, call := range choice.ToolCalls {
@@ -138,7 +138,7 @@ func contentOf(choices []*llms.ContentChoice) *llm.Content {
 			}
 			content.OutputMessages = append(content.OutputMessages, llm.Message{
 				Role:  "assistant",
-				Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.FunctionCall.Name, Arguments: call.FunctionCall.Arguments}},
+				Parts: []llm.Part{{Type: "tool_call", ID: call.ID, Name: call.FunctionCall.Name, Arguments: wlog.JSONTree(call.FunctionCall.Arguments)}},
 			})
 		}
 	}

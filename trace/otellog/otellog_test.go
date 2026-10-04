@@ -84,7 +84,7 @@ func TestOtelLog_ErrorRequest(t *testing.T) {
 	want := logtest.RecordFactory{
 		EventName:    "wlog.request",
 		Severity:     log.SeverityError,
-		SeverityText: log.SeverityError.String(),
+		SeverityText: "error",
 		Body:         attribute.StringValue("GET /orders failed"),
 	}.NewRecord()
 

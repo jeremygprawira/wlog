@@ -25,12 +25,12 @@ type Record struct {
 	ResponseID             string
 	FinishReasons          []string // the provider's own values
 	Status                 string   // Responses-style status, when the provider has one
-	InputTokens            int64    // every input token, cached ones included
-	CacheReadInputTokens   int64    // part of InputTokens
-	CacheWriteInputTokens  int64    // part of InputTokens, 5 minute or unspecified writes
-	CacheWrite1hInputTokens int64   // part of InputTokens, 1 hour writes
-	OutputTokens           int64
-	ReasoningTokens        int64    // part of OutputTokens
+	InputTokens            int    // every input token, cached ones included
+	CacheReadInputTokens   int    // part of InputTokens
+	CacheWriteInputTokens  int    // part of InputTokens, 5 minute or unspecified writes
+	CacheWrite1hInputTokens int   // part of InputTokens, 1 hour writes
+	OutputTokens           int
+	ReasoningTokens        int    // part of OutputTokens
 	Streamed               bool
 	Steps                  int      // agent or chain steps, when the framework reports them
 	OutputTokensPerSecond  float64  // set by llm.Add from OutputTokens and the call duration
@@ -87,7 +87,7 @@ such as `Message.Accumulate` or `ChatCompletionAccumulator`.
 Rules:
 
 - The OpenAI stream observer never adds `stream_options.include_usage`. `WithIncludeUsage(params)`
-  sets it, as an explicit opt-in.
+  sets it, as an explicit opt-in. A chat stream that ends with no usage sets `usage_unknown`.
 - The langchaingo Anthropic provider never calls the end callback in v0.1.14. So the package doc
   says to call `FromContentResponse` on the result.
 - A middleware body tee has a 1 MiB cap. Past the cap it records `usage_unknown` and passes the

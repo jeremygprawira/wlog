@@ -13,11 +13,26 @@ import "time"
 // Record is one model call. A zero field is left off the event, so a caller fills only
 // what its own client reports.
 type Record struct {
-	Provider  string // "openai", "anthropic", "google", or any string
-	Model     string // the exact model id billed, such as "claude-sonnet-5"
-	Operation string // "chat", "embedding", "rerank", or any string
+	Provider string // "openai", "anthropic", "google", or any string
+	Model    string // the exact model id billed, such as "claude-sonnet-5"
+	// ResponseModel is the model the provider returned, often a dated snapshot.
+	ResponseModel string
+	Operation     string // "chat", "embedding", "rerank", or any string
 	// ResponseID is the provider's own id for the response, when it reports one.
 	ResponseID string
+	// Status is the provider status, such as completed or incomplete.
+	Status string
+	// FinishReasons are the provider's own finish values for this call.
+	FinishReasons []string
+	// Attempts is how many tries this call took.
+	Attempts int
+	// RequestIDs are the provider request ids, one per attempt.
+	RequestIDs []string
+	// Err is the call error. Add stores its message on the event.
+	Err error
+	// UsageUnknown is set when a stream ends with no usage chunk, so a zero cost is
+	// not read as a measured zero.
+	UsageUnknown bool
 
 	// InputTokens is the whole input count, the way the providers report it: it includes
 	// the cache reads and the cache writes. CachedInputTokens and CacheWriteInputTokens are
@@ -62,6 +77,7 @@ type Record struct {
 
 // ToolCall is one tool invocation inside a call.
 type ToolCall struct {
+	ID       string
 	Name     string
 	Duration time.Duration
 	Failed   bool

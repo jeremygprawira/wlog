@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -23,8 +24,16 @@ func (p *plugin) OnFinish(ctx context.Context, event wlog.Event) {
 	if !p.cfg.spans {
 		return
 	}
+	// A log line is its own event. It must not copy its pairs onto the request span.
+	if kind, _ := event.Get("kind"); kind == "log" {
+		return
+	}
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.IsRecording() {
+		return
+	}
+	// A nested unit shares the outer span. Only the unit that claimed it may write.
+	if !spanIsMine(ctx, span.SpanContext().SpanID()) {
 		return
 	}
 	fields := eventFields(event)
@@ -74,12 +83,73 @@ func spanAttributes(event map[string]any) []attribute.KeyValue {
 		}
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		ri, rj := attributeRank(names[i]), attributeRank(names[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return names[i] < names[j]
+	})
 	out := make([]attribute.KeyValue, 0, len(names))
 	for _, name := range names {
 		out = append(out, attributeOf(name, raw[name]))
 	}
 	return out
+}
+
+// mappedSpanAttribute names the attributes the otel preset writes for a reserved
+// key. Rank 0 is this set plus error.type, so the span limit keeps them.
+var mappedSpanAttribute = map[string]bool{
+	"client.address": true, "cloud.region": true, "error.type": true,
+	"exception.message": true, "exception.stacktrace": true, "exception.type": true,
+	"faas.coldstart": true, "faas.invocation_id": true, "faas.max_memory": true,
+	"faas.name": true, "faas.trigger": true, "faas.version": true,
+	"gen_ai.input.messages": true, "gen_ai.operation.name": true,
+	"gen_ai.output.messages": true, "gen_ai.provider.name": true,
+	"gen_ai.request.model": true, "gen_ai.response.finish_reasons": true,
+	"gen_ai.response.id": true, "gen_ai.response.model": true,
+	"gen_ai.usage.cache_read.input_tokens":  true,
+	"gen_ai.usage.cache_write.input_tokens": true,
+	"gen_ai.usage.input_tokens":             true, "gen_ai.usage.output_tokens": true,
+	"gen_ai.usage.reasoning.output_tokens": true,
+	"http.request.body.size":               true, "http.request.method": true,
+	"http.response.body.size": true, "http.response.status_code": true,
+	"log.record.uid": true, "messaging.batch.message_count": true,
+	"messaging.consumer.group.name": true, "messaging.destination.name": true,
+	"messaging.destination.partition.id": true, "messaging.kafka.offset": true,
+	"messaging.message.id": true, "messaging.operation.type": true,
+	"messaging.system": true, "network.protocol.name": true,
+	"network.protocol.version": true, "rpc.method": true,
+	"rpc.response.status_code": true, "rpc.system.name": true,
+	"server.address": true, "server.port": true, "url.path": true, "url.scheme": true,
+	"user.email": true, "user.id": true, "user.name": true, "user_agent.original": true,
+}
+
+// attributeRank orders one attribute for the span limit. Rank 0 is a preset-mapped
+// reserved key or error.type. Rank 1 is another reserved key. Rank 2 is a group.
+// Rank 3 is a user key.
+func attributeRank(name string) int {
+	switch {
+	case mappedSpanAttribute[name] || strings.HasPrefix(name, "http.request.header."):
+		return 0
+	case strings.HasPrefix(name, "wlog.fields."):
+		return 3
+	case reservedAttribute(name):
+		return 1
+	case strings.Contains(name, "."):
+		return 2
+	default:
+		return 3
+	}
+}
+
+// reservedAttribute reports whether name is a reserved key or a field of one.
+func reservedAttribute(name string) bool {
+	if wlog.IsReservedKey(name) {
+		return true
+	}
+	head, _, ok := strings.Cut(name, ".")
+	return ok && wlog.IsReservedKey(head)
 }
 
 // skipSpanAttribute reports whether an attribute belongs to the log record, not the
@@ -215,16 +285,9 @@ func messageOf(event wlog.Event) string {
 	return text
 }
 
-// spanErrorType names the error of a span: the error code, then its kind, then its Go
-// type. A request that ended 500 or higher with no error uses the status as text.
+// spanErrorType adds error.type only for a request that ended 500 or higher with no
+// error. The otel preset already maps error.code, error.kind, and error.type.
 func spanErrorType(event wlog.Event) string {
-	for _, path := range []string{"error.code", "error.kind", "error.type"} {
-		if value, ok := event.Get(path); ok {
-			if text, ok := value.(string); ok && text != "" {
-				return text
-			}
-		}
-	}
 	if _, hasError := event.Get("error"); hasError {
 		return ""
 	}
