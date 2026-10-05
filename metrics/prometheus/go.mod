@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/metrics/prometheus
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	github.com/prometheus/client_golang v1.11.1
 )
 

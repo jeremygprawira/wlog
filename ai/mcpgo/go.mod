@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/ai/mcpgo
 go 1.25.5
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	github.com/mark3labs/mcp-go v1.1.0
 )
 

@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/cloudevents/sdk-go/v2 v2.15.2
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 )
 
 require (

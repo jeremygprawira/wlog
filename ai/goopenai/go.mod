@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/ai/goopenai
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	github.com/sashabaranov/go-openai v1.42.1
 )
 

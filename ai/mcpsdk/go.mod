@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/ai/mcpsdk
 go 1.25.0
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 )
 

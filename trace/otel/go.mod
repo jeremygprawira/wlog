@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/trace/otel
 go 1.21
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	go.opentelemetry.io/otel v1.20.0
 	go.opentelemetry.io/otel/metric v1.20.0
 	go.opentelemetry.io/otel/sdk v1.20.0

@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/ai/langchaingo
 go 1.24.4
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	github.com/tmc/langchaingo v0.1.14
 )
 

@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/ai/genai
 go 1.24
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	google.golang.org/genai v1.71.0
 )
 

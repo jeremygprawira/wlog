@@ -3,7 +3,7 @@ module github.com/jeremygprawira/wlog/ai/openai
 go 1.25.0
 
 require (
-	github.com/jeremygprawira/wlog v0.8.0
+	github.com/jeremygprawira/wlog v0.9.0
 	github.com/openai/openai-go/v3 v3.61.0
 )
 
