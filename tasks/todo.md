@@ -244,7 +244,14 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
   - The doc-comment half closed 24 declarations that had none, and `tools ste` now reports
     one under `DOC1`, so the check holds. The wording check (`-comments`) stays off: it
     reports 1079 findings, which is its own task.
-- [ ] 15-2 Parity and comparison pages
+- [x] 15-2 Parity and comparison pages
+  - `docs/compare/` holds one page per library: slog, zap, zerolog, the OTel Logs Bridge,
+    and evlog, with an index that states the rule. Every claim comes from the wlog code or
+    its tests, and each page says that no throughput comparison exists, because the
+    benchmark budget covers wlog alone.
+  - `docs/evlog-parity.md` was checked against the live sitemap again: 111 pages, up from
+    106. The new `compare` section and the `use-cases/signals` section both appear, and
+    signals is the one new gap.
 - [x] 15-3 Audit close-out
   - `tools verifyplan -audit tasks/audit-2026-09-16.md` maps all 252 ids of the page to the
     plan task that closes each one and runs that task's Verify command: 101 tasks green, 10
