@@ -264,3 +264,12 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
 - [x] J, documents and tools: X-7, X-8, T-4, T-6. Run `make docs` and commit the result
   - X-7 and T-6 at `e987902`, X-8 at `18ea44f`, T-4 at `9ac0867`.
 - [ ] K, integration: X-4, D-5, D-23, P-21, T-3. This batch needs Docker
+  - Done: D-23 (a VictoriaLogs health probe), P-21 (the Elastic golden event, `e666d92`),
+    T-3 (the fuzz report keeps its last lines, and the nightly job uploads
+    `testdata/fuzz`), and the T-4 correction at `735c245`. The stack ran on 2026-10-05 and
+    `drain/loki`, `drain/otlp`, `drain/clickhouse`, `drain/elastic`, `drain/victorialogs`,
+    and `preset` all pass.
+  - X-4 and D-5 wait for the `splunk/splunk` image. It has no arm64 build, so an Apple
+    Silicon host pulls the amd64 image under emulation, and the pull is slow. The compose
+    service now names `platform: linux/amd64` and `SPLUNK_HEC_SSL: "false"`, and the test
+    fails on `OnDropped` and searches the management port.
