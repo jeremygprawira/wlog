@@ -261,5 +261,6 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Done and merged from the wlog-shiro branch `phase14-hij`, CI run 37189454661 is green on `791df8e`: I-1 `9e5bf3a`, I-2 `e08e1cd`, I-3 `188fdde`, I-4 `b60e49a`, I-5 `2fe2fb6`, I-6 `f5be788`, I-7 `bf68375`, I-8 `5ee30b4`, I-9 `e5fbb15`, I-10 `fd6e087`, I-11 `33abeea`, I-12 `93b157e`, I-13 `eeda5a7`, I-14 `06eb4b1`, I-15 `5153e10`, I-16 `27e3ca6`, I-17 `64b2b83`, I-18 `fa8c8f8`, I-19 `2b69a9c`.
   - I-20 is a design choice. A run with no `--yes` exits 0. No code change.
   - Gate follow-up, not a review id: `27da287` errcheck, noctx, and staticcheck.
-- [ ] J, documents and tools: X-7, X-8, T-4, T-6. Run `make docs` and commit the result
+- [x] J, documents and tools: X-7, X-8, T-4, T-6. Run `make docs` and commit the result
+  - X-7 and T-6 at `e987902`, X-8 at `18ea44f`, T-4 at `9ac0867`.
 - [ ] K, integration: X-4, D-5, D-23, P-21, T-3. This batch needs Docker
