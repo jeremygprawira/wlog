@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
 
 // fixture returns the path of the fixture workspace.
@@ -282,5 +284,25 @@ func TestRelease_RefusesNoVersion(t *testing.T) {
 	var out bytes.Buffer
 	if err := run(fixture(t), "", true, strings.NewReader(""), &out); err == nil {
 		t.Fatal("run returned nil, want an error for the missing version")
+	}
+}
+
+// TestRelease_NamesTheAPIBaseline proves the baseline file name of a module: the root
+// module keeps its own name, and a nested module turns its separators into dashes.
+func TestRelease_NamesTheAPIBaseline(t *testing.T) {
+	root := "/repo"
+	for _, tc := range []struct {
+		dir  string
+		path string
+		want string
+	}{
+		{".", "github.com/jeremygprawira/wlog", "wlog.txt"},
+		{"./drain/loki", "github.com/jeremygprawira/wlog/drain/loki", "drain-loki.txt"},
+		{"./cmd/wlog", "github.com/jeremygprawira/wlog/cmd/wlog", "cmd-wlog.txt"},
+	} {
+		got := apiName(root, workspace.Module{Dir: tc.dir, Path: tc.path})
+		if got != tc.want {
+			t.Errorf("apiName(%q) = %q, want %q", tc.dir, got, tc.want)
+		}
 	}
 }
