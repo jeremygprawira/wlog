@@ -238,11 +238,12 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
 
 - [x] A, gates: X-2, X-3, X-5, X-6, T-1, T-2, T-5. The push closes X-1
 - [x] B, pipeline and httpdrain: P-11, P-10, P-7, P-12, P-4, D-1
-- [ ] C, HTTP drains: P-1, P-2, P-3, P-4, P-5, P-6, P-8, P-9, P-13 to P-21
+- [x] C, HTTP drains: P-1, P-2, P-3, P-4, P-5, P-6, P-8, P-9, P-13 to P-21
   - Done and pushed: P-1 to P-17, P-19, and the spec half of P-21. CI run 37005501695 is green on `1a1a07f`.
   - P-20 is not reproduced, with the evidence in the review.
   - Done in this batch: P-18 at `fb7f84e`.
-  - Open: the integration half of P-21, which waits for batch K.
+  - P-21 is closed: the Elastic integration test sends the golden event and compares the
+    stored document with the unit golden, on a fresh index per run (`e666d92`).
 - [x] D, Splunk and VictoriaLogs: D-1, D-2, D-8, D-10, D-18, D-20
 - [x] E, syslog, CloudWatch, and conformance: D-3, D-4, D-6, D-7, D-11 to D-17, D-19, D-22, D-24
   - Done: D-3, D-4, D-6, D-7, D-11, D-12, D-13, D-14, D-15, D-16, D-17, D-19, D-22, and D-24. The dedup parts of D-24 are `93dd3ad`.
