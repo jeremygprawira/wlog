@@ -4,6 +4,8 @@ package splunk_test
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -18,12 +20,22 @@ import (
 )
 
 // The local docker collector and its management port from docker-compose.integration.yml.
+// The management port serves HTTPS with the certificate the image generates, so the search
+// client skips the check on that one local host.
 const (
 	splunkURL = "http://localhost:8088"
-	searchURL = "http://localhost:8089"
+	searchURL = "https://localhost:8089"
 	adminUser = "admin"
 	adminPass = "changeme123"
 )
+
+// searchClient talks to the local management port.
+var searchClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // a local test host
+	},
+}
 
 // TestSplunk_Integration proves a batch reaches Splunk Enterprise, comes back with HEC code
 // 0, and answers a search for the operation it carried. It needs the compose stack, so it
@@ -48,7 +60,9 @@ func TestSplunk_Integration(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	log := wlog.New(wlog.WithSilent(), wlog.WithDrains(drain))
-	const operation = "integration-op"
+	// The operation is fresh for every run, so an event from an earlier run cannot answer
+	// the search and hide a broken send.
+	operation := fmt.Sprintf("integration-op-%d", time.Now().UnixNano())
 	ctx, end := wlog.Start(log.WithContext(context.Background()), operation)
 	end()
 	if err := log.Flush(ctx); err != nil {
@@ -90,7 +104,7 @@ func searchFinds(t *testing.T, operation string) bool {
 	}
 	req.SetBasicAuth(adminUser, adminPass)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := searchClient.Do(req)
 	if err != nil {
 		t.Logf("search: %v", err)
 		return false

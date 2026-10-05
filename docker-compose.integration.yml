@@ -124,7 +124,10 @@ services:
     ports:
       - "9428:9428"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:9428/health || exit 1"]
+      # The image is scratch: it holds the server binary and no shell or HTTP client, so a
+      # probe of /health cannot run inside it. The probe proves the binary starts, and the
+      # integration test proves the endpoint answers.
+      test: ["CMD", "/victoria-logs-prod", "-version"]
       interval: 5s
       timeout: 3s
-      retries: 60
+      retries: 12
