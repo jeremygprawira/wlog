@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -139,7 +140,10 @@ func TestElastic_GoldenEvent(t *testing.T) {
 			waitReady(t, tc.url)
 			installTemplate(t, tc.url, tc.engine)
 
-			sender, err := elastic.NewSender(elastic.WithURL(tc.url), elastic.WithIndex(integrationIndex))
+			// The index is fresh for every run, so a document from an earlier run cannot
+			// answer the search and hide a broken send.
+			index := fmt.Sprintf("%s-%d", integrationIndex, time.Now().UnixNano())
+			sender, err := elastic.NewSender(elastic.WithURL(tc.url), elastic.WithIndex(index))
 			if err != nil {
 				t.Fatalf("NewSender: %v", err)
 			}
@@ -148,7 +152,7 @@ func TestElastic_GoldenEvent(t *testing.T) {
 			}
 
 			const id = "018f4b3c-7c00-7a00-8000-000000000000"
-			got := waitForGolden(t, tc.url, id)
+			got := waitForGolden(t, tc.url, index, id)
 			want := goldenSource(t)
 			if !reflect.DeepEqual(got, want) {
 				gotJSON, _ := json.MarshalIndent(got, "", "  ")
@@ -176,9 +180,9 @@ func goldenSource(t *testing.T) map[string]any {
 
 // waitForGolden polls the search endpoint until the document with the id is found, and
 // returns its source.
-func waitForGolden(t *testing.T, base, id string) map[string]any {
+func waitForGolden(t *testing.T, base, index, id string) map[string]any {
 	t.Helper()
-	url := base + "/" + integrationIndex + "/_search?q=event.id:" + id
+	url := base + "/" + index + "/_search?q=event.id:" + id
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(url) //nolint:gosec // a local test URL
