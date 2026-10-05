@@ -17,3 +17,5 @@ github.com/jeremygprawira/wlog/internal/conformance
 github.com/jeremygprawira/wlog/llm
 github.com/jeremygprawira/wlog/middleware/nethttp
 github.com/jeremygprawira/wlog/wlogtest
+github.com/jeremygprawira/wlog/trace/otel
+github.com/jeremygprawira/wlog/trace/otellog

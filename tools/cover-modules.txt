@@ -1,0 +1,10 @@
+# The own modules that the coverage check also measures, one directory per line.
+#
+# The root module holds the core, the drains, and the middleware. These hold the
+# phase 14 adapters whose tests live in their own module, so a fall here fails the
+# run like a fall in the root module. A module with no line is not measured.
+./trace/otel
+./trace/otellog
+./metrics/prometheus
+./ai/mcpsdk
+./ai/mcpgo

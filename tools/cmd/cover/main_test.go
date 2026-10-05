@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -80,5 +81,34 @@ func TestCover_ReadsEveryPackage(t *testing.T) {
 		if results[i] != w {
 			t.Errorf("package %d = %+v, want %+v", i, results[i], w)
 		}
+	}
+}
+
+// TestCover_MeasuresTheListedModules proves that a module named in
+// tools/cover-modules.txt is measured too, so a low package there fails the run.
+func TestCover_MeasuresTheListedModules(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "tools"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tools", "cover-known-low.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tools", "cover-modules.txt"), []byte("./extra\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(dir string) ([]byte, error) {
+		if strings.HasSuffix(dir, "extra") {
+			return []byte("ok  example.com/extra 0.1s coverage: 40.0% of statements\n"), nil
+		}
+		return []byte("ok  example.com/root 0.1s coverage: 90.0% of statements\n"), nil
+	}
+
+	var out bytes.Buffer
+	if err := check(root, 85, run, &out); err == nil {
+		t.Fatal("check returned nil, want an error for the package in the listed module")
+	}
+	if !strings.Contains(out.String(), "example.com/extra") {
+		t.Errorf("output misses the listed module's package:\n%s", out.String())
 	}
 }

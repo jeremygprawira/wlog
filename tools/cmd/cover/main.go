@@ -30,6 +30,11 @@ import (
 // knownLowPath is the list of packages that may sit under the minimum today.
 const knownLowPath = "tools/cover-known-low.txt"
 
+// modulesPath lists the own modules the check also measures, one directory per line.
+// The root module holds the core, the drains, and the middleware, and these hold the
+// phase 14 adapters whose tests live in their own module.
+const modulesPath = "tools/cover-modules.txt"
+
 // coverageLine matches one line of the go test output and captures the package
 // and its coverage. The line holds an elapsed time, or the word cached, between
 // the package and the coverage.
@@ -75,12 +80,26 @@ func check(root string, min float64, run func(dir string) ([]byte, error), out i
 	if err != nil {
 		return err
 	}
+	results := []result{}
 	text, err := run(root)
 	if err != nil {
 		return err
 	}
+	results = append(results, parseCoverage(string(text))...)
 
-	results := parseCoverage(string(text))
+	// The own modules the list names are measured too, so a new module is visible to the
+	// gate and a later fall fails it.
+	dirs, err := readModules(filepath.Join(root, modulesPath))
+	if err != nil {
+		return err
+	}
+	for _, dir := range dirs {
+		text, err := run(filepath.Join(root, dir))
+		if err != nil {
+			return fmt.Errorf("%s: %w", dir, err)
+		}
+		results = append(results, parseCoverage(string(text))...)
+	}
 	if len(results) == 0 {
 		return fmt.Errorf("the go test output holds no coverage line")
 	}
@@ -108,6 +127,27 @@ func check(root string, min float64, run func(dir string) ([]byte, error), out i
 		return nil
 	}
 	return nil
+}
+
+// readModules reads the module directories the check measures. A missing list is not an
+// error, so an older tree still runs.
+func readModules(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		dirs = append(dirs, line)
+	}
+	return dirs, nil
 }
 
 // parseCoverage reads the coverage of every package that the go command reports.
