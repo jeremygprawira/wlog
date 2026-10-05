@@ -25,6 +25,15 @@ jobs:
         with:
           go-version: stable
       - run: make fuzz FUZZTIME=10m
+      # A crash writes its input to testdata/fuzz of the package, which the run does not
+      # commit. The artifact keeps the input, so a later run reproduces the crash.
+      - name: Keep the crash inputs
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: fuzz-corpus
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore
       - name: Report a crash
         if: failure()
         uses: actions/github-script@v9

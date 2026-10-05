@@ -82,3 +82,27 @@ type stubError struct{}
 
 // Error returns the text of a failed run.
 func (stubError) Error() string { return "exit status 1" }
+
+// TestFuzz_KeepsTheLastLines proves that a long failure report keeps the end of the output,
+// where a fuzz crash prints the panic and the failing input.
+func TestFuzz_KeepsTheLastLines(t *testing.T) {
+	var out bytes.Buffer
+	runTarget := func(dir, pkg, name, duration string) ([]byte, error) {
+		if name != "FuzzSub" {
+			return nil, nil
+		}
+		lines := make([]string, 0, 60)
+		for i := 0; i < 59; i++ {
+			lines = append(lines, "filler")
+		}
+		lines = append(lines, "panic: the failing input")
+		return []byte(strings.Join(lines, "\n")), &stubError{}
+	}
+	if err := run(fixture(t), "1s", "", runTarget, &out); err == nil {
+		t.Fatal("run returned nil, want an error for the failed target")
+	}
+	got := out.String()
+	if !strings.Contains(got, "panic: the failing input") {
+		t.Errorf("the report dropped the crash cause:\n%s", got)
+	}
+}

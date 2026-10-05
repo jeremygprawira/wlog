@@ -190,10 +190,12 @@ func runTarget(dir, pkg, name, duration string) ([]byte, error) {
 }
 
 // indent puts four spaces before every line of a fuzz report.
+// indent puts four spaces before every line of a target's output. It keeps the last lines,
+// because a fuzz failure prints the panic and the failing input at the end.
 func indent(text []byte) string {
 	lines := strings.Split(strings.TrimRight(string(text), "\n"), "\n")
 	if len(lines) > 30 {
-		lines = lines[:30]
+		lines = lines[len(lines)-30:]
 	}
 	for i, line := range lines {
 		lines[i] = "    " + line

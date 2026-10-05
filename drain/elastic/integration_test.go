@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,4 +121,83 @@ func waitForEvent(t *testing.T, base string) {
 		time.Sleep(time.Second)
 	}
 	t.Fatalf("%s: the event never became searchable", base)
+}
+
+// TestElastic_GoldenEvent proves the fixed event the unit golden holds reaches a live
+// cluster as the same ECS document. The test reads the document back, so a mapping drift
+// fails here and not only in the unit golden.
+func TestElastic_GoldenEvent(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		url    string
+		engine elastic.Engine
+	}{
+		{"elasticsearch", elasticURL, elastic.Elasticsearch},
+		{"opensearch", openSearchURL, elastic.OpenSearch},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			waitReady(t, tc.url)
+			installTemplate(t, tc.url, tc.engine)
+
+			sender, err := elastic.NewSender(elastic.WithURL(tc.url), elastic.WithIndex(integrationIndex))
+			if err != nil {
+				t.Fatalf("NewSender: %v", err)
+			}
+			if err := sender.SendBatch(context.Background(), []map[string]any{requestEvent()}); err != nil {
+				t.Fatalf("SendBatch: %v", err)
+			}
+
+			const id = "018f4b3c-7c00-7a00-8000-000000000000"
+			got := waitForGolden(t, tc.url, id)
+			want := goldenSource(t)
+			if !reflect.DeepEqual(got, want) {
+				gotJSON, _ := json.MarshalIndent(got, "", "  ")
+				wantJSON, _ := json.MarshalIndent(want, "", "  ")
+				t.Errorf("the stored document drifts from the golden:\ngot %s\nwant %s", gotJSON, wantJSON)
+			}
+		})
+	}
+}
+
+// goldenSource returns the ECS document the unit golden file holds for the fixed event.
+func goldenSource(t *testing.T) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile("testdata/bulk.ndjson")
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &doc); err != nil {
+		t.Fatalf("the golden line is not JSON: %v", err)
+	}
+	return doc
+}
+
+// waitForGolden polls the search endpoint until the document with the id is found, and
+// returns its source.
+func waitForGolden(t *testing.T, base, id string) map[string]any {
+	t.Helper()
+	url := base + "/" + integrationIndex + "/_search?q=event.id:" + id
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url) //nolint:gosec // a local test URL
+		if err == nil {
+			answer, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			var out struct {
+				Hits struct {
+					Hits []struct {
+						Source map[string]any `json:"_source"`
+					} `json:"hits"`
+				} `json:"hits"`
+			}
+			if json.Unmarshal(answer, &out) == nil && len(out.Hits.Hits) > 0 {
+				return out.Hits.Hits[0].Source
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("%s: the golden document never became searchable", base)
+	return nil
 }
