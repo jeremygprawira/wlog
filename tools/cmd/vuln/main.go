@@ -70,12 +70,20 @@ func check(root, only string, scan func(dir string) ([]byte, error), out io.Writ
 		return err
 	}
 
+	// The upgrade runs on a copy of the whole workspace, so a killed run never leaves an
+	// upgraded go.mod in the tree, and the module's tests still read their siblings.
+	tmpRoot, err := tmpcopy.Workspace(root)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(tmpRoot) }()
+
 	bad := 0
 	for _, m := range mods {
 		if only != "" && !strings.Contains(m.Dir, only) {
 			continue
 		}
-		dir := filepath.Join(root, m.Dir)
+		dir := filepath.Join(tmpRoot, m.Dir)
 		text, err := scan(dir)
 		if err == nil {
 			continue
@@ -116,23 +124,16 @@ func buildScanner(root string) (string, error) {
 //
 // The upgrade writes go.mod and go.sum, which the caller puts back afterwards.
 func runVuln(dir, scannerPath string) ([]byte, error) {
-	// The upgrade runs on a copy of the module, so a killed run never leaves an upgraded
-	// go.mod in the tree and no other command in the workspace sees a half-upgraded module.
-	tmp, err := tmpcopy.Module(dir)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-
+	// The upgrade runs inside the copy that the caller made, never in the tree.
 	upgrade := exec.CommandContext(context.Background(), "go", "get", "-u", "./...")
-	upgrade.Dir = tmp
+	upgrade.Dir = dir
 	upgrade.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := upgrade.CombinedOutput(); err != nil {
 		return out, fmt.Errorf("upgrade: %w", err)
 	}
 
 	scan := exec.CommandContext(context.Background(), scannerPath, "./...")
-	scan.Dir = tmp
+	scan.Dir = dir
 	scan.Env = append(os.Environ(), "GOWORK=off")
 	out, err := scan.CombinedOutput()
 	if err != nil {

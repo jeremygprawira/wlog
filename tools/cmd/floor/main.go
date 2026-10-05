@@ -209,13 +209,21 @@ func main() {
 
 	run := runner(runFloor)
 	if *libs {
+		// The upgrade runs on a copy of the whole workspace, so a killed run never leaves
+		// an upgraded go.mod in the tree, and the module's tests still read their siblings.
+		// One copy serves every module.
+		tmpRoot, err := tmpcopy.Workspace(root)
+		if err != nil {
+			fail(err)
+		}
+		defer func() { _ = os.RemoveAll(tmpRoot) }()
 		run = func(dir, floor string) ([]byte, error) {
 			if broken[rel(root, dir)] {
 				// The upgraded set of this module is a known break in a
 				// dependency, so the upgrade is skipped and said out loud.
 				return []byte("the upgraded dependency set is known to fail\n"), nil
 			}
-			return runFloorWithNewerLibs(dir, floor)
+			return runFloorWithNewerLibs(tmpRoot, root, dir, floor)
 		}
 	}
 	if err := check(root, flag.Args(), run, os.Stdout); err != nil {
@@ -308,18 +316,13 @@ func runFloor(dir, floor string) ([]byte, error) {
 //
 // It upgrades in place and restores go.mod and go.sum afterwards, so a check
 // never leaves the tree changed.
-func runFloorWithNewerLibs(dir, floor string) ([]byte, error) {
+func runFloorWithNewerLibs(tmpRoot, root, dir, floor string) ([]byte, error) {
 	if text, err := runFloor(dir, floor); err != nil {
 		return text, err
 	}
 
-	// The upgrade runs on a copy of the module, so a killed run never leaves an upgraded
-	// go.mod in the tree and no other command in the workspace sees a half-upgraded module.
-	tmp, err := tmpcopy.Module(dir)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = os.RemoveAll(tmp) }()
+	// The upgrade runs inside the copy that the caller made, never in the tree.
+	tmp := filepath.Join(tmpRoot, rel(root, dir))
 
 	// The upgrade itself runs on the newest toolchain: it asks for the newest
 	// libraries, and one of them may require a newer Go than the floor.
