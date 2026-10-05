@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jeremygprawira/wlog/tools/internal/tmpcopy"
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
 
@@ -75,12 +76,7 @@ func check(root, only string, scan func(dir string) ([]byte, error), out io.Writ
 			continue
 		}
 		dir := filepath.Join(root, m.Dir)
-		gomod, gosum, err := snapshot(dir)
-		if err != nil {
-			return err
-		}
 		text, err := scan(dir)
-		restore(dir, gomod, gosum)
 		if err == nil {
 			continue
 		}
@@ -120,44 +116,29 @@ func buildScanner(root string) (string, error) {
 //
 // The upgrade writes go.mod and go.sum, which the caller puts back afterwards.
 func runVuln(dir, scannerPath string) ([]byte, error) {
+	// The upgrade runs on a copy of the module, so a killed run never leaves an upgraded
+	// go.mod in the tree and no other command in the workspace sees a half-upgraded module.
+	tmp, err := tmpcopy.Module(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+
 	upgrade := exec.CommandContext(context.Background(), "go", "get", "-u", "./...")
-	upgrade.Dir = dir
+	upgrade.Dir = tmp
 	upgrade.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := upgrade.CombinedOutput(); err != nil {
 		return out, fmt.Errorf("upgrade: %w", err)
 	}
 
 	scan := exec.CommandContext(context.Background(), scannerPath, "./...")
-	scan.Dir = dir
+	scan.Dir = tmp
 	scan.Env = append(os.Environ(), "GOWORK=off")
 	out, err := scan.CombinedOutput()
 	if err != nil {
 		return out, fmt.Errorf("govulncheck found a vulnerability")
 	}
 	return out, nil
-}
-
-// snapshot reads go.mod and go.sum, so a later upgrade can be undone.
-func snapshot(dir string) (gomod, gosum []byte, err error) {
-	gomod, err = os.ReadFile(filepath.Join(dir, "go.mod"))
-	if err != nil {
-		return nil, nil, err
-	}
-	gosum, err = os.ReadFile(filepath.Join(dir, "go.sum"))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, nil, err
-	}
-	return gomod, gosum, nil
-}
-
-// restore writes the two files back.
-func restore(dir string, gomod, gosum []byte) {
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), gomod, 0o600); err != nil {
-		fmt.Fprintln(os.Stderr, "vuln: restore go.mod:", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "go.sum"), gosum, 0o600); err != nil {
-		fmt.Fprintln(os.Stderr, "vuln: restore go.sum:", err)
-	}
 }
 
 // indent puts four spaces before every line of a scanner report.

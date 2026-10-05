@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/mod/semver"
 
+	"github.com/jeremygprawira/wlog/tools/internal/tmpcopy"
 	"github.com/jeremygprawira/wlog/tools/internal/workspace"
 )
 
@@ -312,49 +313,28 @@ func runFloorWithNewerLibs(dir, floor string) ([]byte, error) {
 		return text, err
 	}
 
-	gomod, gosum, err := snapshot(dir)
+	// The upgrade runs on a copy of the module, so a killed run never leaves an upgraded
+	// go.mod in the tree and no other command in the workspace sees a half-upgraded module.
+	tmp, err := tmpcopy.Module(dir)
 	if err != nil {
 		return nil, err
 	}
-	defer restore(dir, gomod, gosum)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	// The upgrade itself runs on the newest toolchain: it asks for the newest
 	// libraries, and one of them may require a newer Go than the floor.
-	if text, err := runGo(dir, "", []string{"get", "-u", "-t", "./..."}); err != nil {
+	if text, err := runGo(tmp, "", []string{"get", "-u", "-t", "./..."}); err != nil {
 		return text, err
 	}
 	// An upgraded module can need a go.sum entry that the old file does not
 	// hold, so the sums are completed before the test.
-	if text, err := runGo(dir, "", []string{"mod", "tidy"}); err != nil {
+	if text, err := runGo(tmp, "", []string{"mod", "tidy"}); err != nil {
 		return text, err
 	}
 	// The upgrade moves the modules past their floor, so the newest toolchain runs
 	// this copy. A floor is the oldest Go that compiles the code as it stands, and
 	// an upgraded dependency set is the day after the release.
-	return runGo(dir, "", append([]string{"test"}, append(linkArgs(), "./...")...))
-}
-
-// snapshot reads go.mod and go.sum, so a later upgrade can be undone.
-func snapshot(dir string) (gomod, gosum []byte, err error) {
-	gomod, err = os.ReadFile(filepath.Join(dir, "go.mod"))
-	if err != nil {
-		return nil, nil, err
-	}
-	gosum, err = os.ReadFile(filepath.Join(dir, "go.sum"))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, nil, err
-	}
-	return gomod, gosum, nil
-}
-
-// restore writes the two files back.
-func restore(dir string, gomod, gosum []byte) {
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), gomod, 0o600); err != nil {
-		fmt.Fprintln(os.Stderr, "floor: restore go.mod:", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "go.sum"), gosum, 0o600); err != nil {
-		fmt.Fprintln(os.Stderr, "floor: restore go.sum:", err)
-	}
+	return runGo(tmp, "", append([]string{"test"}, append(linkArgs(), "./...")...))
 }
 
 // runGo runs one go command in dir with GOWORK=off and the floor toolchain.
