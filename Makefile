@@ -6,7 +6,7 @@
 MODULES := $(shell go work edit -json | grep '"DiskPath"' | sed -E 's/.*"DiskPath": "(.*)"/\1/')
 FUZZTIME ?= 30s
 
-.PHONY: test race fuzz bench lint ste snippets verifyplan tidy tidy-check requires floor release-check compat cover vuln map integration docs docs-check
+.PHONY: test race fuzz bench lint ste apidiff snippets verifyplan tidy tidy-check requires floor release-check compat cover vuln map integration docs docs-check
 
 test:
 	@for m in $(MODULES); do (cd $$m && go test -count=1 ./...) || exit 1; done
@@ -47,6 +47,11 @@ tidy-check:
 # ste runs the Simple English lint over the markdown documents.
 ste:
 	go run ./tools/cmd/ste
+
+# apidiff compares every module with the API baseline under api/, so an
+# incompatible change fails here rather than in a user's build.
+apidiff:
+	go run ./tools/cmd/release -apidiff
 
 # docs builds the two language-model documents from the repository pages.
 docs:

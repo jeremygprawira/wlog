@@ -34,10 +34,17 @@ const versionFile = "tools/version.txt"
 // apidiff is the tool that compares the exported API of two versions.
 const apidiff = "golang.org/x/exp/cmd/apidiff"
 
+// apiDir holds the exported API baseline of every module, one file per module. The
+// baseline is the export data that apidiff writes, so a check compares the working tree
+// with the API of the last release.
+const apiDir = "api"
+
 // main prints the plan, and applies it when the maintainer confirms.
 func main() {
 	version := flag.String("version", "", "the version to release, such as v0.5.0")
 	dryRun := flag.Bool("dry-run", true, "print the plan and change nothing")
+	apidiff := flag.Bool("apidiff", false, "check every module against its stored API baseline")
+	writeAPI := flag.Bool("write-api", false, "write the API baseline of every module")
 	flag.Parse()
 
 	wd, err := os.Getwd()
@@ -47,6 +54,12 @@ func main() {
 	root, err := workspace.FindRoot(wd)
 	if err != nil {
 		fail(err)
+	}
+	if *apidiff {
+		if err := checkAPI(root, *writeAPI, os.Stdout); err != nil {
+			fail(err)
+		}
+		return
 	}
 	if err := run(root, *version, *dryRun, os.Stdin, os.Stdout); err != nil {
 		fail(err)
@@ -484,4 +497,82 @@ func oneLine(report string) string {
 		return "no change"
 	}
 	return strings.Join(lines, "; ")
+}
+
+// checkAPI compares every module with the baseline under api/ and reports an incompatible
+// change. With write it refreshes the baseline instead, which the maintainer runs after a
+// release.
+//
+// A module without a baseline is an error, because a missing file would let any change
+// through.
+func checkAPI(root string, write bool, out io.Writer) error {
+	mods, err := workspace.Modules(root)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp("", "wlog-api-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	if text, err := goCommand(tmp, "mod", "init", "apidiff"); err != nil {
+		return fmt.Errorf("%s: %w", text, err)
+	}
+
+	bad := 0
+	for _, m := range mods {
+		name := apiName(root, m)
+		path := filepath.Join(root, apiDir, name)
+		current := filepath.Join(tmp, name)
+		if text, err := goCommand(filepath.Join(root, m.Dir), "run", apidiff+"@latest", "-m", "-w", current, m.Path); err != nil {
+			return fmt.Errorf("%s: %w", text, err)
+		}
+		if write {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return err
+			}
+			data, err := os.ReadFile(current)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, data, 0o644); err != nil {
+				return err
+			}
+			say(out, "wrote "+filepath.Join(apiDir, name))
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("%s: no API baseline; run the command with -write-api", m.Dir)
+		}
+		// apidiff reports the changes it finds, and the exit status is not the signal: a
+		// report that holds no change line means the API holds.
+		report, _ := goCommand(tmp, "run", apidiff+"@latest", "-m", "-incompatible", path, current)
+		text := oneLine(string(report))
+		if text == "no change" {
+			continue
+		}
+		bad++
+		if _, err := fmt.Fprintf(out, "%s: API1: %s\n", m.Dir, oneLine(text)); err != nil {
+			return err
+		}
+	}
+	if bad > 0 {
+		return fmt.Errorf("%d module(s) hold an incompatible API change", bad)
+	}
+	return nil
+}
+
+// apiName returns the baseline file name of one module: its path under the repository with
+// the separators as dashes, such as wlog-drain-loki.txt.
+func apiName(root string, m workspace.Module) string {
+	rel, err := filepath.Rel(root, filepath.Join(root, m.Dir))
+	if err != nil {
+		rel = m.Dir
+	}
+	name := strings.TrimPrefix(filepath.ToSlash(rel), "./")
+	if name == "." || name == "" {
+		name = filepath.Base(m.Path)
+	}
+	name = strings.ReplaceAll(name, "/", "-")
+	return name + ".txt"
 }

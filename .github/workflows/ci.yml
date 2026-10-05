@@ -60,6 +60,9 @@ jobs:
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
       - run: make lint
       - run: make ste
+      # The API baseline of every module, so an incompatible change fails here rather than
+      # in a user's build. The check reads api/ and compares it with the working tree.
+      - run: go run ./tools/cmd/release -apidiff
 
   # test runs the race detector on each affected module, on the newest Go and on
   # the one before it. GOWORK=off proves the module stands alone.
