@@ -270,13 +270,15 @@ Each batch ends with its gates, a push, and a CI result. Tick a batch after CI i
   - Gate follow-up, not a review id: `27da287` errcheck, noctx, and staticcheck.
 - [x] J, documents and tools: X-7, X-8, T-4, T-6. Run `make docs` and commit the result
   - X-7 and T-6 at `e987902`, X-8 at `18ea44f`, T-4 at `9ac0867`.
-- [ ] K, integration: X-4, D-5, D-23, P-21, T-3. This batch needs Docker
-  - Done: D-23 (a VictoriaLogs health probe), P-21 (the Elastic golden event, `e666d92`),
-    T-3 (the fuzz report keeps its last lines, and the nightly job uploads
-    `testdata/fuzz`), and the T-4 correction at `735c245`. The stack ran on 2026-10-05 and
-    `drain/loki`, `drain/otlp`, `drain/clickhouse`, `drain/elastic`, `drain/victorialogs`,
-    and `preset` all pass.
-  - X-4 and D-5 wait for the `splunk/splunk` image. It has no arm64 build, so an Apple
-    Silicon host pulls the amd64 image under emulation, and the pull is slow. The compose
-    service now names `platform: linux/amd64` and `SPLUNK_HEC_SSL: "false"`, and the test
-    fails on `OnDropped` and searches the management port.
+- [x] K, integration: X-4, D-5, D-23, P-21, T-3. This batch needs Docker
+  - `make integration` passes end to end on 2026-10-05: loki, otlp, clickhouse, elastic,
+    splunk, victorialogs, and preset.
+  - X-4: `splunk/splunk` has no arm64 build, so the stack never started on an Apple Silicon
+    host. The service names `platform: linux/amd64` and `SPLUNK_HEC_SSL: "false"`, and the
+    container becomes healthy.
+  - D-5: the test failed on `OnDropped` and searched the management port, which serves
+    HTTPS, so the search client skips the certificate check on that one local host. The
+    operation holds the run time, so an earlier event cannot answer the search.
+  - D-23: the VictoriaLogs image is scratch, so a probe of `/health` cannot run inside it.
+    The probe proves the binary starts, and the test proves the endpoint answers.
+  - P-21 at `e666d92`, T-3 at `dde8978`, and the T-4 correction at `735c245`.
