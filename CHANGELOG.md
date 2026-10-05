@@ -327,6 +327,19 @@ that holds it.
 - `cli`: CLI-1, CLI-3 to CLI-17, CLI-19 to CLI-22, PAR-6, PAR-28 to PAR-32, PAR-34, BET-9, BET-22.
 - `docs`: DOC-2 to DOC-6, DOC-8, SPEC-G21.
 
+### Recorded decisions
+
+These audit ids hold no plan task, because the answer is a rule and not a change. The decision
+is recorded here.
+
+- `SPEC-G4` (audit guarantees): `docs/SPEC-audit.md` answers the questions the audit named.
+  `Journal` owns the chain state and the write lock, so the lines land in chain order whatever
+  the arrival order. One journal file has one writer, a second writer is refused with an error,
+  and a crash leaves no stale lock on Unix. A restart reads the file and continues the same
+  chain, and a partial last line moves to `<path>.partial`. The spec promises nothing about
+  retention, key rotation, or several writers, so an application that needs retention or
+  rotation owns the file and the rotation.
+
 ### Docs
 
 - Every document passes the Simple English lint, and the skip list is gone. Every Go block either

@@ -15,6 +15,18 @@ permissions:
   issues: write
 
 jobs:
+  # audit maps every id of the gap audit to the plan task that closes it, and runs
+  # that task's Verify command. It takes about ten minutes, which is why it is here
+  # and not on every push.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: go run ./tools/cmd/verifyplan -audit tasks/audit-2026-09-16.md
+
   # fuzz-long runs every fuzz target for ten minutes, and opens an issue when a
   # target finds a crash.
   fuzz-long:

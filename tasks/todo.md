@@ -235,7 +235,15 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
     one under `DOC1`, so the check holds. The wording check (`-comments`) stays off: it
     reports 1079 findings, which is its own task.
 - [ ] 15-2 Parity and comparison pages
-- [ ] 15-3 Audit close-out
+- [x] 15-3 Audit close-out
+  - `tools verifyplan -audit tasks/audit-2026-09-16.md` maps all 252 ids of the page to the
+    plan task that closes each one and runs that task's Verify command: 101 tasks green, 10
+    ids closed by a recorded decision, 1 task skipped (the audit page closes the task that
+    checks the audit).
+  - The eight gates that no task names (`SPEC-G1`, `G4` to `G7`, `G16`, `G17`, `G21`) are
+    spec questions. The changelog records the answer for `SPEC-G4` under "Recorded
+    decisions", and the seven others are already in the closed-id list.
+  - The nightly workflow runs the audit.
 - [ ] Review point 15, v1.0.0: human review, then ask before tagging
 
 ## Phase 14 review fixes ([review-phase14-2026-10-02.md](review-phase14-2026-10-02.md))
