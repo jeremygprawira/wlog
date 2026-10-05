@@ -10,8 +10,11 @@ import (
 type BackoffKind int
 
 const (
+	// Exponential doubles the delay after every attempt, up to MaxDelay.
 	Exponential BackoffKind = iota
+	// Linear adds InitialDelay after every attempt, up to MaxDelay.
 	Linear
+	// Fixed waits InitialDelay after every attempt.
 	Fixed
 )
 

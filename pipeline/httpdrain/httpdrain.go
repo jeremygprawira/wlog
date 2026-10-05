@@ -174,6 +174,7 @@ func newStatusError(resp *http.Response) *StatusError {
 	}
 }
 
+// Error names the status the sink answered, so a log line or a test shows what broke.
 func (e *StatusError) Error() string {
 	return fmt.Sprintf("httpdrain: unexpected status %d", e.Status)
 }

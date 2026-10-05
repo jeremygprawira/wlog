@@ -22,13 +22,20 @@ import (
 type Kind string
 
 const (
-	KindRequest  Kind = "request"
-	KindRPC      Kind = "rpc"
-	KindMessage  Kind = "message"
-	KindJob      Kind = "job"
-	KindCommand  Kind = "command"
+	// KindRequest is one HTTP request or response.
+	KindRequest Kind = "request"
+	// KindRPC is one RPC call.
+	KindRPC Kind = "rpc"
+	// KindMessage is one published or consumed message.
+	KindMessage Kind = "message"
+	// KindJob is one run of a background job.
+	KindJob Kind = "job"
+	// KindCommand is one command-line run.
+	KindCommand Kind = "command"
+	// KindFunction is one call of a serverless function.
 	KindFunction Kind = "function"
-	KindWork     Kind = "work"
+	// KindWork is a unit of work that has no group of its own.
+	KindWork Kind = "work"
 )
 
 // groups maps a kind to the group that holds its fields. KindRequest has no entry here,

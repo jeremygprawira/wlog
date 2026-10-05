@@ -14,8 +14,12 @@ import (
 // Called inside a request's context, the line is still its own standalone event, not
 // folded into the request's event — an input adapter (log-slog and friends) is what
 // merges plain calls into the current wide event, not this package-level function.
-func Info(ctx context.Context, msg string, kv ...any)  { plainLog(ctx, LevelInfo, msg, kv) }
-func Warn(ctx context.Context, msg string, kv ...any)  { plainLog(ctx, LevelWarn, msg, kv) }
+func Info(ctx context.Context, msg string, kv ...any) { plainLog(ctx, LevelInfo, msg, kv) }
+
+// Warn writes one standalone line at warn level.
+func Warn(ctx context.Context, msg string, kv ...any) { plainLog(ctx, LevelWarn, msg, kv) }
+
+// Debug writes one standalone line at debug level.
 func Debug(ctx context.Context, msg string, kv ...any) { plainLog(ctx, LevelDebug, msg, kv) }
 
 // Log writes one standalone line at any level, including error. Info, Warn, and Debug

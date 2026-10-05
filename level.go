@@ -10,9 +10,13 @@ import (
 type Level string
 
 const (
+	// LevelDebug is the level of a step worth reading while an event is built.
 	LevelDebug Level = "debug"
-	LevelInfo  Level = "info"
-	LevelWarn  Level = "warn"
+	// LevelInfo is the level of a unit of work that succeeded.
+	LevelInfo Level = "info"
+	// LevelWarn is the level of a problem that the caller recovered from.
+	LevelWarn Level = "warn"
+	// LevelError is the level of a unit of work that failed.
 	LevelError Level = "error"
 )
 

@@ -9,8 +9,11 @@ import "strconv"
 type StatusClass int
 
 const (
+	// StatusOK covers a success and a redirect, so the event level stays info.
 	StatusOK StatusClass = iota
+	// StatusClientError covers a rejected request, such as HTTP 4xx or gRPC NotFound.
 	StatusClientError
+	// StatusServerError covers a failure of the service or of an unknown code.
 	StatusServerError
 )
 

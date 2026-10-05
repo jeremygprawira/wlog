@@ -33,6 +33,7 @@ import (
 func main() {
 	register := flag.String("type", string(ste.Descriptive), "descriptive or procedural")
 	comments := flag.Bool("comments", false, "also check the Go doc comments")
+	missing := flag.Bool("missing", true, "report exported declarations that have no doc comment")
 	flag.Parse()
 
 	wd, err := os.Getwd()
@@ -43,7 +44,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if err := run(root, flag.Args(), ste.Register(*register), *comments, os.Stdout); err != nil {
+	if err := run(root, flag.Args(), ste.Register(*register), *comments, *missing, os.Stdout); err != nil {
 		fail(err)
 	}
 }
@@ -63,7 +64,10 @@ type passage struct {
 }
 
 // run checks every target and prints one line per hit.
-func run(root string, args []string, register ste.Register, comments bool, out io.Writer) error {
+//
+// The presence check runs on a whole-repository run only, because a run over one path
+// asks about that path and not about the exported API.
+func run(root string, args []string, register ste.Register, comments, missing bool, out io.Writer) error {
 	passages, err := collect(root, args, comments)
 	if err != nil {
 		return err
@@ -78,16 +82,108 @@ func run(root string, args []string, register ste.Register, comments bool, out i
 				p.file, p.line+hit.Line-1, code(hit.Category), squeeze(message(hit))))
 		}
 	}
+	docs := []string{}
+	if missing && len(args) == 0 {
+		docs, err = missingDocs(root)
+		if err != nil {
+			return err
+		}
+	}
+	problems = append(problems, docs...)
 	sort.Strings(problems)
 	for _, line := range problems {
 		if _, err := fmt.Fprintln(out, line); err != nil {
 			return err
 		}
 	}
-	if bad > 0 {
+	switch {
+	case bad > 0 && len(docs) > 0:
+		return fmt.Errorf("%d hit(s) in %s text, and %d exported declaration(s) without a doc comment", bad, register, len(docs))
+	case bad > 0:
 		return fmt.Errorf("%d hit(s) in %s text", bad, register)
+	case len(docs) > 0:
+		return fmt.Errorf("%d exported declaration(s) without a doc comment", len(docs))
 	}
 	return nil
+}
+
+// missingDocs returns one report line per exported declaration that has no doc comment.
+//
+// The check reads the declarations and not the wording, so it holds a declaration that a
+// reader can find. A test file is left out, because its helpers are not an API.
+func missingDocs(root string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if path != root && (name == "vendor" || name == "testdata" || name == "tasks" || strings.HasPrefix(name, ".") || name == "tools") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		found, err := fileMissingDocs(root, path)
+		if err != nil {
+			return err
+		}
+		out = append(out, found...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// fileMissingDocs returns one line per exported declaration of one file that has no doc
+// comment. A group comment covers every declaration in the group, and a declaration
+// comment covers its own.
+func fileMissingDocs(root, path string) ([]string, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	report := func(pos token.Pos, label string) {
+		out = append(out, fmt.Sprintf("%s:%d: DOC1: no doc comment for the exported %s",
+			rel(root, path), fset.Position(pos).Line, label))
+	}
+	for _, decl := range file.Decls {
+		switch d := decl.(type) {
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				switch s := spec.(type) {
+				case *ast.TypeSpec:
+					if s.Name.IsExported() && d.Doc == nil && s.Doc == nil {
+						report(s.Name.Pos(), "type "+s.Name.Name)
+					}
+				case *ast.ValueSpec:
+					if len(s.Names) == 0 {
+						continue
+					}
+					if s.Names[0].IsExported() && d.Doc == nil && s.Doc == nil {
+						report(s.Names[0].Pos(), "value "+s.Names[0].Name)
+					}
+				}
+			}
+		case *ast.FuncDecl:
+			if !d.Name.IsExported() || d.Doc != nil {
+				continue
+			}
+			label := "function " + d.Name.Name
+			if d.Recv != nil && len(d.Recv.List) > 0 {
+				label = "method " + d.Name.Name
+			}
+			report(d.Name.Pos(), label)
+		}
+	}
+	return out, nil
 }
 
 // collect returns every passage to check. With arguments it reads those paths,

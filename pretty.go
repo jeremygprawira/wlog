@@ -17,8 +17,12 @@ import (
 type Format int
 
 const (
+	// FormatAuto picks pretty in a local environment or on a terminal, and JSON
+	// everywhere else.
 	FormatAuto Format = iota
+	// FormatJSON writes one JSON object per line.
 	FormatJSON
+	// FormatPretty writes one indented line for a person to read.
 	FormatPretty
 )
 

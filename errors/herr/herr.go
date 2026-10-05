@@ -38,6 +38,7 @@ var kindNames = map[herr.Kind]string{
 
 type extractorFunc func(err error) wlog.ErrorInfo
 
+// Extract adapts one herr error through the options the extractor was built with.
 func (f extractorFunc) Extract(err error) wlog.ErrorInfo { return f(err) }
 
 // Extractor adapts herr errors to wlog.ErrorInfo via herr.LogRecord's mapping.

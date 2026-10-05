@@ -227,12 +227,13 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 
 ## Phase 15, v1.0.0: API freeze
 
-- [ ] 15-1 API freeze
-  - The API baseline half is done at `b469dd9`: `api/` holds the export data of every
-    module, `tools release -apidiff` compares the working tree with it, `make apidiff` and
-    the CI job `apidiff` run it, and a deletion of an exported symbol fails the check.
-  - Open: the doc-comment half. `tools ste -comments` reports 1079 findings over the Go
-    doc comments, so a check that only proves a doc comment exists is a separate task.
+- [x] 15-1 API freeze
+  - The API baseline half is at `b469dd9`: `api/` holds the export data of every module,
+    `tools release -apidiff` compares the working tree with it, and `make apidiff` and the
+    CI job run it. A deletion of an exported symbol fails the check.
+  - The doc-comment half closed 24 declarations that had none, and `tools ste` now reports
+    one under `DOC1`, so the check holds. The wording check (`-comments`) stays off: it
+    reports 1079 findings, which is its own task.
 - [ ] 15-2 Parity and comparison pages
 - [ ] 15-3 Audit close-out
 - [ ] Review point 15, v1.0.0: human review, then ask before tagging
