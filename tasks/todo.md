@@ -223,13 +223,17 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
 - [x] 14-G-5b ai-mcpgo
 - [x] 14-G-6 Recipes: llm-agent and mcp-server
 - [x] 14-G-7 `wlog init` v2
-- [ ] Review point 14, v0.9.0: human review, then ask before tagging
+- [x] Review point 14, v0.9.0: human review, then ask before tagging
   - Every Track E and G module passes its tests: the 8 `ai/` modules, `trace/otel`,
     `trace/otellog`, `metrics/prometheus`, `drain/cloudwatch`, and the root-module drains.
   - `tools floor` passes for those same modules.
   - `go test -race -run 'TestInitV2_' ./...` in `cmd/wlog` passes, which covers
     `TestInitV2_RecipesBuildAndPassDoctor` on the `llm-agent` and `mcp-server` recipes.
-  - Left: the human review, and the tag. Tagging v0.9.0 is ask-first.
+  - Tagged with the owner's approval: `chore(release): v0.9.0` at `b6c70c2`, with 69 tags,
+    one per module. The release tool reported the API against v0.8.0 before the tag: the
+    root, `trace/otel`, and `cmd/wlog` hold an incompatible change, which a pre-1.0 module
+    allows, and `ai/*`, `metrics/prometheus`, and `trace/otellog` are new.
+  - Left: the human review of the release.
 
 ## Phase 15, v1.0.0: API freeze
 
