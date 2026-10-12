@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/cloudwego/eino v0.9.19
-	github.com/jeremygprawira/wlog v0.9.0
+	github.com/jeremygprawira/wlog v1.0.0
 )
 
 require (

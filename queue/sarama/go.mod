@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/IBM/sarama v1.45.1
-	github.com/jeremygprawira/wlog v0.9.0
+	github.com/jeremygprawira/wlog v1.0.0
 )
 
 require (

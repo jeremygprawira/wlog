@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/go-playground/validator/v10 v10.30.1
-	github.com/jeremygprawira/wlog v0.9.0
+	github.com/jeremygprawira/wlog v1.0.0
 )
 
 require (

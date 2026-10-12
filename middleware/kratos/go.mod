@@ -4,8 +4,8 @@ go 1.21
 
 require (
 	github.com/go-kratos/kratos/v2 v2.8.4
-	github.com/jeremygprawira/wlog v0.9.0
-	github.com/jeremygprawira/wlog/rpc/grpc v0.9.0
+	github.com/jeremygprawira/wlog v1.0.0
+	github.com/jeremygprawira/wlog/rpc/grpc v1.0.0
 	google.golang.org/grpc v1.67.3
 )
 

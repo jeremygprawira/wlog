@@ -10,7 +10,7 @@ require (
 )
 
 require (
-	github.com/jeremygprawira/wlog v0.9.0
+	github.com/jeremygprawira/wlog v1.0.0
 	go.uber.org/multierr v1.10.0 // indirect
 )
 
