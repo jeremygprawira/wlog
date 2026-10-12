@@ -189,9 +189,9 @@ make release-check # dry run: require versions, tidy diff, apidiff, tag order
 
 Single test: `go test -race -run TestName ./package`
 
-CI runs lint, test, floor, tidy, snippets, cover, fuzz, and map on each push, and bench on pull
-requests. It runs vuln, the long fuzz, and integration nightly. SPEC-repo-ci.md holds the schedule.
-It builds only the modules a change touches, plus every module that depends on them.
+No CI runs for now. The owner removed the workflows on 2026-10-12. Run the gates by hand with
+`make test race fuzz lint floor tidy snippets cover map` and `make integration`.
+SPEC-repo-ci.md describes the gates the workflows ran, and a future CI must run the same ones.
 
 ## Project structure
 
