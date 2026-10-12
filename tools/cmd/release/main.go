@@ -32,7 +32,10 @@ import (
 const versionFile = "tools/version.txt"
 
 // apidiff is the tool that compares the exported API of two versions.
-const apidiff = "golang.org/x/exp/cmd/apidiff"
+//
+// The version is pinned. The baselines under api/ hold its export data, and a later apidiff
+// (2026-10-11) could not read them, so an unpinned @latest broke the gate without a code change.
+const apidiff = "golang.org/x/exp/cmd/apidiff@v0.0.0-20260824195058-e88cd73687aa"
 
 // apiDir holds the exported API baseline of every module, one file per module. The
 // baseline is the export data that apidiff writes, so a check compares the working tree
@@ -323,13 +326,13 @@ func apiDiff(root string, s step) (string, error) {
 
 	oldExport := filepath.Join(tmp, "old.export")
 	newExport := filepath.Join(tmp, "new.export")
-	if out, err := goCommand(filepath.Join(oldTree, s.module.Dir), "run", apidiff+"@latest", "-m", "-w", oldExport, s.module.Path); err != nil {
+	if out, err := goCommand(filepath.Join(oldTree, s.module.Dir), "run", apidiff, "-m", "-w", oldExport, s.module.Path); err != nil {
 		return string(out), err
 	}
-	if out, err := goCommand(filepath.Join(root, s.module.Dir), "run", apidiff+"@latest", "-m", "-w", newExport, s.module.Path); err != nil {
+	if out, err := goCommand(filepath.Join(root, s.module.Dir), "run", apidiff, "-m", "-w", newExport, s.module.Path); err != nil {
 		return string(out), err
 	}
-	out, err := goCommand(tmp, "run", apidiff+"@latest", "-m", oldExport, newExport)
+	out, err := goCommand(tmp, "run", apidiff, "-m", oldExport, newExport)
 	return string(out), err
 }
 
@@ -524,7 +527,7 @@ func checkAPI(root string, write bool, out io.Writer) error {
 		name := apiName(root, m)
 		path := filepath.Join(root, apiDir, name)
 		current := filepath.Join(tmp, name)
-		if text, err := goCommand(filepath.Join(root, m.Dir), "run", apidiff+"@latest", "-m", "-w", current, m.Path); err != nil {
+		if text, err := goCommand(filepath.Join(root, m.Dir), "run", apidiff, "-m", "-w", current, m.Path); err != nil {
 			return fmt.Errorf("%s: %w", text, err)
 		}
 		if write {
@@ -546,7 +549,7 @@ func checkAPI(root string, write bool, out io.Writer) error {
 		}
 		// apidiff reports the changes it finds, and the exit status is not the signal: a
 		// report that holds no change line means the API holds.
-		report, _ := goCommand(tmp, "run", apidiff+"@latest", "-m", "-incompatible", path, current)
+		report, _ := goCommand(tmp, "run", apidiff, "-m", "-incompatible", path, current)
 		text := oneLine(string(report))
 		if text == "no change" {
 			continue
