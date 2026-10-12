@@ -7,6 +7,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-13
+
 ### Added
 
 - Phase 14 adds the modules `ai/anthropic`, `ai/openai`, `ai/genai`, `ai/goopenai`,
