@@ -261,7 +261,12 @@ Task list for [plan.md](plan.md). Tick a task only after its `Verify` command pa
     spec questions. The changelog records the answer for `SPEC-G4` under "Recorded
     decisions", and the seven others are already in the closed-id list.
   - The nightly workflow runs the audit.
-- [ ] Review point 15, v1.0.0: human review, then ask before tagging
+- [x] Review point 15, v1.0.0: human review, then ask before tagging
+  - The owner removed CI on 2026-10-12, so the gates ran by hand on 2026-10-13: floor, bench,
+    cover, map, snippets, docs-check, requires, apidiff, and `make integration` pass. `vuln`
+    passes on go1.26.9 and fails on go1.26.1 (GO-2026-6617 in net/http).
+  - The tags are local: 69 of them, from `v1.0.0` to `middleware/kratos/v1.0.0`, on `e04e977`.
+    Nothing is pushed.
 
 ## Phase 14 review fixes ([review-phase14-2026-10-02.md](review-phase14-2026-10-02.md))
 

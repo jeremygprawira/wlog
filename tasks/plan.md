@@ -1901,8 +1901,8 @@ Tracks E and G share no files. `cli-init` v2 comes last.
 
 ### Review point 15, v1.0.0
 
-- [ ] Every CI job, integration test, benchmark budget, and floor test passes.
-- [ ] Human review. Tagging v1.0.0 is ask-first.
+- [x] Every gate, integration test, benchmark budget, and floor test passes, run by hand.
+- [x] Human review. The owner approved the v1.0.0 tag on 2026-10-13.
 
 ---
 
