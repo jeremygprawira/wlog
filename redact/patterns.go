@@ -83,6 +83,11 @@ var identityPaths = map[string]bool{
 	"trace.parent_event_id": true,
 }
 
+// reStackJWT replaces the jwt pattern on a stack. A Go frame name such as
+// "middleware.Config.ToMiddleware.func2.1" has three dotted segments, so only a token with
+// the "eyJ" start of a real header counts. It has no leading \b so "token=xeyJ..." still matches.
+var reStackJWT = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{7,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`)
+
 // applyPatterns runs every active pattern over s and returns the result. path is the
 // field's full path from the event root: it becomes Match.Path/Key, and it is used to
 // exempt http.client_ip from the ipv4 pattern unless MaskClientIP was set.
@@ -91,6 +96,8 @@ func (r *Redactor) applyPatterns(s string, path []string) string {
 		return s
 	}
 	isClientIP := len(path) == 2 && path[0] == "http" && path[1] == "client_ip"
+	// Array elements inherit the parent path, so "errors" covers every errors[] entry.
+	isStack := len(path) == 2 && (path[0] == "error" || path[0] == "errors") && path[1] == "stack"
 	for _, p := range r.patterns {
 		if p.name == "ipv4" && isClientIP && !r.maskClientIP {
 			continue
@@ -98,7 +105,11 @@ func (r *Redactor) applyPatterns(s string, path []string) string {
 		if p.prefilter != nil && !p.prefilter(s) {
 			continue
 		}
-		s = applyRegex(s, p.re, path, p.masker, r.replacement)
+		re := p.re
+		if isStack && p.name == "jwt" && !p.custom {
+			re = reStackJWT
+		}
+		s = applyRegex(s, re, path, p.masker, r.replacement)
 	}
 	return s
 }

@@ -4313,7 +4313,7 @@ Changes vs boilerplate: removed `public_key` (not secret). Added `pin`, `otp`.
 | `email` | on | `alice@example.com` | `a***@***.com` | |
 | `ipv4` | on | `192.168.1.100` | `***.***.***.100` | skips `127.0.0.1`, `0.0.0.0`. Core's own `http.client_ip` is exempt unless `MaskClientIP()` |
 | `phone` | on | `+62 812-3456-7890`, `081234567890` | `+62 ****7890` | E.164 + Indonesian local `08…` |
-| `jwt` | on | `eyJhbGciOi…` | `eyJ***.***` | three base64url segments |
+| `jwt` | on | `eyJhbGciOi…` | `eyJ***.***` | three base64url segments. In `error.stack` and `errors[].stack`, the match must also start with `eyJ`, so a Go frame name keeps its text |
 | `bearer` | on | `Bearer sk_live_abc` | `Bearer ***` | |
 | `iban` | on | `FR76 3000 6000 …189` | `FR76****189` | |
 | `nik` | **off** | `3171234567890001` | `3171********0001` | Indonesian national ID. Opt-in via `EnablePatterns("nik")` (false-positive risk) |

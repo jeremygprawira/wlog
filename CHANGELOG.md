@@ -7,6 +7,13 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ## [Unreleased]
 
+### Fixed
+
+- The `jwt` pattern no longer rewrites a Go frame name in `error.stack` or `errors[].stack`.
+  It turned `middleware.ContextTimeoutConfig.ToMiddleware` into `mid***.***`. In those two
+  fields the pattern now needs the `eyJ` start of a real token. Every other pattern and the
+  key denylist still run on a stack.
+
 ## [1.0.0] - 2026-10-13
 
 ### Added
