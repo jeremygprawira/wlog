@@ -1,6 +1,7 @@
 package wlogzap_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -62,5 +63,33 @@ func TestZapOutput_LevelMapping(t *testing.T) {
 		if got := recorded.All()[0].Level; got != want {
 			t.Errorf("wlog level %v mapped to %v, want %v", in, got, want)
 		}
+	}
+}
+
+func TestZapOutput_FieldOrderIsStable(t *testing.T) {
+	event := map[string]any{"level": "info", "operation": "op"}
+	for _, k := range []string{"zeta", "alpha", "mid", "beta", "omega", "gamma", "delta", "kappa"} {
+		event[k] = k
+	}
+	event["http"] = map[string]any{"status": 200, "path": "/a", "method": "GET", "host": "h"}
+
+	var first string
+	for i := 0; i < 20; i++ {
+		var buf bytes.Buffer
+		enc := zapcore.NewJSONEncoder(zapcore.EncoderConfig{MessageKey: "msg"})
+		logger := zap.New(zapcore.NewCore(enc, zapcore.AddSync(&buf), zap.DebugLevel))
+		wlogzap.Drain(logger).Send(context.Background(), event)
+		if i == 0 {
+			first = buf.String()
+			continue
+		}
+		if buf.String() != first {
+			t.Fatalf("run %d wrote\n%s\nwant\n%s", i, buf.String(), first)
+		}
+	}
+	const want = `{"msg":"op","alpha":"alpha","beta":"beta","delta":"delta","gamma":"gamma",` +
+		`"http":{"host":"h","method":"GET","path":"/a","status":200},"kappa":"kappa","mid":"mid","omega":"omega","zeta":"zeta"}` + "\n"
+	if first != want {
+		t.Errorf("got\n%s\nwant\n%s", first, want)
 	}
 }

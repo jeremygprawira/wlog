@@ -4,6 +4,7 @@ package wlogzap
 
 import (
 	"context"
+	"slices"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -14,16 +15,21 @@ import (
 // Drain returns a wlog.Drain that writes each event as one zap entry through logger.
 // The event's operation (or a plain line's message) becomes the entry message and its
 // level becomes the zap level. Every other field becomes a field, and a nested map
-// stays an object rather than a flattened key.
+// stays an object rather than a flattened key. Fields come in ascending key order.
 func Drain(logger *zap.Logger) wlog.Drain {
 	return wlog.DrainFunc(func(_ context.Context, event map[string]any) {
-		fields := make([]zap.Field, 0, len(event))
-		for k, v := range event {
+		keys := make([]string, 0, len(event))
+		for k := range event {
 			switch k {
 			case "level", "operation", "message":
 				continue
 			}
-			fields = append(fields, zap.Any(k, v))
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		fields := make([]zap.Field, 0, len(keys))
+		for _, k := range keys {
+			fields = append(fields, zap.Any(k, event[k]))
 		}
 		logger.Log(zapLevel(event["level"]), eventMessage(event), fields...)
 	})

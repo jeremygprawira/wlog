@@ -9,6 +9,8 @@ The v1.0.0 release freezes the public API. A later change to that API waits for 
 
 ### Fixed
 
+- `log/zap` writes the top-level fields of an event in ascending key order. A line used to
+  list them in a random order.
 - The `jwt` pattern no longer rewrites a Go frame name in `error.stack` or `errors[].stack`.
   It turned `middleware.ContextTimeoutConfig.ToMiddleware` into `mid***.***`. In those two
   fields the pattern now needs the `eyJ` start of a real token. Every other pattern and the
